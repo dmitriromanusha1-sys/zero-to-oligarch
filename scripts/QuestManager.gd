@@ -82,13 +82,17 @@ func _unlock_available() -> void:
 		emit_signal("quest_added", q)
 
 func _make_repeat_quest() -> Dictionary:
+	# QuestManager.load(cfg) может вызваться из GameManager._ready() ещё до того,
+	# как у самого QuestManager отработает _ready() и заполнит var gm — поэтому
+	# берём автозагрузку напрямую, не полагаясь на порядок инициализации
+	var _gm: Node = gm if gm else get_node("/root/GameManager")
 	_repeat_counter += 1
-	var target: float = maxf(gm.money * 1.5 + 5000.0, 5000.0 * _repeat_counter)
+	var target: float = maxf(_gm.money * 1.5 + 5000.0, 5000.0 * _repeat_counter)
 	var reward: float = target * 0.08
 	return {
 		"id": "rep_%d" % _repeat_counter,
-		"title": "Цель: %s" % gm.format_money(target),
-		"desc": "Накопи %s" % gm.format_money(target),
+		"title": "Цель: %s" % _gm.format_money(target),
+		"desc": "Накопи %s" % _gm.format_money(target),
 		"type": "money", "target": target,
 		"reward_money": reward, "reward_health": 0,
 		"repeatable": true,

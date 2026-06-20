@@ -1,9 +1,8 @@
-[gd_scene load_steps=8 format=3 uid="uid://world001"]
+[gd_scene load_steps=7 format=3 uid="uid://world001"]
 
 [ext_resource type="Script" path="res://scripts/World.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://scenes/HUD.tscn" id="3"]
-[ext_resource type="PackedScene" path="res://scenes/EndingScreen.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/DayNightCycle.tscn" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/MiniGame.tscn" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/CasinoUI.tscn" id="7"]
@@ -26,8 +25,6 @@ color = Color(0.12, 0.12, 0.12, 1.0)
 position = Vector2(-100.0, 100.0)
 
 [node name="HUD" parent="." instance=ExtResource("3")]
-
-[node name="EndingScreen" parent="." instance=ExtResource("4")]
 
 [node name="DayNightCycle" parent="." instance=ExtResource("5")]
 
