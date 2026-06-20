@@ -50,6 +50,10 @@ var _titles_handbook: CanvasLayer = null
 var _titles_btn: Button = null
 var _settings_ui: CanvasLayer = null
 var _settings_btn: Button = null
+var _journal: CanvasLayer = null
+var _journal_btn: Button = null
+var _system_btn: Button = null
+var _system_popup: PanelContainer = null
 
 var _minimap_root: Control = null
 var _minimap_player_dot: ColorRect = null
@@ -144,6 +148,7 @@ func _ready() -> void:
 	menu_btn.pressed.connect(_go_to_menu)
 
 	_setup_invest_btn(am)
+	_setup_journal_and_system(am)
 	_setup_autosave_label()
 
 	var es = get_node_or_null("/root/EventSystem")
@@ -349,7 +354,7 @@ func _process(delta: float) -> void:
 func _any_modal_open() -> bool:
 	for w in [ach_ui, stats_ui, stock_ui, inv_ui, pause_menu, loan_ui,
 			housing_shop, business_shop, quest_ui, _titles_handbook,
-			_settings_ui, _invest_popup]:
+			_settings_ui, _invest_popup, _journal, _system_popup]:
 		if w != null and is_instance_valid(w) and w.visible:
 			return true
 	return false
@@ -456,6 +461,102 @@ func _close_invest_popup() -> void:
 	if _invest_popup and is_instance_valid(_invest_popup):
 		_invest_popup.queue_free()
 		_invest_popup = null
+
+# ── «Журнал» (вкладки) и «Система» (поп-ап) ───────────────────────────────────
+func _setup_journal_and_system(am: Node) -> void:
+	var dock: HBoxContainer = $Dock/DockRow
+
+	# Прячем отдельные кнопки — теперь они внутри «Журнала»/«Системы»
+	quest_btn.visible = false
+	ach_btn.visible   = false
+	stats_btn.visible = false
+	menu_btn.visible  = false
+
+	# «Журнал» с вкладками: Цели / Достижения / Титулы / Статистика
+	var jr_script := load("res://scripts/JournalUI.gd")
+	if jr_script:
+		_journal = CanvasLayer.new()
+		_journal.set_script(jr_script)
+		add_child(_journal)
+		_journal.setup(quest_ui, ach_ui, _titles_handbook, stats_ui)
+
+	_journal_btn = Button.new()
+	_journal_btn.tooltip_text = "Журнал: цели, достижения, титулы и статистика"
+	dock.add_child(_journal_btn)
+	_style_dock_btn(_journal_btn, "📖")
+	_journal_btn.pressed.connect(func():
+		if am: am.play_click()
+		if _journal: _journal.open())
+
+	# «Система»: Настройки / Главное меню
+	_system_btn = Button.new()
+	_system_btn.tooltip_text = "Настройки и выход в главное меню"
+	dock.add_child(_system_btn)
+	_style_dock_btn(_system_btn, "⚙")
+	_system_btn.pressed.connect(func(): _toggle_system_popup(am))
+
+	# Порядок видимых иконок: Следующий день, Жильё, Инвестиции, Инвентарь, Журнал, Система
+	var order := [sleep_btn, housing_btn, _invest_btn, inv_btn, _journal_btn, _system_btn]
+	for i in order.size():
+		if order[i] and is_instance_valid(order[i]):
+			dock.move_child(order[i], i)
+
+func _toggle_system_popup(am: Node) -> void:
+	if _system_popup and is_instance_valid(_system_popup):
+		_system_popup.queue_free()
+		_system_popup = null
+		return
+	if am: am.play_click()
+
+	_system_popup = PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.05, 0.06, 0.10, 0.97)
+	ps.border_color = HUD_BORDER
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(s, 2)
+		ps.set_corner_radius(s, 8)
+	ps.content_margin_left = 6; ps.content_margin_right = 6
+	ps.content_margin_top = 6; ps.content_margin_bottom = 6
+	_system_popup.add_theme_stylebox_override("panel", ps)
+	add_child(_system_popup)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	_system_popup.add_child(vb)
+
+	var items := [
+		{"icon": "⚙", "text": "Настройки", "col": HUD_BTN_BG, "brd": HUD_BORDER,
+		 "cb": func(): if _settings_ui: _settings_ui.open(); _close_system_popup()},
+		{"icon": "🚪", "text": "Главное меню", "col": Color(0.18, 0.07, 0.07), "brd": Color(0.55, 0.20, 0.20),
+		 "cb": func(): _close_system_popup(); _go_to_menu()},
+	]
+	for item in items:
+		var b := Button.new()
+		b.text = item.icon + "  " + item.text
+		b.custom_minimum_size = Vector2(170, 30)
+		b.add_theme_font_size_override("font_size", 13)
+		_style_btn(b, item.col, item.brd)
+		b.pressed.connect(item.cb)
+		vb.add_child(b)
+
+	# Над доком, по центру у кнопки «Система»
+	var vp := get_viewport().get_visible_rect().size
+	var anchor_x: float = vp.x * 0.5
+	if _system_btn and is_instance_valid(_system_btn):
+		anchor_x = _system_btn.get_global_rect().get_center().x
+	_system_popup.position = Vector2(clampf(anchor_x - 90.0, 8.0, vp.x - 190.0), vp.y - 66.0 - 80.0)
+
+	_system_popup.modulate.a = 0.0
+	_system_popup.scale = Vector2(0.90, 0.90)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_system_popup, "modulate:a", 1.0, 0.18)
+	tw.tween_property(_system_popup, "scale", Vector2(1.0, 1.0), 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+func _close_system_popup() -> void:
+	if _system_popup and is_instance_valid(_system_popup):
+		_system_popup.queue_free()
+		_system_popup = null
 
 ## ── Единая цветовая палитра HUD ───────────────────────────────────────────
 const HUD_BG     := Color(0.045, 0.050, 0.085, 0.94)   # тёмное "стекло" панели
@@ -1186,20 +1287,7 @@ func _setup_titles_handbook() -> void:
 	_titles_handbook = CanvasLayer.new()
 	_titles_handbook.set_script(th_script)
 	add_child(_titles_handbook)
-
-	# Кнопку вставляем в док рядом с остальными
-	var dock: HBoxContainer = $Dock/DockRow
-	_titles_btn = Button.new()
-	_titles_btn.tooltip_text = "Справочник всех титулов.\nПосмотри описание и фото."
-	dock.add_child(_titles_btn)
-	# Перемещаем сразу после кнопки достижений
-	dock.move_child(_titles_btn, ach_btn.get_index() + 1)
-	_style_dock_btn(_titles_btn, "👑")
-
-	var am := get_node_or_null("/root/AudioManager")
-	_titles_btn.pressed.connect(func():
-		if am: am.play_click()
-		_titles_handbook.open())
+	# Кнопки в доке нет — справочник титулов открывается через «Журнал»
 
 func _setup_settings_ui() -> void:
 	# Создаём SettingsUI и добавляем как дочерний узел HUD
@@ -1209,16 +1297,4 @@ func _setup_settings_ui() -> void:
 	_settings_ui = CanvasLayer.new()
 	_settings_ui.set_script(st_script)
 	add_child(_settings_ui)
-
-	# Кнопку вставляем в док, прямо перед кнопкой «В главное меню»
-	var dock: HBoxContainer = $Dock/DockRow
-	_settings_btn = Button.new()
-	_settings_btn.tooltip_text = "Звук, видео, сложность, доступность и уведомления.\nМожно менять по ходу игры."
-	dock.add_child(_settings_btn)
-	dock.move_child(_settings_btn, menu_btn.get_index())
-	_style_dock_btn(_settings_btn, "⚙")
-
-	var am2 := get_node_or_null("/root/AudioManager")
-	_settings_btn.pressed.connect(func():
-		if am2: am2.play_click()
-		_settings_ui.open())
+	# Кнопки в доке нет — настройки открываются через «Система»
