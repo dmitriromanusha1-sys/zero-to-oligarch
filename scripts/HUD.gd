@@ -714,6 +714,13 @@ var _quest_tracker_vbox: VBoxContainer = null
 var _quest_tracker_layer: CanvasLayer = null
 
 func _setup_quest_tracker() -> void:
+	# Дерево сцены ещё занято собственной инициализацией (мы внутри HUD._ready,
+	# который вызван из цепочки _ready всей World-сцены) — синхронный add_child
+	# в root в этот момент тихо проваливается ("Parent node is busy setting up
+	# children"), из-за чего трекер раньше не появлялся вообще. Откладываем.
+	call_deferred("_build_quest_tracker")
+
+func _build_quest_tracker() -> void:
 	_quest_tracker_layer = CanvasLayer.new()
 	_quest_tracker_layer.layer = 12
 	get_tree().root.add_child(_quest_tracker_layer)
@@ -730,11 +737,10 @@ func _setup_quest_tracker() -> void:
 	ps.content_margin_top = 8; ps.content_margin_bottom = 8
 	_quest_tracker.add_theme_stylebox_override("panel", ps)
 	_quest_tracker_layer.add_child(_quest_tracker)
-	# Анкеры/позицию задаём только после того, как узел уже в дереве —
-	# иначе Godot считает офсеты от нулевого размера родителя и панель
-	# улетает за пределы экрана
-	_quest_tracker.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_quest_tracker.position = Vector2(-300, 16)
+	# Анкеры не используем вообще — позицию считаем вручную от размера вьюпорта
+	# в _refresh_quest_tracker(), чтобы не зависеть от тонкостей пересчёта
+	# офсетов у anchored Control при добавлении в дерево (из-за этого панель
+	# ранее улетала за экран и была невидима)
 	_quest_tracker.size = Vector2(284, 10)
 
 	var header := Label.new()
@@ -748,6 +754,7 @@ func _setup_quest_tracker() -> void:
 	_quest_tracker_vbox.position = Vector2(10, 28)
 	_quest_tracker_vbox.add_theme_constant_override("separation", 4)
 	_quest_tracker.add_child(_quest_tracker_vbox)
+	get_tree().root.size_changed.connect(_refresh_quest_tracker)
 	_refresh_quest_tracker()
 
 func _refresh_quest_tracker() -> void:
@@ -768,6 +775,8 @@ func _refresh_quest_tracker() -> void:
 		_quest_tracker_vbox.add_child(lbl)
 		shown += 1
 	_quest_tracker.size = Vector2(284, 28 + shown * 22 + 10)
+	var vp_w: float = get_viewport().get_visible_rect().size.x
+	_quest_tracker.position = Vector2(vp_w - _quest_tracker.size.x - 16, 16)
 
 func _on_quest_completed(q: Dictionary) -> void:
 	_refresh_quest_tracker()
