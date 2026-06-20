@@ -89,8 +89,11 @@ func _make_repeat_quest() -> Dictionary:
 	# берём автозагрузку напрямую, не полагаясь на порядок инициализации
 	var _gm: Node = gm if gm else get_node("/root/GameManager")
 	_repeat_counter += 1
-	var target: float = maxf(_gm.money * 1.5 + 5000.0, 5000.0 * _repeat_counter)
-	var reward: float = target * 0.08
+	# Каждая следующая цель заметно больше предыдущей (множитель растёт вместе
+	# со счётчиком), иначе три цели, созданные за один вызов, были бы одинаковыми
+	var base: float = maxf(_gm.money, 5000.0)
+	var target: float = _round_nice(base * (1.25 + 0.45 * _repeat_counter))
+	var reward: float = _round_nice(target * 0.07)
 	return {
 		"id": "rep_%d" % _repeat_counter,
 		"title": "Цель: %s" % _gm.format_money(target),
@@ -99,6 +102,13 @@ func _make_repeat_quest() -> Dictionary:
 		"reward_money": reward, "reward_health": 0,
 		"repeatable": true,
 	}
+
+# Округляет до 2 значащих цифр, чтобы цели выглядели "круглыми" (12 000, 350 000…)
+func _round_nice(v: float) -> float:
+	if v <= 0.0:
+		return 0.0
+	var mag: float = pow(10.0, floor(log(v) / log(10.0)) - 1.0)
+	return round(v / mag) * mag
 
 func _is_active(id: String) -> bool:
 	for q in active_quests:

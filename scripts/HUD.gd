@@ -2,30 +2,30 @@ extends CanvasLayer
 
 const FloatingText = preload("res://scripts/FloatingText.gd")
 
-@onready var money_label: Label    = $Panel/VBox/MoneyLabel
-@onready var income_label: Label   = $Panel/VBox/IncomeLabel
-@onready var title_label: Label    = $Panel/VBox/TitleLabel
-@onready var housing_label: Label  = $Panel/VBox/HousingLabel
-@onready var health_bar: ProgressBar = $Panel/VBox/HealthBar
-@onready var hunger_bar: ProgressBar = $Panel/VBox/HungerBar
-@onready var thirst_bar: ProgressBar = $Panel/VBox/ThirstBar
-@onready var energy_bar: ProgressBar = $Panel/VBox/EnergyBar
-@onready var day_label: Label      = $Panel/VBox/DayLabel
-@onready var time_label: Label     = $Panel/VBox/TimeLabel
+@onready var money_label: Label    = $TopBar/Row/MoneyCol/MoneyLabel
+@onready var income_label: Label   = $TopBar/Row/MoneyCol/IncomeLabel
+@onready var title_label: Label    = $TopBar/Row/StatusCol/StatusRow1/TitleLabel
+@onready var housing_label: Label  = $TopBar/Row/StatusCol/StatusRow1/HousingLabel
+@onready var health_bar: ProgressBar = $TopBar/Row/BarsCol/HealthBar
+@onready var hunger_bar: ProgressBar = $TopBar/Row/BarsCol/HungerBar
+@onready var thirst_bar: ProgressBar = $TopBar/Row/BarsCol/ThirstBar
+@onready var energy_bar: ProgressBar = $TopBar/Row/BarsCol/EnergyBar
+@onready var day_label: Label      = $TopBar/Row/StatusCol/StatusRow2/DayLabel
+@onready var time_label: Label     = $TopBar/Row/StatusCol/StatusRow2/TimeLabel
 @onready var title_popup: Label    = $TitlePopup
-@onready var housing_btn: Button    = $Panel/VBox/HousingBtn
-@onready var business_btn: Button   = $Panel/VBox/BusinessBtn
-@onready var quest_btn: Button      = $Panel/VBox/QuestBtn
-@onready var sleep_btn: Button        = $Panel/VBox/SleepBtn
-@onready var ach_btn: Button           = $Panel/VBox/AchBtn
-@onready var stats_btn: Button        = $Panel/VBox/StatsBtn
-@onready var stock_btn: Button        = $Panel/VBox/StockBtn
-@onready var inv_btn: Button          = $Panel/VBox/InvBtn
-@onready var loan_btn: Button         = $Panel/VBox/LoanBtn
-@onready var menu_btn: Button         = $Panel/VBox/MenuBtn
-@onready var transport_label: Label   = $Panel/VBox/TransportLabel
-@onready var reputation_label: Label  = $Panel/VBox/ReputationLabel
-@onready var education_label: Label   = $Panel/VBox/EducationLabel
+@onready var housing_btn: Button    = $Dock/DockRow/HousingBtn
+@onready var business_btn: Button   = $Dock/DockRow/BusinessBtn
+@onready var quest_btn: Button      = $Dock/DockRow/QuestBtn
+@onready var sleep_btn: Button        = $Dock/DockRow/SleepBtn
+@onready var ach_btn: Button           = $Dock/DockRow/AchBtn
+@onready var stats_btn: Button        = $Dock/DockRow/StatsBtn
+@onready var stock_btn: Button        = $Dock/DockRow/StockBtn
+@onready var inv_btn: Button          = $Dock/DockRow/InvBtn
+@onready var loan_btn: Button         = $Dock/DockRow/LoanBtn
+@onready var menu_btn: Button         = $Dock/DockRow/MenuBtn
+@onready var transport_label: Label   = $TopBar/Row/StatusCol/StatusRow2/TransportLabel
+@onready var reputation_label: Label  = $TopBar/Row/StatusCol/StatusRow3/ReputationLabel
+@onready var education_label: Label   = $TopBar/Row/StatusCol/StatusRow3/EducationLabel
 @onready var ach_ui: CanvasLayer      = $AchievementUI
 @onready var stats_ui: CanvasLayer    = $StatsUI
 @onready var stock_ui: CanvasLayer   = $StockUI
@@ -85,9 +85,12 @@ func _ready() -> void:
 	_setup_quest_tracker()
 	_style_hud()
 	_setup_fade_overlay()
-	$Panel.modulate.a = 0.0
+	$TopBar.modulate.a = 0.0
+	$Dock.modulate.a = 0.0
 	var _hud_tw := create_tween()
-	_hud_tw.tween_property($Panel, "modulate:a", 1.0, 0.60).set_ease(Tween.EASE_OUT)
+	_hud_tw.set_parallel(true)
+	_hud_tw.tween_property($TopBar, "modulate:a", 1.0, 0.60).set_ease(Tween.EASE_OUT)
+	_hud_tw.tween_property($Dock, "modulate:a", 1.0, 0.60).set_ease(Tween.EASE_OUT)
 
 	var zm := get_node_or_null("/root/ZoneManager")
 	if zm:
@@ -176,7 +179,7 @@ var _zone_banner: Label = null
 func _setup_zone_banner() -> void:
 	_zone_panel = Panel.new()
 	_zone_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_zone_panel.position = Vector2(-260, 74)
+	_zone_panel.position = Vector2(-260, 88)
 	_zone_panel.size = Vector2(520, 56)
 	var zps := StyleBoxFlat.new()
 	zps.bg_color = Color(0.04, 0.03, 0.07, 0.86)
@@ -192,7 +195,7 @@ func _setup_zone_banner() -> void:
 	_zone_banner = Label.new()
 	_zone_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_zone_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_zone_banner.position = Vector2(-256, 78)
+	_zone_banner.position = Vector2(-256, 92)
 	_zone_banner.size = Vector2(512, 50)
 	_zone_banner.add_theme_font_size_override("font_size", 26)
 	_zone_banner.add_theme_color_override("font_color", Color(1.0, 0.92, 0.38))
@@ -388,15 +391,11 @@ func _setup_invest_btn(am: Node) -> void:
 
 	# Создаём кнопку «Инвестиции» и вставляем сразу после QuestBtn
 	_invest_btn = Button.new()
-	_invest_btn.text = "💹 Инвестиции"
-	_invest_btn.custom_minimum_size = Vector2(0, 22)
-	_invest_btn.add_theme_font_size_override("font_size", 11)
-	_style_btn(_invest_btn)
 	_invest_btn.tooltip_text = "Бизнес и Банк, Биржа акций, Кредиты"
-
-	var vbox := $Panel/VBox
-	vbox.add_child(_invest_btn)
-	vbox.move_child(_invest_btn, quest_btn.get_index() + 1)
+	var dock := $Dock/DockRow
+	dock.add_child(_invest_btn)
+	dock.move_child(_invest_btn, quest_btn.get_index() + 1)
+	_style_dock_btn(_invest_btn, "💹")
 
 	_invest_btn.pressed.connect(func(): _toggle_invest_popup(am))
 
@@ -419,8 +418,13 @@ func _toggle_invest_popup(am: Node) -> void:
 	ps.content_margin_top    = 6
 	ps.content_margin_bottom = 6
 	_invest_popup.add_theme_stylebox_override("panel", ps)
-	_invest_popup.position = Vector2(250, 220)
 	add_child(_invest_popup)
+	# Над доком, по центру у кнопки «Инвестиции»
+	var vp := get_viewport().get_visible_rect().size
+	var anchor_x: float = vp.x * 0.5
+	if _invest_btn and is_instance_valid(_invest_btn):
+		anchor_x = _invest_btn.get_global_rect().get_center().x
+	_invest_popup.position = Vector2(clampf(anchor_x - 90.0, 8.0, vp.x - 190.0), vp.y - 66.0 - 80.0)
 
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 4)
@@ -460,22 +464,27 @@ const HUD_BTN_BG := Color(0.075, 0.085, 0.135, 1.0)     # фон обычной 
 const HUD_GOLD   := Color(1.0, 0.88, 0.30)              # золотой текст/акцент
 
 func _style_hud() -> void:
-	# ── Панель фона — единое "стекло" с золотой рамкой ────────────────────────
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color     = HUD_BG
-	panel_style.border_color = HUD_BORDER
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		panel_style.set_border_width(side, 1)
-		panel_style.set_corner_radius(side, 10)
-	panel_style.shadow_color = Color(0, 0, 0, 0.35)
-	panel_style.shadow_size = 6
-	$Panel.add_theme_stylebox_override("panel", panel_style)
+	# ── Верхняя полоса и нижний док — единое "стекло" с золотой рамкой ────────
+	var bar_style := StyleBoxFlat.new()
+	bar_style.bg_color     = HUD_BG
+	bar_style.border_color = HUD_BORDER
+	bar_style.set_border_width(SIDE_BOTTOM, 1)
+	bar_style.shadow_color = Color(0, 0, 0, 0.35)
+	bar_style.shadow_size = 5
+	$TopBar.add_theme_stylebox_override("panel", bar_style)
 
-	var vbox: VBoxContainer = $Panel/VBox
-	vbox.add_theme_constant_override("separation", 5)
+	var dock_style := StyleBoxFlat.new()
+	dock_style.bg_color     = HUD_BG
+	dock_style.border_color = HUD_BORDER
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		dock_style.set_border_width(side, 1)
+		dock_style.set_corner_radius(side, 12)
+	dock_style.shadow_color = Color(0, 0, 0, 0.35)
+	dock_style.shadow_size = 6
+	$Dock.add_theme_stylebox_override("panel", dock_style)
 
 	# ── Деньги — крупно, золото ───────────────────────────────────────────────
-	money_label.add_theme_font_size_override("font_size", 18)
+	money_label.add_theme_font_size_override("font_size", 19)
 	money_label.add_theme_color_override("font_color", HUD_GOLD)
 	money_label.add_theme_constant_override("outline_size", 2)
 	money_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
@@ -483,11 +492,8 @@ func _style_hud() -> void:
 	# ── Информационные метки — единый светлый серо-голубой тон ───────────────
 	for lbl in [title_label, housing_label, day_label, time_label,
 				transport_label, reputation_label, education_label, income_label]:
-		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_font_size_override("font_size", 12)
 		lbl.add_theme_color_override("font_color", Color(0.78, 0.80, 0.88))
-
-	# Разделитель между блоком статов и полосками
-	vbox.add_child(_section_divider())
 
 	# ── Полоски: fill + background с скруглением ──────────────────────────────
 	_style_bar_fancy(health_bar,  Color(0.85, 0.15, 0.15), Color(0.20, 0.06, 0.07))
@@ -497,7 +503,6 @@ func _style_hud() -> void:
 
 	# Показывать значение на полосках (% = значение, т.к. max=100)
 	for bar in [health_bar, hunger_bar, thirst_bar, energy_bar]:
-		bar.custom_minimum_size.y = 16
 		bar.show_percentage = true
 		bar.add_theme_font_size_override("font_size", 8)
 		bar.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.90))
@@ -505,15 +510,15 @@ func _style_hud() -> void:
 		bar.add_theme_constant_override("font_shadow_offset_x", 1)
 		bar.add_theme_constant_override("font_shadow_offset_y", 1)
 
-	# Разделитель между полосками и кнопками
-	vbox.add_child(_section_divider())
-
-	# ── Кнопки — единый тёмный стиль с золотой рамкой ─────────────────────────
-	for btn in [housing_btn, quest_btn, ach_btn, stats_btn, inv_btn, menu_btn]:
-		_style_btn(btn, HUD_BTN_BG, HUD_BORDER)
-
-	# Кнопка «Следующий день» — единственное золотое CTA-действие в этом стиле
-	_style_btn_primary(sleep_btn)
+	# ── Кнопки-иконки в доке ──────────────────────────────────────────────────
+	_style_dock_btn(housing_btn, "🏠")
+	_style_dock_btn(quest_btn,   "📋")
+	_style_dock_btn(ach_btn,     "🏆")
+	_style_dock_btn(stats_btn,   "📊")
+	_style_dock_btn(inv_btn,     "🎒")
+	_style_dock_btn(menu_btn,    "🚪")
+	# Кнопка «Следующий день» — золотое CTA, чуть крупнее
+	_style_dock_btn(sleep_btn,   "😴", true)
 
 	# ── TitlePopup — то же "стекло" с золотой рамкой ─────────────────────────
 	var pop_style := StyleBoxFlat.new()
@@ -582,6 +587,28 @@ func _style_btn(btn: Button, bg: Color = HUD_BTN_BG, border: Color = HUD_BORDER)
 	btn.add_theme_font_size_override("font_size", 11)
 	btn.add_theme_color_override("font_color", Color(0.85, 0.86, 0.92))
 	btn.custom_minimum_size.y = 24
+
+# Кнопка-иконка для нижнего дока: только эмодзи, квадратная, тултип уже задан
+func _style_dock_btn(btn: Button, icon: String, primary: bool = false) -> void:
+	btn.text = icon
+	btn.custom_minimum_size = Vector2(56, 44) if not primary else Vector2(64, 44)
+	btn.add_theme_font_size_override("font_size", 24 if not primary else 26)
+	var bg: Color = Color(0.62, 0.48, 0.08) if primary else HUD_BTN_BG
+	var border: Color = Color(0.95, 0.80, 0.30, 0.95) if primary else HUD_BORDER
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = bg
+	sn.border_color = border
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sn.set_border_width(s, 1)
+		sn.set_corner_radius(s, 8)
+	btn.add_theme_stylebox_override("normal", sn)
+	var sh := sn.duplicate() as StyleBoxFlat
+	sh.bg_color = bg.lightened(0.18)
+	sh.border_color = border.lightened(0.20)
+	btn.add_theme_stylebox_override("hover", sh)
+	var sp := sn.duplicate() as StyleBoxFlat
+	sp.bg_color = bg.darkened(0.10)
+	btn.add_theme_stylebox_override("pressed", sp)
 
 func _setup_autosave_label() -> void:
 	_autosave_lbl = Label.new()
@@ -789,7 +816,8 @@ func _refresh_quest_tracker() -> void:
 		shown += 1
 	_quest_tracker.size = Vector2(284, 28 + shown * 22 + 10)
 	var vp_w: float = get_viewport().get_visible_rect().size.x
-	_quest_tracker.position = Vector2(vp_w - _quest_tracker.size.x - 16, 16)
+	# Ниже верхней полосы статуса (74px), чтобы не перекрывать шкалы справа
+	_quest_tracker.position = Vector2(vp_w - _quest_tracker.size.x - 16, 84)
 
 func _on_quest_completed(q: Dictionary) -> void:
 	_refresh_quest_tracker()
@@ -1066,11 +1094,13 @@ func _on_energy_changed(val: float) -> void:
 # Масштаб интерфейса растёт вместе с приближением камеры (Ctrl+колесо мыши)
 func _on_view_zoom_changed(zoom: float) -> void:
 	var t: float = clampf((zoom - gm.VIEW_ZOOM_MIN) / (gm.VIEW_ZOOM_MAX - gm.VIEW_ZOOM_MIN), 0.0, 1.0)
-	var ui_scale: float = lerpf(0.85, 1.15, t)
-	var panel: Control = $Panel
-	panel.pivot_offset = Vector2.ZERO
-	var stw := panel.create_tween()
-	stw.tween_property(panel, "scale", Vector2(ui_scale, ui_scale), 0.15).set_ease(Tween.EASE_OUT)
+	var ui_scale: float = lerpf(0.88, 1.12, t)
+	# Масштабируем только нижний док от его центра — верхняя полоса во всю
+	# ширину при масштабировании уехала бы за экран
+	var dock: Control = $Dock
+	dock.pivot_offset = dock.size * 0.5
+	var stw := dock.create_tween()
+	stw.tween_property(dock, "scale", Vector2(ui_scale, ui_scale), 0.15).set_ease(Tween.EASE_OUT)
 
 func _on_day_changed(d: int) -> void:
 	day_label.text = "📅 День " + str(d)
@@ -1090,7 +1120,7 @@ func _refresh_meal_buff() -> void:
 		_meal_buff_lbl = Label.new()
 		_meal_buff_lbl.add_theme_font_size_override("font_size", 11)
 		_meal_buff_lbl.add_theme_color_override("font_color", Color(0.55, 1.0, 0.65))
-		$Panel/VBox.add_child(_meal_buff_lbl)
+		$TopBar/Row/StatusCol/StatusRow3.add_child(_meal_buff_lbl)
 	if gm.meal_buff_days > 0:
 		_meal_buff_lbl.text = "🍴 -%.0f%% расход (%d дн.)" % [gm.meal_drain_bonus * 100, gm.meal_buff_days]
 		_meal_buff_lbl.visible = true
@@ -1157,17 +1187,14 @@ func _setup_titles_handbook() -> void:
 	_titles_handbook.set_script(th_script)
 	add_child(_titles_handbook)
 
-	# Кнопку вставляем в тот же VBox что и остальные кнопки
-	var vbox: VBoxContainer = $Panel/VBox
+	# Кнопку вставляем в док рядом с остальными
+	var dock: HBoxContainer = $Dock/DockRow
 	_titles_btn = Button.new()
-	_titles_btn.text = "👑 Титулы"
 	_titles_btn.tooltip_text = "Справочник всех титулов.\nПосмотри описание и фото."
-	_titles_btn.custom_minimum_size = Vector2(0, 22)
-	_titles_btn.add_theme_font_size_override("font_size", 11)
-	_style_btn(_titles_btn)
-	vbox.add_child(_titles_btn)
+	dock.add_child(_titles_btn)
 	# Перемещаем сразу после кнопки достижений
-	vbox.move_child(_titles_btn, ach_btn.get_index() + 1)
+	dock.move_child(_titles_btn, ach_btn.get_index() + 1)
+	_style_dock_btn(_titles_btn, "👑")
 
 	var am := get_node_or_null("/root/AudioManager")
 	_titles_btn.pressed.connect(func():
@@ -1183,16 +1210,13 @@ func _setup_settings_ui() -> void:
 	_settings_ui.set_script(st_script)
 	add_child(_settings_ui)
 
-	# Кнопку вставляем в тот же VBox, прямо перед кнопкой «В главное меню»
-	var vbox: VBoxContainer = $Panel/VBox
+	# Кнопку вставляем в док, прямо перед кнопкой «В главное меню»
+	var dock: HBoxContainer = $Dock/DockRow
 	_settings_btn = Button.new()
-	_settings_btn.text = "⚙ Настройки"
 	_settings_btn.tooltip_text = "Звук, видео, сложность, доступность и уведомления.\nМожно менять по ходу игры."
-	_settings_btn.custom_minimum_size = Vector2(0, 22)
-	_settings_btn.add_theme_font_size_override("font_size", 11)
-	_style_btn(_settings_btn)
-	vbox.add_child(_settings_btn)
-	vbox.move_child(_settings_btn, menu_btn.get_index())
+	dock.add_child(_settings_btn)
+	dock.move_child(_settings_btn, menu_btn.get_index())
+	_style_dock_btn(_settings_btn, "⚙")
 
 	var am2 := get_node_or_null("/root/AudioManager")
 	_settings_btn.pressed.connect(func():
