@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://casinoui001"]
+
+[ext_resource type="Script" path="res://scripts/CasinoUI.gd" id="1"]
+
+[node name="CasinoUI" type="CanvasLayer"]
+script = ExtResource("1")

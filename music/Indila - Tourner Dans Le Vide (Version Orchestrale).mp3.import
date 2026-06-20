@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://coe2ev5wot4fl"
+path="res://.godot/imported/Indila - Tourner Dans Le Vide (Version Orchestrale).mp3-94f0f37c472ce2c962f9e5caf975eb7e.mp3str"
+
+[deps]
+
+source_file="res://music/Indila - Tourner Dans Le Vide (Version Orchestrale).mp3"
+dest_files=["res://.godot/imported/Indila - Tourner Dans Le Vide (Version Orchestrale).mp3-94f0f37c472ce2c962f9e5caf975eb7e.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

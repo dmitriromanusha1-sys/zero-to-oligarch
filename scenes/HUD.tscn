@@ -1,0 +1,145 @@
+[gd_scene load_steps=12 format=3 uid="uid://hud001"]
+
+[ext_resource type="Script" path="res://scripts/HUD.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/HousingShop.tscn" id="2"]
+[ext_resource type="Script" path="res://scripts/Minimap.gd" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/BusinessShop.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/QuestUI.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/AchievementUI.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/StatsUI.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/StockUI.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/InventoryUI.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/PauseMenu.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/LoanUI.tscn" id="11"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1")
+
+[node name="Panel" type="Panel" parent="."]
+offset_right = 245.0
+offset_bottom = 345.0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 237.0
+offset_bottom = 337.0
+
+[node name="MoneyLabel" type="Label" parent="Panel/VBox"]
+text = "💰 0 ₽"
+
+[node name="IncomeLabel" type="Label" parent="Panel/VBox"]
+text = "📈 Доход: 0 ₽/день"
+modulate = Color(0.6, 1.0, 0.6, 1.0)
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox"]
+text = "🏅 Бомж"
+
+[node name="HousingLabel" type="Label" parent="Panel/VBox"]
+text = "🏠 Улица"
+
+[node name="DayLabel" type="Label" parent="Panel/VBox"]
+text = "📅 День 1"
+
+[node name="TimeLabel" type="Label" parent="Panel/VBox"]
+text = "🕗 08:00"
+
+[node name="HealthBar" type="ProgressBar" parent="Panel/VBox"]
+custom_minimum_size = Vector2(220.0, 14.0)
+max_value = 100.0
+value = 100.0
+
+[node name="HungerBar" type="ProgressBar" parent="Panel/VBox"]
+custom_minimum_size = Vector2(220.0, 12.0)
+max_value = 100.0
+value = 100.0
+
+[node name="ThirstBar" type="ProgressBar" parent="Panel/VBox"]
+custom_minimum_size = Vector2(220.0, 12.0)
+max_value = 100.0
+value = 100.0
+
+[node name="EnergyBar" type="ProgressBar" parent="Panel/VBox"]
+custom_minimum_size = Vector2(220.0, 12.0)
+max_value = 100.0
+value = 100.0
+
+[node name="TransportLabel" type="Label" parent="Panel/VBox"]
+text = "🚶 Пешком"
+
+[node name="ReputationLabel" type="Label" parent="Panel/VBox"]
+text = "⭐ Репутация: Обычный"
+
+[node name="EducationLabel" type="Label" parent="Panel/VBox"]
+text = "📚 Без образования"
+
+[node name="HousingBtn" type="Button" parent="Panel/VBox"]
+text = "🏠 Купить жильё"
+
+[node name="BusinessBtn" type="Button" parent="Panel/VBox"]
+text = "💼 Бизнес и Банк"
+
+[node name="QuestBtn" type="Button" parent="Panel/VBox"]
+text = "📋 Цели и дневник"
+
+[node name="SleepBtn" type="Button" parent="Panel/VBox"]
+text = "😴 Следующий день"
+
+[node name="AchBtn" type="Button" parent="Panel/VBox"]
+text = "🏆 Достижения"
+
+[node name="StatsBtn" type="Button" parent="Panel/VBox"]
+text = "📊 Статистика"
+
+[node name="StockBtn" type="Button" parent="Panel/VBox"]
+text = "📈 Биржа акций"
+
+[node name="InvBtn" type="Button" parent="Panel/VBox"]
+text = "🎒 Инвентарь"
+
+[node name="LoanBtn" type="Button" parent="Panel/VBox"]
+text = "🏦 Кредиты"
+
+[node name="MenuBtn" type="Button" parent="Panel/VBox"]
+text = "🏠 В главное меню"
+
+[node name="Minimap" type="Control" parent="."]
+script = ExtResource("3")
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -200.0
+offset_right = 0.0
+offset_bottom = 40.0
+
+[node name="DistrictLabel" type="Label" parent="Minimap"]
+anchor_right = 1.0
+offset_bottom = 40.0
+horizontal_alignment = 1
+text = "📍 Промзона"
+
+[node name="TitlePopup" type="Label" parent="."]
+offset_left = 300.0
+offset_top = 30.0
+offset_right = 980.0
+offset_bottom = 70.0
+text = ""
+horizontal_alignment = 1
+visible = false
+
+[node name="HousingShop" parent="." instance=ExtResource("2")]
+
+[node name="BusinessShop" parent="." instance=ExtResource("4")]
+
+[node name="QuestUI" parent="." instance=ExtResource("5")]
+
+[node name="AchievementUI" parent="." instance=ExtResource("6")]
+
+[node name="StatsUI" parent="." instance=ExtResource("7")]
+
+[node name="StockUI" parent="." instance=ExtResource("8")]
+
+[node name="InventoryUI" parent="." instance=ExtResource("9")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("10")]
+
+[node name="LoanUI" parent="." instance=ExtResource("11")]

@@ -1,0 +1,63 @@
+extends Node
+
+signal education_changed(level: int)
+
+const LEVELS: Array = [
+	{"name": "Чтение",           "icon": "📖", "price": 0,          "desc": "Только самые простые работы"},
+	{"name": "3 класса",         "icon": "✏️",  "price": 500,        "desc": "Уборщик, грузчик, дворник"},
+	{"name": "9 классов",        "icon": "📝", "price": 5000,       "desc": "Завод, стройка, рынок"},
+	{"name": "ПТУ",              "icon": "🔧", "price": 20000,      "desc": "Мастер, механик, электрик"},
+	{"name": "Колледж",          "icon": "📋", "price": 80000,      "desc": "Кафе, супермаркет, автосалон"},
+	{"name": "ВУЗ (Бакалавр)",   "icon": "🎓", "price": 350000,     "desc": "Офис, биржа, инвест. банк"},
+	{"name": "ВУЗ (Магистр)",    "icon": "🏫", "price": 1200000,    "desc": "Управление, консалтинг"},
+	{"name": "ВУЗ (Аспирант)",   "icon": "🔬", "price": 4000000,    "desc": "Яхт-клуб, элитный сектор"},
+	{"name": "Доктор наук",      "icon": "🧑‍🔬", "price": 15000000,   "desc": "Дворец, частный аэропорт"},
+	{"name": "Гений",            "icon": "🧠", "price": 80000000,   "desc": "Всё доступно. Максимум удачи"},
+]
+
+# Веса зон [miss, ok, good, perfect] для каждого уровня образования
+const ZONE_WEIGHTS: Array = [
+	[50, 30, 15,  5],  # 0 — чтение
+	[42, 32, 18,  8],  # 1 — 3 класса
+	[33, 35, 22, 10],  # 2 — 9 классов
+	[25, 37, 26, 12],  # 3 — ПТУ
+	[18, 35, 30, 17],  # 4 — колледж
+	[12, 30, 35, 23],  # 5 — бакалавр
+	[ 8, 25, 38, 29],  # 6 — магистр
+	[ 5, 20, 40, 35],  # 7 — аспирант
+	[ 3, 15, 40, 42],  # 8 — доктор наук
+	[ 2, 10, 35, 53],  # 9 — гений
+]
+
+var level: int = 0
+
+func get_level_name() -> String:
+	return LEVELS[level].name
+
+func get_level_icon() -> String:
+	return LEVELS[level].icon
+
+func can_work_at(edu_req: int) -> bool:
+	return level >= edu_req
+
+func get_zone_weights() -> Array:
+	return ZONE_WEIGHTS[level]
+
+func buy_next() -> bool:
+	if level >= LEVELS.size() - 1:
+		return false
+	var gm: Node = get_node("/root/GameManager")
+	var price: float = LEVELS[level + 1].price
+	if not gm.spend_money(price):
+		return false
+	level += 1
+	emit_signal("education_changed", level)
+	var qm: Node = get_node_or_null("/root/QuestManager")
+	if qm: qm.add_diary_entry("🎓 Получено: " + LEVELS[level].name)
+	return true
+
+func save(cfg: ConfigFile) -> void:
+	cfg.set_value("education", "level", level)
+
+func load_data(cfg: ConfigFile) -> void:
+	level = cfg.get_value("education", "level", 0)

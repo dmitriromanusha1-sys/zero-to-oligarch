@@ -1,0 +1,16 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Build output
+/build/
+
+# Claude Code session/local config
+.claude/
+
+# Texture backups from local cleanup scripts
+assets/textures/_backup_pre_alpha_fix/
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db

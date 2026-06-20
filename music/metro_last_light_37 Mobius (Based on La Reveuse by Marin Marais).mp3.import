@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://jq34gcp5nd73"
+path="res://.godot/imported/metro_last_light_37 Mobius (Based on La Reveuse by Marin Marais).mp3-970798d91d4f71a0c35055d11f0abece.mp3str"
+
+[deps]
+
+source_file="res://music/metro_last_light_37 Mobius (Based on La Reveuse by Marin Marais).mp3"
+dest_files=["res://.godot/imported/metro_last_light_37 Mobius (Based on La Reveuse by Marin Marais).mp3-970798d91d4f71a0c35055d11f0abece.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

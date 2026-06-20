@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://statsui001"]
+
+[ext_resource type="Script" path="res://scripts/StatsUI.gd" id="1"]
+
+[node name="StatsUI" type="CanvasLayer"]
+script = ExtResource("1")
+layer = 8

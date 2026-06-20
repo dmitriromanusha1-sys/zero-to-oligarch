@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://stockui001"]
+
+[ext_resource type="Script" path="res://scripts/StockUI.gd" id="1"]
+
+[node name="StockUI" type="CanvasLayer"]
+script = ExtResource("1")
+layer = 8

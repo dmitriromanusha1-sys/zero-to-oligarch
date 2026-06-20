@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://travelui001"]
+
+[ext_resource type="Script" path="res://scripts/TravelAgencyUI.gd" id="1"]
+
+[node name="TravelAgencyUI" type="CanvasLayer"]
+script = ExtResource("1")

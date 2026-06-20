@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://questui001"]
+
+[ext_resource type="Script" path="res://scripts/QuestUI.gd" id="1"]
+
+[node name="QuestUI" type="Control"]
+script = ExtResource("1")

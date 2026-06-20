@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dyo324iyfcot2"
+path="res://.godot/imported/Plenka - Nightmare.mp3-9604b5eee03f87436f6b30a5d8fc6349.mp3str"
+
+[deps]
+
+source_file="res://music/Plenka - Nightmare.mp3"
+dest_files=["res://.godot/imported/Plenka - Nightmare.mp3-9604b5eee03f87436f6b30a5d8fc6349.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

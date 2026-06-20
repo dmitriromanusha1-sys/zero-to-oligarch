@@ -1,0 +1,68 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Zero to Oligarch"
+run/main_scene="res://scenes/MainMenu.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+FontFix="*res://scripts/FontFix.gd"
+GameManager="*res://scripts/GameManager.gd"
+EventSystem="*res://scripts/EventSystem.gd"
+BusinessManager="*res://scripts/BusinessManager.gd"
+DistrictManager="*res://scripts/DistrictManager.gd"
+QuestManager="*res://scripts/QuestManager.gd"
+AudioManager="*res://scripts/AudioManager.gd"
+ReputationManager="*res://scripts/ReputationManager.gd"
+AchievementManager="*res://scripts/AchievementManager.gd"
+PasserbyManager="*res://scripts/PasserbyManager.gd"
+StockMarket="*res://scripts/StockMarket.gd"
+InventoryManager="*res://scripts/InventoryManager.gd"
+LoanManager="*res://scripts/LoanManager.gd"
+CentralBankManager="*res://scripts/CentralBankManager.gd"
+LeaderboardManager="*res://scripts/LeaderboardManager.gd"
+EducationManager="*res://scripts/EducationManager.gd"
+ZoneManager="*res://scripts/ZoneManager.gd"
+TransportManager="*res://scripts/TransportManager.gd"
+SceneTransition="*res://scripts/SceneTransition.gd"
+SettingsManager="*res://scripts/SettingsManager.gd"
+Localization="*res://scripts/Localization.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=2
+window/stretch/mode="canvas_items"
+
+[input]
+
+interact={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":69,"key_label":0,"unicode":101,"location":0,"echo":false,"script":null)
+]
+}
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+rendering_device/driver.windows="d3d12"
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true

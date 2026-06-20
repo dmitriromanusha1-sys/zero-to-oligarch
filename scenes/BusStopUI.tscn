@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://busstopui001"]
+
+[ext_resource type="Script" path="res://scripts/BusStopUI.gd" id="1"]
+
+[node name="BusStopUI" type="CanvasLayer"]
+script = ExtResource("1")

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cokrs53bs62jx"
+path="res://.godot/imported/metro_last_light_09 Echoes of the Past.mp3-f1c7a76ceb10df698f9b7c29483e8b3d.mp3str"
+
+[deps]
+
+source_file="res://music/metro_last_light_09 Echoes of the Past.mp3"
+dest_files=["res://.godot/imported/metro_last_light_09 Echoes of the Past.mp3-f1c7a76ceb10df698f9b7c29483e8b3d.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

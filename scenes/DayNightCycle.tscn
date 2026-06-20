@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://ctfe164bo08cq"]
+
+[ext_resource type="Script" path="res://scripts/DayNightCycle.gd" id="1"]
+
+[node name="DayNightCycle" type="CanvasLayer"]
+script = ExtResource("1")
+layer = 5

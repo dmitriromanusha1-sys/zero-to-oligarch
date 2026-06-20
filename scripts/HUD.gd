@@ -1,0 +1,1109 @@
+extends CanvasLayer
+
+const FloatingText = preload("res://scripts/FloatingText.gd")
+
+@onready var money_label: Label    = $Panel/VBox/MoneyLabel
+@onready var income_label: Label   = $Panel/VBox/IncomeLabel
+@onready var title_label: Label    = $Panel/VBox/TitleLabel
+@onready var housing_label: Label  = $Panel/VBox/HousingLabel
+@onready var health_bar: ProgressBar = $Panel/VBox/HealthBar
+@onready var hunger_bar: ProgressBar = $Panel/VBox/HungerBar
+@onready var thirst_bar: ProgressBar = $Panel/VBox/ThirstBar
+@onready var energy_bar: ProgressBar = $Panel/VBox/EnergyBar
+@onready var day_label: Label      = $Panel/VBox/DayLabel
+@onready var time_label: Label     = $Panel/VBox/TimeLabel
+@onready var title_popup: Label    = $TitlePopup
+@onready var housing_btn: Button    = $Panel/VBox/HousingBtn
+@onready var business_btn: Button   = $Panel/VBox/BusinessBtn
+@onready var quest_btn: Button      = $Panel/VBox/QuestBtn
+@onready var sleep_btn: Button        = $Panel/VBox/SleepBtn
+@onready var ach_btn: Button           = $Panel/VBox/AchBtn
+@onready var stats_btn: Button        = $Panel/VBox/StatsBtn
+@onready var stock_btn: Button        = $Panel/VBox/StockBtn
+@onready var inv_btn: Button          = $Panel/VBox/InvBtn
+@onready var loan_btn: Button         = $Panel/VBox/LoanBtn
+@onready var menu_btn: Button         = $Panel/VBox/MenuBtn
+@onready var transport_label: Label   = $Panel/VBox/TransportLabel
+@onready var reputation_label: Label  = $Panel/VBox/ReputationLabel
+@onready var education_label: Label   = $Panel/VBox/EducationLabel
+@onready var ach_ui: CanvasLayer      = $AchievementUI
+@onready var stats_ui: CanvasLayer    = $StatsUI
+@onready var stock_ui: CanvasLayer   = $StockUI
+@onready var inv_ui: CanvasLayer     = $InventoryUI
+@onready var pause_menu: CanvasLayer = $PauseMenu
+@onready var loan_ui: CanvasLayer    = $LoanUI
+@onready var housing_shop: Control  = $HousingShop
+@onready var business_shop: Control = $BusinessShop
+@onready var quest_ui: Control      = $QuestUI
+
+var gm: Node
+var bm: Node
+var qm: Node
+var rm: Node
+
+var _invest_btn: Button = null
+var _invest_popup: PanelContainer = null
+var _zone_panel: Panel = null
+var _damage_vignette: ColorRect = null
+var _game_over_shown: bool = false
+var _titles_handbook: CanvasLayer = null
+var _titles_btn: Button = null
+var _settings_ui: CanvasLayer = null
+var _settings_btn: Button = null
+
+var _minimap_root: Control = null
+var _minimap_player_dot: ColorRect = null
+var _minimap_zone_cells: Array = []
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("hud")
+	gm = get_node("/root/GameManager")
+	bm = get_node("/root/BusinessManager")
+	qm = get_node("/root/QuestManager")
+	rm = get_node("/root/ReputationManager")
+	rm.reputation_changed.connect(_on_reputation_changed)
+	var em: Node = get_node_or_null("/root/EducationManager")
+	if em: em.education_changed.connect(func(_l): _refresh_education())
+
+	gm.money_changed.connect(_on_money_changed)
+	gm.title_changed.connect(_on_title_changed)
+	gm.housing_changed.connect(_on_housing_changed)
+	gm.health_changed.connect(_on_health_changed)
+	gm.day_changed.connect(_on_day_changed)
+	gm.time_changed.connect(_on_time_changed)
+	gm.hunger_changed.connect(_on_hunger_changed)
+	gm.thirst_changed.connect(_on_thirst_changed)
+	gm.energy_changed.connect(_on_energy_changed)
+	gm.view_zoom_changed.connect(_on_view_zoom_changed)
+	_on_view_zoom_changed(gm.view_zoom)
+	bm.business_changed.connect(_refresh_income)
+	bm.bank_changed.connect(func(_v): _refresh_income())
+	qm.quest_completed.connect(_on_quest_completed)
+
+	_style_hud()
+	_setup_fade_overlay()
+	$Panel.modulate.a = 0.0
+	var _hud_tw := create_tween()
+	_hud_tw.tween_property($Panel, "modulate:a", 1.0, 0.60).set_ease(Tween.EASE_OUT)
+
+	var zm := get_node_or_null("/root/ZoneManager")
+	if zm:
+		zm.zone_changed.connect(_on_zone_entered)
+
+	_setup_zone_banner()
+	_setup_hp_pulse()
+	_add_vignette()
+	_setup_damage_vignette()
+	_setup_minimap()
+	_setup_titles_handbook()
+	_setup_settings_ui()
+
+	# Запустить музыку для стартовой зоны
+	var zm_init := get_node_or_null("/root/ZoneManager")
+	var am_init := get_node_or_null("/root/AudioManager")
+	if zm_init and am_init:
+		var meta_init: Dictionary = zm_init.ZONE_META[zm_init.current_zone]
+		am_init.notify_district(meta_init.name)
+
+	# Тултипы
+	housing_btn.tooltip_text   = "Купить или снять жильё.\nЖильё влияет на здоровье каждый день."
+	quest_btn.tooltip_text     = "Активные цели и личный дневник.\nВыполняй цели для получения наград."
+	sleep_btn.tooltip_text     = "Перейти к следующему дню.\nНачислится доход, спишутся налоги и аренда."
+	ach_btn.tooltip_text       = "Список достижений.\nЗарабатывай их, играя!"
+	stats_btn.tooltip_text     = "Статистика и график роста капитала."
+	inv_btn.tooltip_text       = "Инвентарь: еда, напитки, аптечки.\nИспользуй предметы для восстановления."
+	menu_btn.tooltip_text      = "Сохранить и выйти в главное меню."
+	health_bar.tooltip_text    = "❤ Здоровье. При 0 — конец игры.\nЖильё, еда и отдых восстанавливают."
+	hunger_bar.tooltip_text    = "Сытость. Убывает каждый день.\nПри 0 — теряешь здоровье. Ешь!"
+	thirst_bar.tooltip_text    = "Жажда. Убывает каждый день.\nПри 0 — теряешь здоровье. Пей!"
+	energy_bar.tooltip_text    = "Энергия. Тратится при работе (-10 за действие).\nПри 0 — нельзя работать. Жми Следующий день!"
+
+	var am = get_node_or_null("/root/AudioManager")
+	housing_btn.pressed.connect(func():
+		if am: am.play_click()
+		housing_shop.open())
+	quest_btn.pressed.connect(func():
+		if am: am.play_click()
+		quest_ui.open())
+	sleep_btn.pressed.connect(func(): gm.next_day())
+	ach_btn.pressed.connect(func():
+		if am: am.play_click()
+		ach_ui.open())
+	stats_btn.pressed.connect(func():
+		if am: am.play_click()
+		stats_ui.open())
+	inv_btn.pressed.connect(func():
+		if am: am.play_click()
+		inv_ui.open())
+	menu_btn.pressed.connect(_go_to_menu)
+
+	_setup_invest_btn(am)
+	_setup_autosave_label()
+
+	var es = get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.connect(_on_event)
+
+	_refresh()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if _game_over_shown:
+			return
+		if pause_menu.visible:
+			pause_menu._resume()
+		else:
+			pause_menu.open()
+		get_viewport().set_input_as_handled()
+
+var _last_hp: float = 100.0
+var _fade_rect: ColorRect = null
+var _autosave_lbl: Label = null
+
+func _setup_fade_overlay() -> void:
+	_fade_rect = ColorRect.new()
+	_fade_rect.color = Color(0, 0, 0, 0)
+	_fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade_rect.z_index = 10
+	add_child(_fade_rect)
+
+var _zone_banner: Label = null
+
+func _setup_zone_banner() -> void:
+	_zone_panel = Panel.new()
+	_zone_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_zone_panel.position = Vector2(-260, 74)
+	_zone_panel.size = Vector2(520, 56)
+	var zps := StyleBoxFlat.new()
+	zps.bg_color = Color(0.04, 0.03, 0.07, 0.86)
+	zps.border_color = Color(0.80, 0.65, 0.22, 0.65)
+	zps.set_border_width_all(1)
+	zps.set_corner_radius_all(10)
+	zps.content_margin_left = 12; zps.content_margin_right = 12
+	_zone_panel.add_theme_stylebox_override("panel", zps)
+	_zone_panel.modulate.a = 0.0
+	_zone_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_zone_panel)
+
+	_zone_banner = Label.new()
+	_zone_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_zone_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_zone_banner.position = Vector2(-256, 78)
+	_zone_banner.size = Vector2(512, 50)
+	_zone_banner.add_theme_font_size_override("font_size", 26)
+	_zone_banner.add_theme_color_override("font_color", Color(1.0, 0.92, 0.38))
+	_zone_banner.add_theme_constant_override("outline_size", 4)
+	_zone_banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.90))
+	_zone_banner.modulate.a = 0.0
+	add_child(_zone_banner)
+
+func _add_vignette() -> void:
+	var vw: float = 1280.0; var vh: float = 720.0
+	var edges := [
+		[0.0, 0.0, 70.0, vh,  0.22],
+		[vw - 70.0, 0.0, 70.0, vh, 0.22],
+		[0.0, 0.0, vw, 55.0, 0.18],
+		[0.0, vh - 55.0, vw, 55.0, 0.18],
+	]
+	for e in edges:
+		var vr := ColorRect.new()
+		vr.position = Vector2(e[0], e[1])
+		vr.size = Vector2(e[2], e[3])
+		vr.color = Color(0.0, 0.0, 0.0, e[4])
+		vr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(vr)
+
+func _setup_hp_pulse() -> void:
+	pass  # пульсация реализована в _process
+
+func _setup_minimap() -> void:
+	const MM: float = 138.0
+	const CELL: float = 42.0
+	const GAP: float = 2.0
+	var zm := get_node_or_null("/root/ZoneManager")
+	if zm == null:
+		return
+
+	_minimap_root = Control.new()
+	_minimap_root.position = Vector2(1280.0 - MM - 8.0, 720.0 - MM - 8.0)
+	_minimap_root.size = Vector2(MM, MM)
+	_minimap_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_minimap_root)
+
+	var bg := ColorRect.new()
+	bg.size = Vector2(MM, MM)
+	bg.color = Color(0.04, 0.04, 0.08, 0.86)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_minimap_root.add_child(bg)
+
+	# Тонкая рамка
+	for edge in [[0,0,MM,2],[0,MM-2,MM,2],[0,0,2,MM],[MM-2,0,2,MM]]:
+		var brd := ColorRect.new()
+		brd.position = Vector2(edge[0], edge[1]); brd.size = Vector2(edge[2], edge[3])
+		brd.color = Color(0.35, 0.35, 0.55, 0.70); brd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_minimap_root.add_child(brd)
+
+	# Ячейки зон 3×3
+	for z in 9:
+		var g: Vector2i = ZoneManager.ZONE_GRID[z]
+		var meta: Dictionary = ZoneManager.ZONE_META[z]
+		var cell := ColorRect.new()
+		cell.size = Vector2(CELL, CELL)
+		cell.position = Vector2(GAP + g.x * (CELL + GAP), GAP + g.y * (CELL + GAP))
+		cell.color = meta.bg.lightened(0.25)
+		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_minimap_root.add_child(cell)
+		_minimap_zone_cells.append(cell)
+
+		var icon_lbl := Label.new()
+		icon_lbl.text = meta.icon
+		icon_lbl.position = cell.position + Vector2(2, 2)
+		icon_lbl.add_theme_font_size_override("font_size", 11)
+		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_minimap_root.add_child(icon_lbl)
+
+	# Точка игрока
+	_minimap_player_dot = ColorRect.new()
+	_minimap_player_dot.size = Vector2(5, 5)
+	_minimap_player_dot.color = Color(1.0, 1.0, 1.0, 1.0)
+	_minimap_root.add_child(_minimap_player_dot)
+
+	_update_minimap_zone(zm.current_zone)
+	zm.zone_changed.connect(func(z): _update_minimap_zone(z))
+
+func _update_minimap_zone(zone_idx: int) -> void:
+	var zm2 := get_node_or_null("/root/ZoneManager")
+	var current: int = zm2.current_zone if zm2 else zone_idx
+	for i in _minimap_zone_cells.size():
+		var cell: ColorRect = _minimap_zone_cells[i]
+		var meta: Dictionary = ZoneManager.ZONE_META[i]
+		if i == current:
+			cell.color = meta.bg.lightened(0.60)   # текущая — яркая
+		elif i < current:
+			cell.color = meta.bg.lightened(0.28)   # посещённая — нормальная
+		else:
+			cell.color = Color(0.04, 0.04, 0.07)   # заблокированная — тёмная
+
+func _setup_damage_vignette() -> void:
+	_damage_vignette = ColorRect.new()
+	_damage_vignette.color = Color(0.72, 0.04, 0.04, 0.0)
+	_damage_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_damage_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_damage_vignette.z_index = 8
+	add_child(_damage_vignette)
+
+func _process(delta: float) -> void:
+	if gm == null:
+		return
+	# Мини-карта: позиция игрока
+	if _minimap_player_dot and _minimap_root:
+		var player_node = get_tree().get_first_node_in_group("player")
+		if player_node:
+			const MAP_SIZE: float = 7500.0
+			var nx: float = (player_node.global_position.x + 3750.0) / MAP_SIZE
+			var ny: float = (player_node.global_position.y + 3750.0) / MAP_SIZE
+			_minimap_player_dot.position = Vector2(
+				clampf(nx * 138.0 - 2.5, 2.0, 133.0),
+				clampf(ny * 138.0 - 2.5, 2.0, 133.0)
+			)
+	var pulse: float = (sin(Time.get_ticks_msec() * 0.005) + 1.0) * 0.5
+	if gm.health <= 30.0:
+		var t: float = clampf(1.0 - gm.health / 30.0, 0.0, 1.0)
+		health_bar.modulate = Color(1.0, 0.2 + pulse * 0.8, 0.2 + pulse * 0.8)
+		if _damage_vignette:
+			_damage_vignette.color.a = t * (0.18 + pulse * 0.14)
+	else:
+		health_bar.modulate = Color(1.0, 1.0, 1.0)
+		if _damage_vignette:
+			_damage_vignette.color.a = maxf(_damage_vignette.color.a - delta * 2.0, 0.0)
+	if gm.hunger <= 20.0:
+		hunger_bar.modulate = Color(1.0, 0.25 + pulse * 0.75, 0.25 + pulse * 0.75)
+	else:
+		hunger_bar.modulate = Color(1.0, 1.0, 1.0)
+	if gm.thirst <= 20.0:
+		thirst_bar.modulate = Color(1.0, 0.25 + pulse * 0.75, 0.25 + pulse * 0.75)
+	else:
+		thirst_bar.modulate = Color(1.0, 1.0, 1.0)
+	if gm.energy <= 20.0:
+		energy_bar.modulate = Color(1.0, 0.25 + pulse * 0.75, 0.25 + pulse * 0.75)
+	else:
+		energy_bar.modulate = Color(1.0, 1.0, 1.0)
+	# Кнопка «Следующий день» пульсирует когда энергия в нуле
+	if gm.energy <= 0.0:
+		sleep_btn.modulate = Color(1.0, 0.55 + pulse * 0.45, 0.55 + pulse * 0.45)
+	else:
+		sleep_btn.modulate = Color(1.0, 1.0, 1.0)
+
+func _on_zone_entered(zone_idx: int) -> void:
+	_play_zone_fade()
+	var zm := get_node_or_null("/root/ZoneManager")
+	if zm == null or _zone_banner == null:
+		return
+	var meta: Dictionary = zm.ZONE_META[zone_idx]
+	_zone_banner.text = meta.icon + "  " + meta.name
+	_zone_banner.modulate.a = 0.0
+	if _zone_panel: _zone_panel.modulate.a = 0.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_zone_banner, "modulate:a", 1.0, 0.35)
+	if _zone_panel: tw.tween_property(_zone_panel, "modulate:a", 1.0, 0.35)
+	tw.set_parallel(false)
+	tw.tween_interval(2.5)
+	tw.set_parallel(true)
+	tw.tween_property(_zone_banner, "modulate:a", 0.0, 0.55)
+	if _zone_panel: tw.tween_property(_zone_panel, "modulate:a", 0.0, 0.55)
+	var am := get_node_or_null("/root/AudioManager")
+	if am: am.notify_district(meta.name)
+
+func _play_zone_fade() -> void:
+	if _fade_rect == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(_fade_rect, "color", Color(0, 0, 0, 1.0), 0.25)
+	tw.tween_interval(0.15)
+	tw.tween_property(_fade_rect, "color", Color(0, 0, 0, 0.0), 0.40)
+
+func _setup_invest_btn(am: Node) -> void:
+	# Скрываем три отдельные кнопки
+	business_btn.visible = false
+	stock_btn.visible    = false
+	loan_btn.visible     = false
+
+	# Создаём кнопку «Инвестиции» и вставляем сразу после QuestBtn
+	_invest_btn = Button.new()
+	_invest_btn.text = "💹 Инвестиции"
+	_invest_btn.custom_minimum_size = Vector2(0, 22)
+	_invest_btn.add_theme_font_size_override("font_size", 11)
+	_style_btn(_invest_btn)
+	_invest_btn.tooltip_text = "Бизнес и Банк, Биржа акций, Кредиты"
+
+	var vbox := $Panel/VBox
+	vbox.add_child(_invest_btn)
+	vbox.move_child(_invest_btn, quest_btn.get_index() + 1)
+
+	_invest_btn.pressed.connect(func(): _toggle_invest_popup(am))
+
+func _toggle_invest_popup(am: Node) -> void:
+	if _invest_popup and is_instance_valid(_invest_popup):
+		_invest_popup.queue_free()
+		_invest_popup = null
+		return
+	if am: am.play_click()
+
+	_invest_popup = PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.05, 0.06, 0.10, 0.97)
+	ps.border_color = Color(0.25, 0.52, 0.20, 0.90)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(s, 2)
+		ps.set_corner_radius(s, 8)
+	ps.content_margin_left   = 6
+	ps.content_margin_right  = 6
+	ps.content_margin_top    = 6
+	ps.content_margin_bottom = 6
+	_invest_popup.add_theme_stylebox_override("panel", ps)
+	_invest_popup.position = Vector2(250, 220)
+	add_child(_invest_popup)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	_invest_popup.add_child(vb)
+
+	var items := [
+		{"icon": "💼", "text": "Бизнес и Банк",  "col": Color(0.08, 0.18, 0.10), "brd": Color(0.25, 0.58, 0.25),
+		 "cb": func(): business_shop.open(); _close_invest_popup()},
+		{"icon": "📈", "text": "Биржа акций",    "col": Color(0.06, 0.14, 0.22), "brd": Color(0.22, 0.45, 0.75),
+		 "cb": func(): stock_ui.open(); _close_invest_popup()},
+	]
+	for item in items:
+		var b := Button.new()
+		b.text = item.icon + "  " + item.text
+		b.custom_minimum_size = Vector2(170, 26)
+		b.add_theme_font_size_override("font_size", 12)
+		_style_btn(b, item.col, item.brd)
+		b.pressed.connect(item.cb)
+		vb.add_child(b)
+
+	_invest_popup.modulate.a = 0.0
+	_invest_popup.scale = Vector2(0.90, 0.90)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_invest_popup, "modulate:a", 1.0, 0.18)
+	tw.tween_property(_invest_popup, "scale", Vector2(1.0, 1.0), 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+func _close_invest_popup() -> void:
+	if _invest_popup and is_instance_valid(_invest_popup):
+		_invest_popup.queue_free()
+		_invest_popup = null
+
+## ── Единая цветовая палитра HUD ───────────────────────────────────────────
+const HUD_BG     := Color(0.045, 0.050, 0.085, 0.94)   # тёмное "стекло" панели
+const HUD_BORDER := Color(0.70, 0.56, 0.18, 0.75)       # золотой акцент рамки
+const HUD_BTN_BG := Color(0.075, 0.085, 0.135, 1.0)     # фон обычной кнопки
+const HUD_GOLD   := Color(1.0, 0.88, 0.30)              # золотой текст/акцент
+
+func _style_hud() -> void:
+	# ── Панель фона — единое "стекло" с золотой рамкой ────────────────────────
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color     = HUD_BG
+	panel_style.border_color = HUD_BORDER
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		panel_style.set_border_width(side, 1)
+		panel_style.set_corner_radius(side, 10)
+	panel_style.shadow_color = Color(0, 0, 0, 0.35)
+	panel_style.shadow_size = 6
+	$Panel.add_theme_stylebox_override("panel", panel_style)
+
+	var vbox: VBoxContainer = $Panel/VBox
+	vbox.add_theme_constant_override("separation", 5)
+
+	# ── Деньги — крупно, золото ───────────────────────────────────────────────
+	money_label.add_theme_font_size_override("font_size", 18)
+	money_label.add_theme_color_override("font_color", HUD_GOLD)
+	money_label.add_theme_constant_override("outline_size", 2)
+	money_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+
+	# ── Информационные метки — единый светлый серо-голубой тон ───────────────
+	for lbl in [title_label, housing_label, day_label, time_label,
+				transport_label, reputation_label, education_label, income_label]:
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_color_override("font_color", Color(0.78, 0.80, 0.88))
+
+	# Разделитель между блоком статов и полосками
+	vbox.add_child(_section_divider())
+
+	# ── Полоски: fill + background с скруглением ──────────────────────────────
+	_style_bar_fancy(health_bar,  Color(0.85, 0.15, 0.15), Color(0.20, 0.06, 0.07))
+	_style_bar_fancy(hunger_bar,  Color(0.92, 0.58, 0.12), Color(0.22, 0.14, 0.05))
+	_style_bar_fancy(thirst_bar,  Color(0.18, 0.52, 0.95), Color(0.06, 0.13, 0.24))
+	_style_bar_fancy(energy_bar,  Color(0.28, 0.82, 0.28), Color(0.07, 0.19, 0.08))
+
+	# Показывать значение на полосках (% = значение, т.к. max=100)
+	for bar in [health_bar, hunger_bar, thirst_bar, energy_bar]:
+		bar.custom_minimum_size.y = 16
+		bar.show_percentage = true
+		bar.add_theme_font_size_override("font_size", 8)
+		bar.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.90))
+		bar.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.70))
+		bar.add_theme_constant_override("font_shadow_offset_x", 1)
+		bar.add_theme_constant_override("font_shadow_offset_y", 1)
+
+	# Разделитель между полосками и кнопками
+	vbox.add_child(_section_divider())
+
+	# ── Кнопки — единый тёмный стиль с золотой рамкой ─────────────────────────
+	for btn in [housing_btn, quest_btn, ach_btn, stats_btn, inv_btn, menu_btn]:
+		_style_btn(btn, HUD_BTN_BG, HUD_BORDER)
+
+	# Кнопка «Следующий день» — единственное золотое CTA-действие в этом стиле
+	_style_btn_primary(sleep_btn)
+
+	# ── TitlePopup — то же "стекло" с золотой рамкой ─────────────────────────
+	var pop_style := StyleBoxFlat.new()
+	pop_style.bg_color     = HUD_BG
+	pop_style.border_color = HUD_BORDER
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		pop_style.set_border_width(side, 1)
+		pop_style.set_corner_radius(side, 8)
+	title_popup.add_theme_stylebox_override("normal", pop_style)
+	title_popup.add_theme_font_size_override("font_size", 15)
+	title_popup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_popup.custom_minimum_size.x = 320
+
+func _section_divider() -> Control:
+	var d := ColorRect.new()
+	d.custom_minimum_size = Vector2(0, 1)
+	d.color = Color(HUD_BORDER.r, HUD_BORDER.g, HUD_BORDER.b, 0.35)
+	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return d
+
+func _style_btn_primary(btn: Button) -> void:
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0.62, 0.48, 0.08)
+	sn.border_color = Color(0.95, 0.80, 0.30, 0.95)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sn.set_border_width(s, 1)
+		sn.set_corner_radius(s, 6)
+	btn.add_theme_stylebox_override("normal", sn)
+	var sh := sn.duplicate() as StyleBoxFlat
+	sh.bg_color = sn.bg_color.lightened(0.15)
+	btn.add_theme_stylebox_override("hover", sh)
+	btn.add_theme_color_override("font_color", Color(0.12, 0.08, 0.0))
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.custom_minimum_size.y = 26
+
+func _style_bar_fancy(bar: ProgressBar, fill_col: Color, bg_col: Color) -> void:
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_col
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		fill.set_corner_radius(s, 4)
+	bar.add_theme_stylebox_override("fill", fill)
+
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = bg_col
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		bg.set_corner_radius(s, 4)
+	bar.add_theme_stylebox_override("background", bg)
+
+func _style_btn(btn: Button, bg: Color = HUD_BTN_BG, border: Color = HUD_BORDER) -> void:
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = bg
+	sn.border_color = border
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sn.set_border_width(s, 1)
+		sn.set_corner_radius(s, 6)
+	btn.add_theme_stylebox_override("normal", sn)
+
+	var sh := StyleBoxFlat.new()
+	sh.bg_color = bg.lightened(0.10)
+	sh.border_color = border.lightened(0.2)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		sh.set_border_width(s, 1)
+		sh.set_corner_radius(s, 6)
+	btn.add_theme_stylebox_override("hover", sh)
+
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.add_theme_color_override("font_color", Color(0.85, 0.86, 0.92))
+	btn.custom_minimum_size.y = 24
+
+func _setup_autosave_label() -> void:
+	_autosave_lbl = Label.new()
+	_autosave_lbl.text = "💾 Сохранено"
+	_autosave_lbl.add_theme_font_size_override("font_size", 12)
+	_autosave_lbl.add_theme_color_override("font_color", Color(0.55, 0.90, 0.55))
+	_autosave_lbl.add_theme_constant_override("outline_size", 2)
+	_autosave_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.70))
+	_autosave_lbl.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_autosave_lbl.position = Vector2(-130, -32)
+	_autosave_lbl.modulate.a = 0.0
+	_autosave_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_autosave_lbl)
+
+func show_autosave_toast() -> void:
+	if _autosave_lbl == null:
+		return
+	_autosave_lbl.modulate.a = 0.0
+	var tw := _autosave_lbl.create_tween()
+	tw.tween_property(_autosave_lbl, "modulate:a", 1.0, 0.25)
+	tw.tween_interval(1.2)
+	tw.tween_property(_autosave_lbl, "modulate:a", 0.0, 0.50)
+
+func _refresh() -> void:
+	money_label.text  = "💰 " + gm.format_money(gm.money)
+	title_label.text  = "🏅 " + gm.get_title()
+	housing_label.text = "🏠 " + gm.get_housing()
+	health_bar.value  = gm.health
+	hunger_bar.value  = gm.hunger
+	thirst_bar.value  = gm.thirst
+	energy_bar.value  = gm.energy
+	day_label.text    = "📅 День " + str(gm.day)
+	time_label.text   = _time_str(gm.current_hour, gm.current_minute)
+	_refresh_income()
+	_refresh_transport()
+	_refresh_reputation()
+	_refresh_education()
+	_refresh_bar_labels()
+	_refresh_meal_buff()
+
+func _refresh_bar_labels() -> void:
+	hunger_bar.modulate = Color(1.0, 0.3, 0.3) if gm.hunger <= 20 else Color(1.0, 1.0, 1.0)
+	thirst_bar.modulate = Color(1.0, 0.3, 0.3) if gm.thirst <= 20 else Color(1.0, 1.0, 1.0)
+	energy_bar.modulate = Color(1.0, 0.3, 0.3) if gm.energy <= 20 else Color(1.0, 1.0, 1.0)
+
+func _refresh_transport() -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	if player and player.has_method("get_transport_name"):
+		transport_label.text = player.get_transport_name()
+
+func _refresh_education() -> void:
+	var em: Node = get_node_or_null("/root/EducationManager")
+	if em:
+		education_label.text = em.get_level_icon() + " " + em.get_level_name()
+
+func _refresh_reputation() -> void:
+	reputation_label.text = "⭐ " + rm.get_level_name() + " (%d)" % rm.reputation
+	reputation_label.add_theme_color_override("font_color", rm.get_level_color())
+
+func _refresh_income() -> void:
+	var income = bm.get_daily_income()
+	if income > 0:
+		income_label.text = "📈 Доход: +" + gm.format_money(income) + "/день"
+		income_label.visible = true
+	else:
+		income_label.visible = false
+
+var _last_money: float = 0.0
+
+func _on_money_changed(amount: float) -> void:
+	var gained: bool = amount >= _last_money
+	_last_money = amount
+	money_label.text = "💰 " + gm.format_money(amount)
+	var flash_col: Color = Color(1.0, 0.95, 0.35) if gained else Color(1.0, 0.30, 0.30)
+	var rest_col: Color  = Color(1.0, 0.88, 0.25) if gained else Color(1.0, 0.55, 0.55)
+	var scale_peak: float = 1.20 if gained else 1.10
+	var _mtw := money_label.create_tween()
+	_mtw.set_parallel(true)
+	_mtw.tween_property(money_label, "scale", Vector2(scale_peak, scale_peak), 0.08).set_ease(Tween.EASE_OUT)
+	_mtw.tween_property(money_label, "scale", Vector2(1.0, 1.0), 0.22).set_ease(Tween.EASE_IN_OUT).set_delay(0.08)
+	_mtw.tween_property(money_label, "modulate", flash_col, 0.08)
+	_mtw.tween_property(money_label, "modulate", rest_col, 0.30).set_delay(0.08)
+	_mtw.set_parallel(false)
+	_mtw.tween_property(money_label, "modulate", Color(1.0, 0.88, 0.25), 0.55)
+
+func _on_title_changed(title: String) -> void:
+	title_label.text = "🏅 " + title
+	var gm_ref: Node = get_node_or_null("/root/GameManager")
+	var popup_text: String = "🎉 Новый титул: " + title + "!"
+	if gm_ref:
+		var t: Dictionary = gm_ref.TITLES[gm_ref.current_title_index]
+		var icon: String = t.get("icon", "🏅")
+		var desc: String = t.get("desc", "")
+		title_label.text = icon + " " + title
+		popup_text = icon + " " + title + "\n" + desc
+	_show_popup(popup_text)
+	qm.add_diary_entry("🏅 Получен титул: " + title)
+	var am = get_node_or_null("/root/AudioManager")
+	if am: am.play_level_up()
+	_refresh_transport()
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		FloatingText.spawn(get_tree(), player.global_position + Vector2(0, -80), "🏅 " + title + "!", Color(1.0, 0.85, 0.1))
+	# Золотая вспышка на весь экран
+	var gold_flash := ColorRect.new()
+	gold_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	gold_flash.color = Color(1.0, 0.84, 0.08, 0.0)
+	gold_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gold_flash.z_index = 9
+	add_child(gold_flash)
+	var gtw := gold_flash.create_tween()
+	gtw.tween_property(gold_flash, "modulate:a", 0.52, 0.16)
+	gtw.tween_property(gold_flash, "modulate:a", 0.0,  0.70)
+	gtw.tween_callback(gold_flash.queue_free)
+	# Пульс метки титула
+	var ttw := title_label.create_tween()
+	ttw.set_parallel(true)
+	ttw.tween_property(title_label, "scale", Vector2(1.25, 1.25), 0.14).set_ease(Tween.EASE_OUT)
+	ttw.tween_property(title_label, "scale", Vector2(1.0, 1.0), 0.30).set_ease(Tween.EASE_IN_OUT).set_delay(0.14)
+
+func _on_reputation_changed(_val: int) -> void:
+	_refresh_reputation()
+
+func _on_housing_changed(housing: String) -> void:
+	housing_label.text = "🏠 " + housing
+
+func _on_health_changed(hp: float) -> void:
+	health_bar.value = hp
+	if hp < _last_hp:
+		var dmg: float = _last_hp - hp
+		if dmg >= 5.0:
+			var player = get_tree().get_first_node_in_group("player")
+			if player and player.has_method("shake_camera"):
+				player.shake_camera(minf(dmg * 0.8, 12.0), 0.25)
+	_last_hp = hp
+	if hp <= 0 and not _game_over_shown:
+		_game_over_shown = true
+		_show_game_over()
+
+func _on_quest_completed(q: Dictionary) -> void:
+	var toast := CanvasLayer.new()
+	toast.layer = 14
+	get_tree().root.add_child(toast)
+
+	var panel := Panel.new()
+	panel.position = Vector2(900.0, 690.0)
+	panel.size = Vector2(340.0, 80.0)
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.04, 0.13, 0.06, 0.96)
+	ps.border_color = Color(0.24, 0.72, 0.28, 0.95)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(s, 2)
+		ps.set_corner_radius(s, 8)
+	ps.content_margin_left = 10; ps.content_margin_right = 10
+	ps.content_margin_top = 6; ps.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", ps)
+	toast.add_child(panel)
+
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hbox.add_theme_constant_override("separation", 8)
+	panel.add_child(hbox)
+
+	var icon_lbl := Label.new()
+	icon_lbl.text = "✅"
+	icon_lbl.add_theme_font_size_override("font_size", 30)
+	icon_lbl.custom_minimum_size = Vector2(44, 0)
+	icon_lbl.scale = Vector2(0.4, 0.4)
+	hbox.add_child(icon_lbl)
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(vbox)
+
+	var top_lbl := Label.new()
+	top_lbl.text = "Цель выполнена!"
+	top_lbl.add_theme_font_size_override("font_size", 10)
+	top_lbl.add_theme_color_override("font_color", Color(0.50, 1.0, 0.55))
+	top_lbl.add_theme_constant_override("outline_size", 2)
+	top_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.60))
+	vbox.add_child(top_lbl)
+
+	var name_lbl := Label.new()
+	name_lbl.text = q.get("title", "")
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_color_override("font_color", Color(0.85, 1.0, 0.85))
+	name_lbl.add_theme_constant_override("outline_size", 2)
+	name_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.60))
+	vbox.add_child(name_lbl)
+
+	if q.get("reward_money", 0) > 0:
+		var rew := Label.new()
+		rew.text = "💰 +" + gm.format_money(q.reward_money)
+		rew.add_theme_font_size_override("font_size", 11)
+		rew.add_theme_color_override("font_color", Color(1.0, 0.90, 0.35))
+		vbox.add_child(rew)
+
+	panel.modulate.a = 0.0
+	var tw := toast.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(panel, "modulate:a", 1.0, 0.28)
+	tw.tween_property(panel, "position:y", 600.0, 0.28).set_ease(Tween.EASE_OUT)
+	tw.tween_property(icon_lbl, "scale", Vector2(1.0, 1.0), 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK).set_delay(0.22)
+	tw.set_parallel(false)
+	tw.tween_interval(3.5)
+	tw.tween_property(panel, "modulate:a", 0.0, 0.45)
+	tw.tween_callback(toast.queue_free)
+
+	# Зелёные частицы-конфетти
+	for i in 8:
+		var c := ColorRect.new()
+		c.size = Vector2(randf_range(3.0, 6.0), randf_range(3.0, 6.0))
+		c.color = Color(0.30, 1.0, 0.42, 0.92)
+		c.position = Vector2(randf_range(910.0, 1200.0), randf_range(600.0, 660.0))
+		toast.add_child(c)
+		var sc := Vector2(randf_range(-65, 65), randf_range(-85, -8))
+		var ctw := toast.create_tween()
+		ctw.set_parallel(true)
+		ctw.tween_property(c, "position", c.position + sc, 0.55).set_ease(Tween.EASE_OUT).set_delay(0.22)
+		ctw.tween_property(c, "modulate:a", 0.0, 0.44).set_delay(0.35)
+		ctw.set_parallel(false)
+		ctw.tween_callback(c.queue_free)
+
+func _show_game_over() -> void:
+	var go_layer := CanvasLayer.new()
+	go_layer.layer = 15
+	get_tree().root.add_child(go_layer)
+
+	var dimmer := ColorRect.new()
+	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0.06, 0.0, 0.0, 0.0)
+	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP
+	go_layer.add_child(dimmer)
+	dimmer.create_tween().tween_property(dimmer, "color", Color(0.06, 0.0, 0.0, 0.93), 1.4)
+
+	# Заголовок
+	var title := Label.new()
+	title.text = "☠  КОНЕЦ ИГРЫ"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.set_anchors_preset(Control.PRESET_CENTER)
+	title.position = Vector2(-420, -230)
+	title.size = Vector2(840, 90)
+	title.add_theme_font_size_override("font_size", 54)
+	title.add_theme_color_override("font_color", Color(0.88, 0.07, 0.07))
+	title.add_theme_constant_override("outline_size", 7)
+	title.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.92))
+	title.modulate.a = 0.0
+	title.scale = Vector2(0.55, 0.55)
+	go_layer.add_child(title)
+	var ttw := title.create_tween()
+	ttw.set_parallel(true)
+	ttw.tween_property(title, "modulate:a", 1.0, 0.55).set_delay(0.9)
+	ttw.tween_property(title, "scale", Vector2(1.0, 1.0), 0.55).set_delay(0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+	# Подзаголовок
+	var sub := Label.new()
+	sub.text = "Ты не выдержал испытаний жизни..."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.set_anchors_preset(Control.PRESET_CENTER)
+	sub.position = Vector2(-360, -110)
+	sub.size = Vector2(720, 40)
+	sub.add_theme_font_size_override("font_size", 20)
+	sub.add_theme_color_override("font_color", Color(0.70, 0.50, 0.50))
+	sub.modulate.a = 0.0
+	go_layer.add_child(sub)
+	sub.create_tween().tween_property(sub, "modulate:a", 1.0, 0.40).set_delay(1.6)
+
+	# Карточка со статистикой
+	var card := Panel.new()
+	card.set_anchors_preset(Control.PRESET_CENTER)
+	card.position = Vector2(-280, -58)
+	card.size = Vector2(560, 150)
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.08, 0.02, 0.02, 0.88)
+	cs.border_color = Color(0.55, 0.12, 0.12, 0.75)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		cs.set_border_width(s, 2)
+		cs.set_corner_radius(s, 10)
+	cs.content_margin_left = 20; cs.content_margin_right = 20
+	cs.content_margin_top = 14; cs.content_margin_bottom = 14
+	card.add_theme_stylebox_override("panel", cs)
+	card.modulate.a = 0.0
+	go_layer.add_child(card)
+
+	var stat_vbox := VBoxContainer.new()
+	stat_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	stat_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	stat_vbox.add_theme_constant_override("separation", 8)
+	card.add_child(stat_vbox)
+
+	var rm_node: Node = get_node_or_null("/root/ReputationManager")
+	var stat_rows := [
+		["💰 Наличные",      gm.format_money(gm.money)],
+		["📊 Чистые активы", gm.format_money(gm.get_net_worth())],
+		["📅 Дней прожито",  str(gm.day)],
+		["🏅 Титул",         gm.get_title()],
+		["🏠 Жильё",         gm.get_housing()],
+		["⭐ Репутация",     rm_node.get_level_name() if rm_node else "—"],
+	]
+	for row_data in stat_rows:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		stat_vbox.add_child(row)
+		var k := Label.new()
+		k.text = row_data[0]
+		k.add_theme_font_size_override("font_size", 13)
+		k.add_theme_color_override("font_color", Color(0.60, 0.55, 0.55))
+		k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(k)
+		var v := Label.new()
+		v.text = row_data[1]
+		v.add_theme_font_size_override("font_size", 13)
+		v.add_theme_color_override("font_color", Color(0.90, 0.85, 0.85))
+		row.add_child(v)
+
+	card.create_tween().tween_property(card, "modulate:a", 1.0, 0.40).set_delay(1.9)
+
+	# Кнопки
+	var btn_row := HBoxContainer.new()
+	btn_row.set_anchors_preset(Control.PRESET_CENTER)
+	btn_row.position = Vector2(-225, 115)
+	btn_row.size = Vector2(450, 52)
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	btn_row.modulate.a = 0.0
+	go_layer.add_child(btn_row)
+
+	var restart_btn := Button.new()
+	restart_btn.text = "🔄 Начать заново"
+	restart_btn.custom_minimum_size = Vector2(210, 50)
+	restart_btn.add_theme_font_size_override("font_size", 16)
+	restart_btn.add_theme_color_override("font_color", Color(1.0, 0.82, 0.82))
+	var rbs := StyleBoxFlat.new()
+	rbs.bg_color = Color(0.28, 0.04, 0.04)
+	rbs.border_color = Color(0.72, 0.14, 0.14, 0.90)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		rbs.set_border_width(s, 2)
+		rbs.set_corner_radius(s, 8)
+	restart_btn.add_theme_stylebox_override("normal", rbs)
+	var rbsh := rbs.duplicate() as StyleBoxFlat
+	rbsh.bg_color = rbs.bg_color.lightened(0.12)
+	restart_btn.add_theme_stylebox_override("hover", rbsh)
+	restart_btn.pressed.connect(func():
+		Engine.time_scale = 1.0
+		var lb2 = get_node_or_null("/root/LeaderboardManager")
+		if lb2: lb2.try_add_entry()
+		gm.reset_game()
+		SceneTransition.go("res://scenes/World.tscn")
+	)
+	btn_row.add_child(restart_btn)
+
+	var menu_btn2 := Button.new()
+	menu_btn2.text = "🏠 В главное меню"
+	menu_btn2.custom_minimum_size = Vector2(210, 50)
+	menu_btn2.add_theme_font_size_override("font_size", 16)
+	menu_btn2.add_theme_color_override("font_color", Color(0.82, 0.82, 1.0))
+	var mbs := StyleBoxFlat.new()
+	mbs.bg_color = Color(0.08, 0.08, 0.22)
+	mbs.border_color = Color(0.30, 0.30, 0.72, 0.90)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		mbs.set_border_width(s, 2)
+		mbs.set_corner_radius(s, 8)
+	menu_btn2.add_theme_stylebox_override("normal", mbs)
+	var mbsh := mbs.duplicate() as StyleBoxFlat
+	mbsh.bg_color = mbs.bg_color.lightened(0.12)
+	menu_btn2.add_theme_stylebox_override("hover", mbsh)
+	menu_btn2.pressed.connect(func():
+		Engine.time_scale = 1.0
+		var lb2 = get_node_or_null("/root/LeaderboardManager")
+		if lb2: lb2.try_add_entry()
+		SceneTransition.go("res://scenes/MainMenu.tscn")
+	)
+	btn_row.add_child(menu_btn2)
+
+	btn_row.create_tween().tween_property(btn_row, "modulate:a", 1.0, 0.40).set_delay(2.4)
+
+func _on_hunger_changed(val: float) -> void:
+	hunger_bar.value = val
+	_refresh_bar_labels()
+	if val <= 0:
+		_show_popup("😵 Ты голоден! Поешь что-нибудь!")
+	elif val <= 25:
+		_pulse_bar(hunger_bar, Color(1.0, 0.45, 0.15))
+
+func _on_thirst_changed(val: float) -> void:
+	thirst_bar.value = val
+	_refresh_bar_labels()
+	if val <= 0:
+		_show_popup("🥵 Ты обезвожен! Выпей воды!")
+	elif val <= 25:
+		_pulse_bar(thirst_bar, Color(0.2, 0.6, 1.0))
+
+func _pulse_bar(bar: ProgressBar, col: Color) -> void:
+	var ptw := bar.create_tween()
+	ptw.tween_property(bar, "modulate", col, 0.12)
+	ptw.tween_property(bar, "modulate", Color(1.0, 0.3, 0.3), 0.20)
+	ptw.tween_property(bar, "modulate", col, 0.12)
+	ptw.tween_property(bar, "modulate", Color(1.0, 0.3, 0.3), 0.20)
+
+func _on_energy_changed(val: float) -> void:
+	energy_bar.value = val
+	_refresh_bar_labels()
+	if val <= 0:
+		_show_popup("😴 Энергия на нуле! Нажми «Следующий день» чтобы поспать.")
+
+# Масштаб интерфейса растёт вместе с приближением камеры (Ctrl+колесо мыши)
+func _on_view_zoom_changed(zoom: float) -> void:
+	var t: float = clampf((zoom - gm.VIEW_ZOOM_MIN) / (gm.VIEW_ZOOM_MAX - gm.VIEW_ZOOM_MIN), 0.0, 1.0)
+	var ui_scale: float = lerpf(0.85, 1.15, t)
+	var panel: Control = $Panel
+	panel.pivot_offset = Vector2.ZERO
+	var stw := panel.create_tween()
+	stw.tween_property(panel, "scale", Vector2(ui_scale, ui_scale), 0.15).set_ease(Tween.EASE_OUT)
+
+func _on_day_changed(d: int) -> void:
+	day_label.text = "📅 День " + str(d)
+	_refresh_income()
+	_refresh_meal_buff()
+	var dtw := day_label.create_tween()
+	dtw.set_parallel(true)
+	dtw.tween_property(day_label, "modulate", Color(1.0, 0.94, 0.40), 0.18)
+	dtw.tween_property(day_label, "modulate", Color(1.0, 1.0, 1.0), 0.55).set_delay(0.18)
+	dtw.tween_property(day_label, "scale", Vector2(1.15, 1.15), 0.14).set_ease(Tween.EASE_OUT)
+	dtw.tween_property(day_label, "scale", Vector2(1.0, 1.0), 0.28).set_ease(Tween.EASE_IN_OUT).set_delay(0.14)
+
+var _meal_buff_lbl: Label = null
+
+func _refresh_meal_buff() -> void:
+	if _meal_buff_lbl == null:
+		_meal_buff_lbl = Label.new()
+		_meal_buff_lbl.add_theme_font_size_override("font_size", 11)
+		_meal_buff_lbl.add_theme_color_override("font_color", Color(0.55, 1.0, 0.65))
+		$Panel/VBox.add_child(_meal_buff_lbl)
+	if gm.meal_buff_days > 0:
+		_meal_buff_lbl.text = "🍴 -%.0f%% расход (%d дн.)" % [gm.meal_drain_bonus * 100, gm.meal_buff_days]
+		_meal_buff_lbl.visible = true
+	else:
+		_meal_buff_lbl.visible = false
+
+func _on_event(event: Dictionary) -> void:
+	var sm := get_node_or_null("/root/SettingsManager")
+	var icon = "📰"
+	var ev_money: float = event.get("money", 0)
+	var ev_health: float = event.get("health", 0)
+	if ev_money > 0: icon = "🎉"
+	elif ev_money < 0: icon = "😱"
+	elif ev_health < 0: icon = "🤒"
+	if not sm or sm.notify_events:
+		_show_popup(icon + " " + event.text)
+	qm.add_diary_entry(icon + " " + event.text)
+	var player = get_tree().get_first_node_in_group("player")
+	if player and ev_money != 0:
+		var col := Color(0.4, 1.0, 0.4) if ev_money > 0 else Color(1.0, 0.4, 0.4)
+		var prefix := "+" if ev_money > 0 else ""
+		FloatingText.spawn(get_tree(), player.global_position + Vector2(0, -60), prefix + gm.format_money(ev_money), col)
+
+func _go_to_menu() -> void:
+	Engine.time_scale = 1.0
+	gm.save_game()
+	var lb: Node = get_node_or_null("/root/LeaderboardManager")
+	if lb: lb.try_add_entry()
+	SceneTransition.go("res://scenes/MainMenu.tscn")
+
+func _on_time_changed(h: int, m: int) -> void:
+	time_label.text = _time_str(h, m)
+
+func _time_str(h: int, m: int) -> String:
+	var icon: String
+	if h < 6:    icon = "🌙"
+	elif h < 9:  icon = "🌅"
+	elif h < 18: icon = "☀️"
+	elif h < 21: icon = "🌆"
+	else:        icon = "🌙"
+	return "%s %02d:%02d" % [icon, h, m]
+
+var _popup_tween: Tween = null
+
+func _show_popup(text: String) -> void:
+	title_popup.text = text
+	title_popup.visible = true
+	title_popup.modulate.a = 0.0
+	if _popup_tween and _popup_tween.is_valid():
+		_popup_tween.kill()
+	_popup_tween = create_tween()
+	_popup_tween.tween_property(title_popup, "modulate:a", 1.0, 0.20)
+	_popup_tween.tween_interval(3.5)
+	_popup_tween.tween_property(title_popup, "modulate:a", 0.0, 0.40)
+	await _popup_tween.finished
+	title_popup.visible = false
+
+func _setup_titles_handbook() -> void:
+	# Создаём TitlesHandbook и добавляем как дочерний узел HUD
+	var th_script := load("res://scripts/TitlesHandbook.gd")
+	if th_script == null:
+		return
+	_titles_handbook = CanvasLayer.new()
+	_titles_handbook.set_script(th_script)
+	add_child(_titles_handbook)
+
+	# Кнопку вставляем в тот же VBox что и остальные кнопки
+	var vbox: VBoxContainer = $Panel/VBox
+	_titles_btn = Button.new()
+	_titles_btn.text = "👑 Титулы"
+	_titles_btn.tooltip_text = "Справочник всех титулов.\nПосмотри описание и фото."
+	_titles_btn.custom_minimum_size = Vector2(0, 22)
+	_titles_btn.add_theme_font_size_override("font_size", 11)
+	_style_btn(_titles_btn)
+	vbox.add_child(_titles_btn)
+	# Перемещаем сразу после кнопки достижений
+	vbox.move_child(_titles_btn, ach_btn.get_index() + 1)
+
+	var am := get_node_or_null("/root/AudioManager")
+	_titles_btn.pressed.connect(func():
+		if am: am.play_click()
+		_titles_handbook.open())
+
+func _setup_settings_ui() -> void:
+	# Создаём SettingsUI и добавляем как дочерний узел HUD
+	var st_script := load("res://scripts/SettingsUI.gd")
+	if st_script == null:
+		return
+	_settings_ui = CanvasLayer.new()
+	_settings_ui.set_script(st_script)
+	add_child(_settings_ui)
+
+	# Кнопку вставляем в тот же VBox, прямо перед кнопкой «В главное меню»
+	var vbox: VBoxContainer = $Panel/VBox
+	_settings_btn = Button.new()
+	_settings_btn.text = "⚙ Настройки"
+	_settings_btn.tooltip_text = "Звук, видео, сложность, доступность и уведомления.\nМожно менять по ходу игры."
+	_settings_btn.custom_minimum_size = Vector2(0, 22)
+	_settings_btn.add_theme_font_size_override("font_size", 11)
+	_style_btn(_settings_btn)
+	vbox.add_child(_settings_btn)
+	vbox.move_child(_settings_btn, menu_btn.get_index())
+
+	var am2 := get_node_or_null("/root/AudioManager")
+	_settings_btn.pressed.connect(func():
+		if am2: am2.play_click()
+		_settings_ui.open())

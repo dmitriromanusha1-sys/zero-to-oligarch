@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://2tqx6467quma"]
+
+[ext_resource type="Script" path="res://scripts/TransportShopUI.gd" id="1"]
+
+[node name="TransportShopUI" type="CanvasLayer"]
+script = ExtResource("1")

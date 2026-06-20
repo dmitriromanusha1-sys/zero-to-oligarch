@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dhsorl5ldkulh"
+path="res://.godot/imported/Sayfalse, cape, JXNDRO - MONTAGEM RUGADA.mp3-c505312f5d126609149678d6e8743bc2.mp3str"
+
+[deps]
+
+source_file="res://music/Sayfalse, cape, JXNDRO - MONTAGEM RUGADA.mp3"
+dest_files=["res://.godot/imported/Sayfalse, cape, JXNDRO - MONTAGEM RUGADA.mp3-c505312f5d126609149678d6e8743bc2.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

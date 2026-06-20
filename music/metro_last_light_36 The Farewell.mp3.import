@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cilrtcxxasm1l"
+path="res://.godot/imported/metro_last_light_36 The Farewell.mp3-a43ed942cae7f912eb23f575e4c17780.mp3str"
+
+[deps]
+
+source_file="res://music/metro_last_light_36 The Farewell.mp3"
+dest_files=["res://.godot/imported/metro_last_light_36 The Farewell.mp3-a43ed942cae7f912eb23f575e4c17780.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

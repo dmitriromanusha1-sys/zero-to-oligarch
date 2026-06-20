@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dsh34heslh882"
+path="res://.godot/imported/Indila - Derniere Dance.mp3-08a51d729ec26551d7c50d5b80ba02bd.mp3str"
+
+[deps]
+
+source_file="res://music/Indila - Derniere Dance.mp3"
+dest_files=["res://.godot/imported/Indila - Derniere Dance.mp3-08a51d729ec26551d7c50d5b80ba02bd.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
