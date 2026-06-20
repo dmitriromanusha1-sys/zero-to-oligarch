@@ -711,11 +711,14 @@ func _on_health_changed(hp: float) -> void:
 var _quest_tracker: Panel = null
 var _quest_tracker_vbox: VBoxContainer = null
 
+var _quest_tracker_layer: CanvasLayer = null
+
 func _setup_quest_tracker() -> void:
+	_quest_tracker_layer = CanvasLayer.new()
+	_quest_tracker_layer.layer = 12
+	get_tree().root.add_child(_quest_tracker_layer)
+
 	_quest_tracker = Panel.new()
-	_quest_tracker.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_quest_tracker.position = Vector2(-300, 16)
-	_quest_tracker.size = Vector2(284, 10)
 	_quest_tracker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.06, 0.07, 0.10, 0.80)
@@ -726,7 +729,13 @@ func _setup_quest_tracker() -> void:
 	ps.content_margin_left = 10; ps.content_margin_right = 10
 	ps.content_margin_top = 8; ps.content_margin_bottom = 8
 	_quest_tracker.add_theme_stylebox_override("panel", ps)
-	get_tree().root.add_child.call_deferred(_quest_tracker)
+	_quest_tracker_layer.add_child(_quest_tracker)
+	# Анкеры/позицию задаём только после того, как узел уже в дереве —
+	# иначе Godot считает офсеты от нулевого размера родителя и панель
+	# улетает за пределы экрана
+	_quest_tracker.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_quest_tracker.position = Vector2(-300, 16)
+	_quest_tracker.size = Vector2(284, 10)
 
 	var header := Label.new()
 	header.text = "📜 ЦЕЛИ"
@@ -739,7 +748,7 @@ func _setup_quest_tracker() -> void:
 	_quest_tracker_vbox.position = Vector2(10, 28)
 	_quest_tracker_vbox.add_theme_constant_override("separation", 4)
 	_quest_tracker.add_child(_quest_tracker_vbox)
-	call_deferred("_refresh_quest_tracker")
+	_refresh_quest_tracker()
 
 func _refresh_quest_tracker() -> void:
 	if _quest_tracker_vbox == null:
