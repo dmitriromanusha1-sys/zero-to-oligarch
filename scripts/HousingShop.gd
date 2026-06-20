@@ -157,6 +157,13 @@ func _build_list() -> void:
 			tier_col if (is_current or can_afford) else Color(0.35, 0.35, 0.38))
 		info_col.add_child(price_lbl)
 
+		# Краткая сводка бонусов — видна сразу, без наведения на тултип
+		var perks_lbl := Label.new()
+		perks_lbl.text = _perks_summary(h)
+		perks_lbl.add_theme_font_size_override("font_size", 10)
+		perks_lbl.add_theme_color_override("font_color", Color(0.60, 0.78, 0.62))
+		info_col.add_child(perks_lbl)
+
 		# Текущее / кнопка
 		if is_current:
 			var cur_lbl := Label.new()
@@ -203,11 +210,42 @@ func _build_list() -> void:
 		row_wrap.mouse_entered.connect(func(): _on_row_hover(target_idx))
 		row_wrap.mouse_exited.connect(_on_row_exit)
 
+func _perks_summary(h: Dictionary) -> String:
+	var parts: Array = []
+	var h_regen: float = h.get("health_regen", 0.0) as float
+	if h_regen != 0.0:
+		parts.append("❤%+.1f/д" % h_regen)
+	var hunger_d: float = h.get("hunger_drain", 1.0) as float
+	if hunger_d != 1.0:
+		parts.append("🍖×%.2f" % hunger_d)
+	var rep_d: float = h.get("rep_per_day", 0.0) as float
+	if rep_d != 0.0:
+		parts.append("⭐%+.1f/д" % rep_d)
+	var income_m: float = h.get("income_mult", 1.0) as float
+	if income_m != 1.0:
+		parts.append("💰×%.2f" % income_m)
+	var skill_m: float = h.get("skill_xp_mult", 1.0) as float
+	if skill_m != 1.0:
+		parts.append("📚×%.2f" % skill_m)
+	if parts.is_empty():
+		return "— без бонусов"
+	return " • ".join(parts)
+
 func _on_row_hover(idx: int) -> void:
 	_tooltip_target = idx
 	_tooltip_timer.start()
 	var panel_rect: Rect2 = $Panel.get_global_rect()
-	_tooltip.global_position = Vector2(panel_rect.end.x + 6, get_global_mouse_position().y)
+	var viewport_w: float = get_viewport_rect().size.x
+	var tooltip_w: float = _tooltip.custom_minimum_size.x
+	var mouse_y: float = get_global_mouse_position().y
+	var x: float
+	if panel_rect.end.x + 6 + tooltip_w <= viewport_w:
+		x = panel_rect.end.x + 6
+	elif panel_rect.position.x - 6 - tooltip_w >= 0:
+		x = panel_rect.position.x - 6 - tooltip_w
+	else:
+		x = maxf(0.0, viewport_w - tooltip_w - 6)
+	_tooltip.global_position = Vector2(x, mouse_y)
 
 func _on_row_exit() -> void:
 	_tooltip_timer.stop()
@@ -273,6 +311,11 @@ func _show_tooltip_for_target() -> void:
 		_add_stat(vbox, "😊 Счастье", "%+.0f" % happy, happy > 0)
 
 	_tooltip.visible = true
+	await get_tree().process_frame
+	var viewport_h: float = get_viewport_rect().size.y
+	var th: float = _tooltip.size.y
+	if _tooltip.global_position.y + th > viewport_h:
+		_tooltip.global_position.y = maxf(0.0, viewport_h - th - 6)
 
 func _sep() -> HSeparator:
 	var s := HSeparator.new()
