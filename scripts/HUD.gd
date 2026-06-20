@@ -338,6 +338,19 @@ func _process(delta: float) -> void:
 	else:
 		sleep_btn.modulate = Color(1.0, 1.0, 1.0)
 
+	# Прячем трекер целей, когда открыто любое окно/меню — чтобы он не
+	# перекрывал кнопку «Закрыть» и содержимое окон в правом верхнем углу
+	if _quest_tracker_layer:
+		_quest_tracker_layer.visible = not _any_modal_open()
+
+func _any_modal_open() -> bool:
+	for w in [ach_ui, stats_ui, stock_ui, inv_ui, pause_menu, loan_ui,
+			housing_shop, business_shop, quest_ui, _titles_handbook,
+			_settings_ui, _invest_popup]:
+		if w != null and is_instance_valid(w) and w.visible:
+			return true
+	return false
+
 func _on_zone_entered(zone_idx: int) -> void:
 	_play_zone_fade()
 	var zm := get_node_or_null("/root/ZoneManager")
