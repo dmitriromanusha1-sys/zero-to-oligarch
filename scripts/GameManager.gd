@@ -238,12 +238,40 @@ var money_history: Array = []   # [{day, money}] — каждые 5 дней
 var meal_buff_days: int = 0       # оставшихся дней бонуса после обеда
 var meal_drain_bonus: float = 0.0 # снижение расхода еды/воды (0.0–0.50, чем дороже обед — тем больше % и дольше срок)
 
-const SAVE_PATH = "user://savegame.cfg"
+const SAVE_PATH_LEGACY = "user://savegame.cfg"   # старое единое сохранение (миграция)
 const SECS_PER_GAME_MIN: float = 0.5   # 1 сек реального времени = 2 игровых минуты
+
+# Слот сохранения 1..3, выбирается в главном меню
+var current_slot: int = 1
+
+func slot_path(slot: int) -> String:
+	return "user://savegame_slot%d.cfg" % slot
+
+func slot_exists(slot: int) -> bool:
+	return FileAccess.file_exists(slot_path(slot))
+
+# Краткая инфа о слоте для отображения в меню без переключения текущего состояния игры
+func slot_info(slot: int) -> Dictionary:
+	var cfg := ConfigFile.new()
+	if cfg.load(slot_path(slot)) != OK:
+		return {}
+	var t_idx: int = cfg.get_value("player", "title_index", 0)
+	return {
+		"day": cfg.get_value("player", "day", 1),
+		"money": cfg.get_value("player", "money", 0.0),
+		"title_index": t_idx,
+		"title": TITLES[clampi(t_idx, 0, TITLES.size() - 1)].name,
+	}
+
+func delete_slot(slot: int) -> void:
+	var path := slot_path(slot)
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 var _time_acc: float = 0.0
 
 func _ready() -> void:
+	_migrate_legacy_save()
 	load_game()
 	var sm := get_node_or_null("/root/SettingsManager")
 	if sm: Engine.time_scale = sm.default_speed
@@ -595,15 +623,28 @@ func save_game() -> void:
 	if tm: tm.save(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.save(cfg)
-	cfg.save(SAVE_PATH)
+	cfg.save(slot_path(current_slot))
 	var hud := get_tree().get_first_node_in_group("hud") if get_tree() else null
 	var _sm := get_node_or_null("/root/SettingsManager")
 	if hud and hud.has_method("show_autosave_toast") and (not _sm or _sm.notify_autosave):
 		hud.show_autosave_toast()
 
+func _migrate_legacy_save() -> void:
+	# До введения слотов было одно сохранение — переносим его в слот 1,
+	# чтобы у игроков с прогрессом он не "пропал" после обновления
+	if FileAccess.file_exists(SAVE_PATH_LEGACY) and not slot_exists(1):
+		var src := FileAccess.open(SAVE_PATH_LEGACY, FileAccess.READ)
+		if src:
+			var data := src.get_as_text()
+			src.close()
+			var dst := FileAccess.open(slot_path(1), FileAccess.WRITE)
+			if dst:
+				dst.store_string(data)
+				dst.close()
+
 func load_game() -> void:
 	var cfg = ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(slot_path(current_slot)) != OK:
 		return
 	money = cfg.get_value("player", "money", 0.0)
 	health = cfg.get_value("player", "health", 100.0)

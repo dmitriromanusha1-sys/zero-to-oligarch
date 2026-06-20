@@ -1,6 +1,7 @@
 extends Node2D
 
 var _has_save: bool = false
+var _slot_panel: Control = null
 var _lb_panel: Control = null
 var _settings_panel: Control = null
 var _rebind_panel_ref: Control = null
@@ -14,8 +15,13 @@ var _bg_canvas: CanvasLayer   # layer 1 — фон, звёзды, силуэт �
 var _ui_canvas: CanvasLayer   # layer 2 — кнопки и интерфейс
 
 func _ready() -> void:
-	var cfg = ConfigFile.new()
-	_has_save = cfg.load("user://savegame.cfg") == OK
+	var gm0 = get_node_or_null("/root/GameManager")
+	_has_save = false
+	if gm0:
+		for s in range(1, 4):
+			if gm0.slot_exists(s):
+				_has_save = true
+				break
 
 	_bg_canvas = CanvasLayer.new()
 	_bg_canvas.layer = 1
@@ -390,12 +396,12 @@ func _build_ui() -> void:
 
 	# Единый стиль: тёмный фон, золотая рамка, акцентный цвет левой полосы
 	var new_btn := _make_button("▶  Новая игра",        Color(0.07, 0.10, 0.18), Color(0.72, 0.56, 0.10))
-	new_btn.pressed.connect(_on_new_game_pressed)
+	new_btn.pressed.connect(func(): _toggle_slot_panel("new"))
 	vbox.add_child(new_btn)
 
 	if _has_save:
 		var cont_btn := _make_button("⏩  Продолжить",   Color(0.07, 0.10, 0.18), Color(0.72, 0.56, 0.10))
-		cont_btn.pressed.connect(_continue_game)
+		cont_btn.pressed.connect(func(): _toggle_slot_panel("continue"))
 		vbox.add_child(cont_btn)
 
 	var sep := ColorRect.new()
@@ -1708,27 +1714,100 @@ func _import_settings(sm: Node, panel: Panel) -> void:
 		else:
 			_show_footer_toast(panel, "⚠ Ошибка при импорте", false)
 
-func _on_new_game_pressed() -> void:
-	if not _has_save:
-		_start_new()
+func _toggle_slot_panel(mode: String) -> void:
+	if _slot_panel and is_instance_valid(_slot_panel):
+		_slot_panel.queue_free()
+		_slot_panel = null
 		return
-	var dlg := ConfirmationDialog.new()
-	dlg.title = "Новая игра"
-	dlg.dialog_text = "Весь текущий прогресс (деньги, кредиты, репутация, образование, бизнес, радио, охрана и т.д.) будет полностью удалён без возможности восстановления.\n\nНачать заново?"
-	dlg.ok_button_text = "Да, сбросить и начать"
-	dlg.cancel_button_text = "Отмена"
-	add_child(dlg)
-	dlg.confirmed.connect(_start_new)
-	dlg.confirmed.connect(dlg.queue_free)
-	dlg.canceled.connect(dlg.queue_free)
-	dlg.popup_centered()
 
-func _start_new() -> void:
 	var gm = get_node_or_null("/root/GameManager")
-	if gm: gm.reset_game()
+
+	var panel := Panel.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.size = Vector2(420, 320)
+	panel.position = Vector2(-210, -160)
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.05, 0.05, 0.09, 0.97)
+	ps.border_color = Color(0.72, 0.56, 0.10, 0.85)
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(side, 2)
+		ps.set_corner_radius(side, 12)
+	ps.content_margin_left = 18; ps.content_margin_right = 18
+	ps.content_margin_top = 16; ps.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", ps)
+	panel.modulate.a = 0.0
+	panel.scale = Vector2(0.92, 0.92)
+	_ui_canvas.add_child(panel)
+	_slot_panel = panel
+	var sp_tw := _ui_canvas.create_tween()
+	sp_tw.set_parallel(true)
+	sp_tw.tween_property(panel, "modulate:a", 1.0, 0.20)
+	sp_tw.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.20).set_ease(Tween.EASE_OUT)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	var header := Label.new()
+	header.text = "Выбери сохранение" if mode == "new" else "Выбери сохранение для загрузки"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 18)
+	header.add_theme_color_override("font_color", Color(0.90, 0.78, 0.35))
+	vbox.add_child(header)
+
+	for slot in range(1, 4):
+		var has_save: bool = gm != null and gm.slot_exists(slot)
+		var info: Dictionary = gm.slot_info(slot) if has_save else {}
+		var label_text: String
+		if has_save:
+			label_text = "Слот %d — День %d, %s, %s" % [slot, info.day, gm.format_money(info.money), info.title]
+		else:
+			label_text = "Слот %d — пусто" % slot
+		var slot_btn := _make_button(label_text, Color(0.07, 0.10, 0.18), Color(0.72, 0.56, 0.10))
+		if mode == "continue" and not has_save:
+			slot_btn.disabled = true
+			slot_btn.modulate.a = 0.4
+		else:
+			slot_btn.pressed.connect(_make_slot_handler(mode, slot, has_save))
+		vbox.add_child(slot_btn)
+
+	var close_btn := _make_button("Отмена", Color(0.10, 0.07, 0.07), Color(0.50, 0.20, 0.20))
+	close_btn.pressed.connect(func():
+		if _slot_panel and is_instance_valid(_slot_panel):
+			_slot_panel.queue_free()
+			_slot_panel = null
+	)
+	vbox.add_child(close_btn)
+
+func _make_slot_handler(mode: String, slot: int, has_save: bool) -> Callable:
+	return func():
+		if mode == "new" and has_save:
+			var dlg := ConfirmationDialog.new()
+			dlg.title = "Слот %d занят" % slot
+			dlg.dialog_text = "В этом слоте уже есть сохранение. Весь прогресс в нём (деньги, кредиты, репутация, образование, бизнес, радио и т.д.) будет полностью удалён без возможности восстановления.\n\nНачать заново в слоте %d?" % slot
+			dlg.ok_button_text = "Да, сбросить и начать"
+			dlg.cancel_button_text = "Отмена"
+			add_child(dlg)
+			dlg.confirmed.connect(func(): _start_new(slot))
+			dlg.confirmed.connect(dlg.queue_free)
+			dlg.canceled.connect(dlg.queue_free)
+			dlg.popup_centered()
+		elif mode == "new":
+			_start_new(slot)
+		else:
+			_continue_game(slot)
+
+func _start_new(slot: int) -> void:
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		gm.current_slot = slot
+		gm.reset_game()
 	SceneTransition.go("res://scenes/World.tscn")
 
-func _continue_game() -> void:
+func _continue_game(slot: int) -> void:
 	var gm = get_node_or_null("/root/GameManager")
-	if gm: gm.load_game()
+	if gm:
+		gm.current_slot = slot
+		gm.load_game()
 	SceneTransition.go("res://scenes/World.tscn")
