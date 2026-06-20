@@ -108,7 +108,9 @@ func roll_event() -> Dictionary:
 		if picked.money > 0:
 			gm.add_money(picked.money)
 		else:
-			var loss: float = minf(abs(picked.money), gm.money)
+			# Не больше 20% текущих наличных за одно событие — чтобы крупные номиналы
+			# из таблицы не выбивали игрока в ноль одним роллом
+			var loss: float = minf(abs(picked.money), gm.money * 0.2)
 			if loss > 0:
 				gm.spend_money(loss)
 

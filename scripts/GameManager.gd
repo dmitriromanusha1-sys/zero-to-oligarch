@@ -114,7 +114,7 @@ const HOUSINGS = [
 		"name": "Улица", "icon": "🌧",
 		"desc": "Спишь под открытым небом. Холодно, опасно и голодно.",
 		"price": 0, "monthly": 0,
-		"health_regen": -3.0, "hunger_drain": 1.3, "thirst_drain": 1.3,
+		"health_regen": -1.0, "hunger_drain": 1.3, "thirst_drain": 1.3,
 		"income_mult": 1.0, "expense_mult": 1.0, "rep_per_day": -1.0,
 		"crime_risk": 0.4, "happiness": -10.0, "skill_xp_mult": 0.8, "tier": 0,
 	},
@@ -122,7 +122,7 @@ const HOUSINGS = [
 		"name": "Коробка", "icon": "📦",
 		"desc": "Картонная коробка под мостом. Хотя бы крыша над головой.",
 		"price": 100, "monthly": 0,
-		"health_regen": -1.5, "hunger_drain": 1.15, "thirst_drain": 1.15,
+		"health_regen": -0.5, "hunger_drain": 1.15, "thirst_drain": 1.15,
 		"income_mult": 1.0, "expense_mult": 1.0, "rep_per_day": -0.5,
 		"crime_risk": 0.3, "happiness": -5.0, "skill_xp_mult": 0.85, "tier": 0,
 	},
@@ -352,12 +352,13 @@ func next_day() -> void:
 			meal_drain_bonus = 0.0
 	emit_signal("hunger_changed", hunger)
 	emit_signal("thirst_changed", thirst)
-	# Штраф здоровью если голоден или обезвожен
+	# Штраф здоровью если голоден или обезвожен (смягчён, чтобы не убивать
+	# новичка за пару дней нищеты — это предупреждение, а не приговор)
 	if hunger <= 0.0:
-		health = clamp(health - 5.0 * health_m, 0.0, 100.0)
+		health = clamp(health - 3.0 * health_m, 0.0, 100.0)
 		emit_signal("health_changed", health)
 	if thirst <= 0.0:
-		health = clamp(health - 8.0 * health_m, 0.0, 100.0)
+		health = clamp(health - 4.0 * health_m, 0.0, 100.0)
 		emit_signal("health_changed", health)
 
 	# Энергия восстанавливается за ночь в зависимости от жилья:
@@ -396,8 +397,8 @@ func next_day() -> void:
 		var np = get_tree().get_first_node_in_group("newspaper")
 		if np: np.show_newspaper(day)
 
-	# Случайное событие (40% шанс каждый день)
-	if randf() < 0.4:
+	# Случайное событие (25% шанс каждый день)
+	if randf() < 0.25:
 		var es = get_node_or_null("/root/EventSystem")
 		if es:
 			es.roll_event()
@@ -649,9 +650,18 @@ func reset_game() -> void:
 	money_history.clear()
 	meal_buff_days = 0; meal_drain_bonus = 0.0
 	var bm = get_node_or_null("/root/BusinessManager")
-	if bm: bm.owned_business_id = ""; bm.employees.clear(); bm.bank_deposit = 0.0
+	if bm:
+		bm.owned_business_id = ""; bm.employees.clear(); bm.bank_deposit = 0.0
+		bm.business_level = 0; bm.active_loan = 0.0; bm.total_earned = 0.0
+		bm.business_days = 0; bm.security_level = 0; bm.last_event = {}
 	var lm = get_node_or_null("/root/LoanManager")
-	if lm: lm.active_loans.clear()
+	if lm:
+		lm.active_loans.clear(); lm.loan_history.clear()
+		lm.credit_rating = "B"; lm.ban_until_day = 0; lm.rejection_cooldowns.clear()
+	var am_r = get_node_or_null("/root/AudioManager")
+	if am_r: am_r.current_station = "standard"; am_r.owned_stations = ["standard"]
+	var dm = get_node_or_null("/root/DistrictManager")
+	if dm: dm.unlocked.clear()
 	var cb_r = get_node_or_null("/root/CentralBankManager")
 	if cb_r: cb_r.reset()
 	var rm = get_node_or_null("/root/ReputationManager")
@@ -668,6 +678,8 @@ func reset_game() -> void:
 	if sm:
 		for s in sm.STOCKS:
 			sm.owned[s.id] = 0; sm.prices[s.id] = s.base; sm.history[s.id] = [s.base]
+			sm.cost_basis[s.id] = 0.0; sm.daily_change[s.id] = 0.0
+		sm.active_event = {}; sm.event_days_left = 0; sm._day_counter = 0
 	var tm = get_node_or_null("/root/TransportManager")
 	if tm: tm.current_vehicle_id = "walk"; tm.owned_vehicles = ["walk"]
 	var im = get_node_or_null("/root/InventoryManager")

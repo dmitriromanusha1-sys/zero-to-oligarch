@@ -80,7 +80,9 @@ func _ready() -> void:
 	bm.business_changed.connect(_refresh_income)
 	bm.bank_changed.connect(func(_v): _refresh_income())
 	qm.quest_completed.connect(_on_quest_completed)
+	qm.quest_added.connect(func(_q): _refresh_quest_tracker())
 
+	_setup_quest_tracker()
 	_style_hud()
 	_setup_fade_overlay()
 	$Panel.modulate.a = 0.0
@@ -706,7 +708,60 @@ func _on_health_changed(hp: float) -> void:
 		_game_over_shown = true
 		_show_game_over()
 
+var _quest_tracker: Panel = null
+var _quest_tracker_vbox: VBoxContainer = null
+
+func _setup_quest_tracker() -> void:
+	_quest_tracker = Panel.new()
+	_quest_tracker.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_quest_tracker.position = Vector2(-300, 16)
+	_quest_tracker.size = Vector2(284, 10)
+	_quest_tracker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.06, 0.07, 0.10, 0.80)
+	ps.border_color = Color(0.85, 0.70, 0.25, 0.65)
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(s, 1)
+		ps.set_corner_radius(s, 8)
+	ps.content_margin_left = 10; ps.content_margin_right = 10
+	ps.content_margin_top = 8; ps.content_margin_bottom = 8
+	_quest_tracker.add_theme_stylebox_override("panel", ps)
+	get_tree().root.add_child.call_deferred(_quest_tracker)
+
+	var header := Label.new()
+	header.text = "📜 ЦЕЛИ"
+	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_color_override("font_color", Color(0.90, 0.78, 0.35))
+	header.position = Vector2(10, 6)
+	_quest_tracker.add_child(header)
+
+	_quest_tracker_vbox = VBoxContainer.new()
+	_quest_tracker_vbox.position = Vector2(10, 28)
+	_quest_tracker_vbox.add_theme_constant_override("separation", 4)
+	_quest_tracker.add_child(_quest_tracker_vbox)
+	call_deferred("_refresh_quest_tracker")
+
+func _refresh_quest_tracker() -> void:
+	if _quest_tracker_vbox == null:
+		return
+	for c in _quest_tracker_vbox.get_children():
+		c.queue_free()
+	var shown: int = 0
+	for q in qm.active_quests:
+		if shown >= 3:
+			break
+		var lbl := Label.new()
+		lbl.text = "• %s" % q.get("desc", q.get("title", ""))
+		lbl.add_theme_font_size_override("font_size", 12)
+		lbl.add_theme_color_override("font_color", Color(0.88, 0.88, 0.88))
+		lbl.custom_minimum_size = Vector2(264, 0)
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_quest_tracker_vbox.add_child(lbl)
+		shown += 1
+	_quest_tracker.size = Vector2(284, 28 + shown * 22 + 10)
+
 func _on_quest_completed(q: Dictionary) -> void:
+	_refresh_quest_tracker()
 	var toast := CanvasLayer.new()
 	toast.layer = 14
 	get_tree().root.add_child(toast)
@@ -791,8 +846,10 @@ func _on_quest_completed(q: Dictionary) -> void:
 		ctw.tween_callback(c.queue_free)
 
 func _show_game_over() -> void:
+	get_tree().paused = false
 	var go_layer := CanvasLayer.new()
 	go_layer.layer = 15
+	go_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().root.add_child(go_layer)
 
 	var dimmer := ColorRect.new()
@@ -910,10 +967,12 @@ func _show_game_over() -> void:
 	rbsh.bg_color = rbs.bg_color.lightened(0.12)
 	restart_btn.add_theme_stylebox_override("hover", rbsh)
 	restart_btn.pressed.connect(func():
+		get_tree().paused = false
 		Engine.time_scale = 1.0
 		var lb2 = get_node_or_null("/root/LeaderboardManager")
 		if lb2: lb2.try_add_entry()
 		gm.reset_game()
+		_game_over_shown = false
 		SceneTransition.go("res://scenes/World.tscn")
 	)
 	btn_row.add_child(restart_btn)
@@ -934,6 +993,7 @@ func _show_game_over() -> void:
 	mbsh.bg_color = mbs.bg_color.lightened(0.12)
 	menu_btn2.add_theme_stylebox_override("hover", mbsh)
 	menu_btn2.pressed.connect(func():
+		get_tree().paused = false
 		Engine.time_scale = 1.0
 		var lb2 = get_node_or_null("/root/LeaderboardManager")
 		if lb2: lb2.try_add_entry()

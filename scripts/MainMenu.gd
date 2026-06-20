@@ -390,7 +390,7 @@ func _build_ui() -> void:
 
 	# Единый стиль: тёмный фон, золотая рамка, акцентный цвет левой полосы
 	var new_btn := _make_button("▶  Новая игра",        Color(0.07, 0.10, 0.18), Color(0.72, 0.56, 0.10))
-	new_btn.pressed.connect(_start_new)
+	new_btn.pressed.connect(_on_new_game_pressed)
 	vbox.add_child(new_btn)
 
 	if _has_save:
@@ -1707,6 +1707,21 @@ func _import_settings(sm: Node, panel: Panel) -> void:
 			_show_settings()
 		else:
 			_show_footer_toast(panel, "⚠ Ошибка при импорте", false)
+
+func _on_new_game_pressed() -> void:
+	if not _has_save:
+		_start_new()
+		return
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Новая игра"
+	dlg.dialog_text = "Весь текущий прогресс (деньги, кредиты, репутация, образование, бизнес, радио, охрана и т.д.) будет полностью удалён без возможности восстановления.\n\nНачать заново?"
+	dlg.ok_button_text = "Да, сбросить и начать"
+	dlg.cancel_button_text = "Отмена"
+	add_child(dlg)
+	dlg.confirmed.connect(_start_new)
+	dlg.confirmed.connect(dlg.queue_free)
+	dlg.canceled.connect(dlg.queue_free)
+	dlg.popup_centered()
 
 func _start_new() -> void:
 	var gm = get_node_or_null("/root/GameManager")

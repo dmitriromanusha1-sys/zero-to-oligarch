@@ -32,7 +32,16 @@ const ALL_QUESTS = [
 	{"id":"q19","title":"Олигарх",               "desc":"Накопи 1 000 000 000 ₽",     "type":"money",    "target":1000000000,   "reward_money":0,      "reward_health":100},
 	{"id":"q20","title":"Везунчик",             "desc":"Выиграй в казино",            "type":"casino_win","target":1,           "reward_money":50000,  "reward_health":0},
 	{"id":"q21","title":"Игрок",                "desc":"Выиграй в казино 5 раз",      "type":"casino_win","target":5,           "reward_money":200000, "reward_health":0},
+	# Обучение — цепочка "найди школу, получи образование"
+	{"id":"q22","title":"Найти школу",          "desc":"Получи начальное образование (3 класса)", "type":"education","target":1, "reward_money":1000,   "reward_health":5},
+	{"id":"q23","title":"Школьник",             "desc":"Закончи 9 классов",            "type":"education","target":2,           "reward_money":4000,   "reward_health":5},
+	{"id":"q24","title":"Студент",              "desc":"Получи ПТУ или колледж",       "type":"education","target":4,           "reward_money":15000,  "reward_health":10},
+	{"id":"q25","title":"Дипломированный",      "desc":"Закончи ВУЗ (бакалавр)",       "type":"education","target":5,           "reward_money":60000,  "reward_health":10},
 ]
+
+# Повторяемые цели — выдаются, когда фиксированный список исчерпан, чтобы у игрока
+# всегда было к чему стремиться на протяжении всей игры
+var _repeat_counter: int = 0
 
 var active_quests: Array = []
 var completed_ids: Array = []
@@ -50,6 +59,8 @@ func _ready() -> void:
 	gm.day_changed.connect(func(_d): _check_quests(gm.money))
 	gm.housing_changed.connect(func(_h): _check_quests(gm.money))
 	bm.business_changed.connect(func(): _check_quests(gm.money))
+	var em = get_node_or_null("/root/EducationManager")
+	if em: em.education_changed.connect(func(_l): _check_quests(gm.money))
 	_unlock_available()
 
 func _on_casino_finished(delta: float) -> void:
@@ -63,6 +74,25 @@ func _unlock_available() -> void:
 			if active_quests.size() < 4:
 				active_quests.append(q.duplicate())
 				emit_signal("quest_added", q)
+	# Если фиксированные цели закончились — генерируем повторяемую цель,
+	# чтобы список заданий никогда не пустел до конца игры
+	while active_quests.size() < 3:
+		var q := _make_repeat_quest()
+		active_quests.append(q)
+		emit_signal("quest_added", q)
+
+func _make_repeat_quest() -> Dictionary:
+	_repeat_counter += 1
+	var target: float = maxf(gm.money * 1.5 + 5000.0, 5000.0 * _repeat_counter)
+	var reward: float = target * 0.08
+	return {
+		"id": "rep_%d" % _repeat_counter,
+		"title": "Цель: %s" % gm.format_money(target),
+		"desc": "Накопи %s" % gm.format_money(target),
+		"type": "money", "target": target,
+		"reward_money": reward, "reward_health": 0,
+		"repeatable": true,
+	}
 
 func _is_active(id: String) -> bool:
 	for q in active_quests:
@@ -89,6 +119,9 @@ func _is_quest_done(q: Dictionary) -> bool:
 		"bank":       return bm.bank_deposit >= q.target
 		"day":        return gm.day >= q.target
 		"casino_win": return casino_wins >= q.target
+		"education":
+			var em = get_node_or_null("/root/EducationManager")
+			return em != null and em.level >= q.target
 	return false
 
 func _biz_level() -> int:
