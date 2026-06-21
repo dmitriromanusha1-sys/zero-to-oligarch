@@ -334,8 +334,8 @@ func buy_housing(index: int) -> bool:
 # ── Сон ───────────────────────────────────────────────────────────────────────
 # Энергию даёт только сон. Качество сна зависит от жилья (энергия/час и лечение/
 # час), еда/вода тратятся медленно, на небезопасном жилье можно лишиться денег.
-const SLEEP_HUNGER_PER_H := 0.8
-const SLEEP_THIRST_PER_H := 1.0
+const SLEEP_HUNGER_PER_H := 4.0
+const SLEEP_THIRST_PER_H := 5.0
 
 func get_sleep_energy_per_hour() -> float:
 	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
