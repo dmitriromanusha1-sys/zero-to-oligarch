@@ -13,7 +13,7 @@ var _playlist_idx: int = 0
 # "Французское радио" покупается в магазине радио в зоне 5 (Элитный район).
 const RADIO_STATIONS: Array = [
 	{
-		"id": "standard", "name": "Стандартное радио", "icon": "📻", "cost": 0, "zone_req": 0,
+		"id": "standard", "name": "Стандартное радио", "icon": "📻", "freq": "88.5", "cost": 0, "zone_req": 0,
 		"desc": "Обычный плейлист: эмбиент и саундтреки из «Метро».",
 		"files": [
 			"res://music/metro_last_light_17 Echoes of the Past (Guitar Version).mp3",
@@ -24,16 +24,7 @@ const RADIO_STATIONS: Array = [
 		],
 	},
 	{
-		"id": "french", "name": "Французское радио", "icon": "🇫🇷", "cost": 250000, "zone_req": 5,
-		"desc": "Indila — атмосферная французская эстрада для элитного района.",
-		"files": [
-			"res://music/Indila - Ainsi Bas La Vida.mp3",
-			"res://music/Indila - Derniere Dance.mp3",
-			"res://music/Indila - Tourner Dans Le Vide (Version Orchestrale).mp3",
-		],
-	},
-	{
-		"id": "cold_will", "name": "Холодная воля", "icon": "❄", "cost": 180000, "zone_req": 3,
+		"id": "cold_will", "name": "Холодная воля", "icon": "❄", "freq": "95.3", "cost": 180000, "zone_req": 3,
 		"desc": "Frostpunk — суровый оркестровый саундтрек о выживании и стойкости.",
 		"files": [
 			"res://music/frostpunk_01. Frostpunk Theme.mp3",
@@ -43,7 +34,16 @@ const RADIO_STATIONS: Array = [
 		],
 	},
 	{
-		"id": "mix", "name": "МИКС", "icon": "🎧", "cost": 250000, "zone_req": 0,
+		"id": "french", "name": "Французское радио", "icon": "🇫🇷", "freq": "101.2", "cost": 250000, "zone_req": 5,
+		"desc": "Indila — атмосферная французская эстрада для элитного района.",
+		"files": [
+			"res://music/Indila - Ainsi Bas La Vida.mp3",
+			"res://music/Indila - Derniere Dance.mp3",
+			"res://music/Indila - Tourner Dans Le Vide (Version Orchestrale).mp3",
+		],
+	},
+	{
+		"id": "mix", "name": "МИКС", "icon": "🎧", "freq": "108.0", "cost": 250000, "zone_req": 0,
 		"desc": "ABBA, Plenka, Sayfalse — разношёрстная подборка хитов.",
 		"files": [
 			"res://music/ABBA, Benny Andersson, Bjrn Ulvaeus - Money, Money, Money.mp3",
@@ -54,7 +54,10 @@ const RADIO_STATIONS: Array = [
 ]
 
 var current_station: String = "standard"
-var owned_stations: Array = ["standard"]
+# Радио как устройство: уровень = сколько волн ловит антенна.
+# Уровень 0 — только базовая волна (индекс 0). Каждый апгрейд открывает
+# следующую волну по порядку RADIO_STATIONS. Волна i доступна если i <= radio_level.
+var radio_level: int = 0
 
 
 const DISTRICT_COLORS := {
@@ -105,18 +108,54 @@ func _get_station(station_id: String) -> Dictionary:
 	return {}
 
 # ── Радио: публичный API ──────────────────────────────────────────────────────
-func is_station_owned(station_id: String) -> bool:
-	return station_id in owned_stations
+func station_index(station_id: String) -> int:
+	for i in RADIO_STATIONS.size():
+		if RADIO_STATIONS[i].id == station_id:
+			return i
+	return -1
 
-func buy_station(station_id: String) -> bool:
-	if is_station_owned(station_id): return true
-	var st := _get_station(station_id)
-	if st.is_empty(): return false
-	var gm: Node = get_node_or_null("/root/GameManager")
+# Волна доступна, если её индекс не выше текущего уровня радио
+func is_station_owned(station_id: String) -> bool:
+	var idx := station_index(station_id)
+	return idx >= 0 and idx <= radio_level
+
+func max_radio_level() -> int:
+	return RADIO_STATIONS.size() - 1
+
+func is_radio_maxed() -> bool:
+	return radio_level >= max_radio_level()
+
+# Волна, которую откроет следующий апгрейд (или {} если уже максимум)
+func next_upgrade_station() -> Dictionary:
+	if is_radio_maxed():
+		return {}
+	return RADIO_STATIONS[radio_level + 1]
+
+func next_upgrade_cost() -> int:
+	var st := next_upgrade_station()
+	return int(st.get("cost", 0)) if not st.is_empty() else 0
+
+# Достигнута ли зона, требуемая для следующего апгрейда
+func can_upgrade_radio() -> bool:
+	var st := next_upgrade_station()
+	if st.is_empty():
+		return false
 	var zm: Node = get_node_or_null("/root/ZoneManager")
-	if zm and zm.max_zone_reached < st.zone_req: return false
-	if gm == null or not gm.spend_money(st.cost): return false
-	owned_stations.append(station_id)
+	if zm and zm.max_zone_reached < int(st.get("zone_req", 0)):
+		return false
+	return true
+
+func upgrade_radio() -> bool:
+	var st := next_upgrade_station()
+	if st.is_empty():
+		return false
+	var zm: Node = get_node_or_null("/root/ZoneManager")
+	if zm and zm.max_zone_reached < int(st.get("zone_req", 0)):
+		return false
+	var gm: Node = get_node_or_null("/root/GameManager")
+	if gm == null or not gm.spend_money(int(st.get("cost", 0))):
+		return false
+	radio_level += 1
 	gm.save_game()
 	return true
 
@@ -132,11 +171,20 @@ func select_station(station_id: String) -> bool:
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("audio", "current_station", current_station)
-	cfg.set_value("audio", "owned_stations",  owned_stations)
+	cfg.set_value("audio", "radio_level", radio_level)
 
 func load_data(cfg: ConfigFile) -> void:
 	current_station = cfg.get_value("audio", "current_station", "standard")
-	owned_stations   = cfg.get_value("audio", "owned_stations",  ["standard"])
+	radio_level = cfg.get_value("audio", "radio_level", -1)
+	# Миграция со старой системы (owned_stations): уровень = самый дальний открытый
+	if radio_level < 0:
+		var owned: Array = cfg.get_value("audio", "owned_stations", ["standard"])
+		var maxidx := 0
+		for i in RADIO_STATIONS.size():
+			if RADIO_STATIONS[i].id in owned:
+				maxidx = maxi(maxidx, i)
+		radio_level = maxidx
+	radio_level = clampi(radio_level, 0, max_radio_level())
 	if not is_station_owned(current_station):
 		current_station = "standard"
 	# GameManager стоит раньше AudioManager в автозагрузке и может вызвать

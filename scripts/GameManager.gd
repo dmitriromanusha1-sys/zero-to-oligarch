@@ -700,7 +700,7 @@ func reset_game() -> void:
 		lm.active_loans.clear(); lm.loan_history.clear()
 		lm.credit_rating = "B"; lm.ban_until_day = 0; lm.rejection_cooldowns.clear()
 	var am_r = get_node_or_null("/root/AudioManager")
-	if am_r: am_r.current_station = "standard"; am_r.owned_stations = ["standard"]
+	if am_r: am_r.current_station = "standard"; am_r.radio_level = 0
 	var dm = get_node_or_null("/root/DistrictManager")
 	if dm: dm.unlocked.clear()
 	var cb_r = get_node_or_null("/root/CentralBankManager")
