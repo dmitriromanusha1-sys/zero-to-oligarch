@@ -210,8 +210,13 @@ func _build_list() -> void:
 		row_wrap.mouse_entered.connect(func(): _on_row_hover(target_idx))
 		row_wrap.mouse_exited.connect(_on_row_exit)
 
+func _sleep_energy_per_h(h: Dictionary) -> float:
+	var tier: int = h.get("tier", 0) as int
+	return lerpf(4.0, 16.0, clampf(tier / 10.0, 0.0, 1.0))
+
 func _perks_summary(h: Dictionary) -> String:
 	var parts: Array = []
+	parts.append("😴%.0f эн/ч" % _sleep_energy_per_h(h))
 	var h_regen: float = h.get("health_regen", 0.0) as float
 	if h_regen != 0.0:
 		parts.append("❤%+.1f/д" % h_regen)
@@ -295,6 +300,7 @@ func _show_tooltip_for_target() -> void:
 	var crime: float = h.get("crime_risk", 0.0) as float
 	var happy: float = h.get("happiness", 0.0) as float
 
+	_add_stat(vbox, "😴 Сон", "%.0f эн/час" % _sleep_energy_per_h(h), true)
 	_add_stat(vbox, "❤ Здоровье", "%+.1f/день" % h_regen, h_regen >= 0)
 	_add_stat(vbox, "🍖 Голод", "×%.2f" % hunger_d, hunger_d <= 1.0)
 	if income_m != 1.0:

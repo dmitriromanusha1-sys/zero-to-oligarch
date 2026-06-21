@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://sleepui001"]
+
+[ext_resource type="Script" path="res://scripts/SleepUI.gd" id="1"]
+
+[node name="SleepUI" type="CanvasLayer"]
+script = ExtResource("1")

@@ -118,7 +118,7 @@ func _ready() -> void:
 	# Тултипы
 	housing_btn.tooltip_text   = "Купить или снять жильё.\nЖильё влияет на здоровье каждый день."
 	quest_btn.tooltip_text     = "Активные цели и личный дневник.\nВыполняй цели для получения наград."
-	sleep_btn.tooltip_text     = "Перейти к следующему дню.\nНачислится доход, спишутся налоги и аренда."
+	sleep_btn.tooltip_text     = "Сон. Выбери сколько часов спать.\nТолько сон восстанавливает энергию — качество зависит от жилья."
 	ach_btn.tooltip_text       = "Список достижений.\nЗарабатывай их, играя!"
 	stats_btn.tooltip_text     = "Статистика и график роста капитала."
 	inv_btn.tooltip_text       = "Инвентарь: еда, напитки, аптечки.\nИспользуй предметы для восстановления."
@@ -126,7 +126,7 @@ func _ready() -> void:
 	health_bar.tooltip_text    = "❤ Здоровье. При 0 — конец игры.\nЖильё, еда и отдых восстанавливают."
 	hunger_bar.tooltip_text    = "Сытость. Убывает каждый день.\nПри 0 — теряешь здоровье. Ешь!"
 	thirst_bar.tooltip_text    = "Жажда. Убывает каждый день.\nПри 0 — теряешь здоровье. Пей!"
-	energy_bar.tooltip_text    = "Энергия. Тратится при работе (-10 за действие).\nПри 0 — нельзя работать. Жми Следующий день!"
+	energy_bar.tooltip_text    = "Энергия. Тратится на работе.\nПри 0 — нельзя работать. Поспи, чтобы восстановить!"
 
 	var am = get_node_or_null("/root/AudioManager")
 	housing_btn.pressed.connect(func():
@@ -135,7 +135,10 @@ func _ready() -> void:
 	quest_btn.pressed.connect(func():
 		if am: am.play_click()
 		quest_ui.open())
-	sleep_btn.pressed.connect(func(): gm.next_day())
+	sleep_btn.pressed.connect(func():
+		if am: am.play_click()
+		var su = get_tree().get_first_node_in_group("sleep_ui")
+		if su: su.open())
 	ach_btn.pressed.connect(func():
 		if am: am.play_click()
 		ach_ui.open())
@@ -357,6 +360,9 @@ func _any_modal_open() -> bool:
 			_settings_ui, _invest_popup, _journal, _system_popup]:
 		if w != null and is_instance_valid(w) and w.visible:
 			return true
+	var su = get_tree().get_first_node_in_group("sleep_ui")
+	if su and is_instance_valid(su) and su.visible:
+		return true
 	return false
 
 func _on_zone_entered(zone_idx: int) -> void:

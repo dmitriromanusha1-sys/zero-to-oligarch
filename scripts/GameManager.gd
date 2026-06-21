@@ -331,6 +331,61 @@ func buy_housing(index: int) -> bool:
 
 # --- Следующий день ---
 
+# ── Сон ───────────────────────────────────────────────────────────────────────
+# Энергию даёт только сон. Качество сна зависит от жилья (энергия/час и лечение/
+# час), еда/вода тратятся медленно, на небезопасном жилье можно лишиться денег.
+const SLEEP_HUNGER_PER_H := 0.8
+const SLEEP_THIRST_PER_H := 1.0
+
+func get_sleep_energy_per_hour() -> float:
+	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
+	return lerpf(4.0, 16.0, clampf(tier / 10.0, 0.0, 1.0))
+
+func get_sleep_health_per_hour() -> float:
+	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
+	return lerpf(-0.6, 1.5, clampf(tier / 10.0, 0.0, 1.0))
+
+# Возвращает сводку: {energy_gain, robbed, robbed_amount}
+func sleep_hours(hours: int) -> Dictionary:
+	var h: Dictionary = HOUSINGS[current_housing_index]
+	var before_e: float = energy
+	energy = clamp(energy + get_sleep_energy_per_hour() * hours, 0.0, 100.0)
+	var energy_gain: float = energy - before_e
+	emit_signal("energy_changed", energy)
+
+	var meal_m: float = 1.0 - meal_drain_bonus
+	hunger = clamp(hunger - SLEEP_HUNGER_PER_H * hours * meal_m, 0.0, 100.0)
+	thirst = clamp(thirst - SLEEP_THIRST_PER_H * hours * meal_m, 0.0, 100.0)
+	emit_signal("hunger_changed", hunger)
+	emit_signal("thirst_changed", thirst)
+
+	health = clamp(health + get_sleep_health_per_hour() * hours, 0.0, 100.0)
+	emit_signal("health_changed", health)
+
+	# Кража во сне на небезопасном жилье
+	var robbed: bool = false
+	var robbed_amount: float = 0.0
+	var crime: float = h.get("crime_risk", 0.0) as float
+	if crime > 0.0 and money > 0.0:
+		var chance: float = clampf(crime * (hours / 8.0), 0.0, 0.9)
+		if randf() < chance:
+			robbed = true
+			robbed_amount = money * randf_range(0.05, 0.15)
+			money = maxf(0.0, money - robbed_amount)
+			emit_signal("money_changed", money)
+			_check_title()
+			var es = get_node_or_null("/root/EventSystem")
+			if es:
+				es.event_triggered.emit({
+					"text": "🦹 Тебя обокрали во сне! Потеряно %s" % format_money(robbed_amount),
+					"money": -robbed_amount, "health": 0
+				})
+
+	# Сон тратит игровое время
+	advance_time(hours)
+	save_game()
+	return {"energy_gain": energy_gain, "robbed": robbed, "robbed_amount": robbed_amount}
+
 # Прокрутка времени на N часов (рабочая смена). Если смена выходит за полночь —
 # просто наступает следующий день (с его обработкой), иначе сдвигаем часы.
 func advance_time(hours: int) -> void:
@@ -402,12 +457,7 @@ func next_day() -> void:
 		health = clamp(health - 4.0 * health_m, 0.0, 100.0)
 		emit_signal("health_changed", health)
 
-	# Энергия восстанавливается за ночь в зависимости от жилья:
-	# без жилья (tier 0) — только 25% от максимума, лучшее жильё (tier 10) — 100%
-	var tier: int = h.get("tier", 0) as int
-	var sleep_pct: float = lerpf(0.25, 1.0, clampf(tier / 10.0, 0.0, 1.0))
-	energy = clamp(energy + 100.0 * sleep_pct, 0.0, 100.0)
-	emit_signal("energy_changed", energy)
+	# Энергия за смену дня НЕ восстанавливается — только сном (см. sleep_hours)
 
 	# Пассивный доход от бизнеса
 	var bm = get_node_or_null("/root/BusinessManager")
