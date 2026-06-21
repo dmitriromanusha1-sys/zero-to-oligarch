@@ -216,7 +216,7 @@ func _sleep_energy_per_h(h: Dictionary) -> float:
 
 func _sleep_health_per_h(h: Dictionary) -> float:
 	var tier: int = h.get("tier", 0) as int
-	return lerpf(-0.8, 2.5, clampf(tier / 10.0, 0.0, 1.0))
+	return lerpf(0.0, 2.5, clampf(tier / 10.0, 0.0, 1.0))
 
 func _perks_summary(h: Dictionary) -> String:
 	var parts: Array = []

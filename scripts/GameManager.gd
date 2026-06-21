@@ -342,8 +342,10 @@ func get_sleep_energy_per_hour() -> float:
 	return lerpf(4.0, 16.0, clampf(tier / 10.0, 0.0, 1.0))
 
 func get_sleep_health_per_hour() -> float:
+	# Сон не вредит здоровью: на худшем жилье — 0 (нет восстановления),
+	# на лучшем — до +2.5/час. Здоровье от голода/жажды убирается отдельно.
 	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
-	return lerpf(-0.8, 2.5, clampf(tier / 10.0, 0.0, 1.0))
+	return lerpf(0.0, 2.5, clampf(tier / 10.0, 0.0, 1.0))
 
 # Возвращает сводку: {energy_gain, robbed, robbed_amount}
 func sleep_hours(hours: int) -> Dictionary:
