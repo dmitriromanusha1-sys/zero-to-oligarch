@@ -33,6 +33,16 @@ const RADIO_STATIONS: Array = [
 		],
 	},
 	{
+		"id": "cold_will", "name": "Холодная воля", "icon": "❄", "cost": 180000, "zone_req": 3,
+		"desc": "Frostpunk — суровый оркестровый саундтрек о выживании и стойкости.",
+		"files": [
+			"res://music/frostpunk_01. Frostpunk Theme.mp3",
+			"res://music/frostpunk_02. Are We Alone!.mp3",
+			"res://music/frostpunk_08. Into The Storm.mp3",
+			"res://music/frostpunk_09. The City Must Survive.mp3",
+		],
+	},
+	{
 		"id": "mix", "name": "МИКС", "icon": "🎧", "cost": 250000, "zone_req": 0,
 		"desc": "ABBA, Plenka, Sayfalse — разношёрстная подборка хитов.",
 		"files": [

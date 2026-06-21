@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cdae53yu0ww8u"
+path="res://.godot/imported/frostpunk_01. Frostpunk Theme.mp3-4e9258e7926218f353297f1fe8b6b7e1.mp3str"
+
+[deps]
+
+source_file="res://music/frostpunk_01. Frostpunk Theme.mp3"
+dest_files=["res://.godot/imported/frostpunk_01. Frostpunk Theme.mp3-4e9258e7926218f353297f1fe8b6b7e1.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

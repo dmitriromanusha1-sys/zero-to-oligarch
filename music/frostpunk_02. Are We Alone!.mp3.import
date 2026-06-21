@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cicoem8bna0h3"
+path="res://.godot/imported/frostpunk_02. Are We Alone!.mp3-6da6dd50c640f6b0dc4521e4e6a45b98.mp3str"
+
+[deps]
+
+source_file="res://music/frostpunk_02. Are We Alone!.mp3"
+dest_files=["res://.godot/imported/frostpunk_02. Are We Alone!.mp3-6da6dd50c640f6b0dc4521e4e6a45b98.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
