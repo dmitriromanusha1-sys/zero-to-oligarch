@@ -59,11 +59,12 @@ func get_zone_bg() -> Color:
 	return ZONE_META[current_zone].bg
 
 # Физическое присутствие игрока в зоне (вызывается из World при ходьбе по
-# карте). Двигает "память" прогресса вперёд, но никогда не откатывает её назад.
+# карте). ТОЛЬКО обновляет отображаемую текущую зону и НИКОГДА не разблокирует
+# новые зоны — разблокировка идёт исключительно через турфирму (travel_to) с
+# проверкой условий. Если игрок забрёл в ещё не открытую зону, прогресс не трогаем.
 func register_visit(z: int) -> void:
-	current_zone = z
-	if z > max_zone_reached:
-		max_zone_reached = z
+	if z <= max_zone_reached:
+		current_zone = z
 
 func is_final_zone() -> bool:
 	return max_zone_reached >= ZONE_META.size() - 1
@@ -142,7 +143,10 @@ func travel_to(target_zone: int) -> void:
 			push_warning("travel_to: условия не выполнены")
 			return
 	print(">>> travel_to: переходим в зону ", target_zone)
-	register_visit(target_zone)
+	# Легальная разблокировка зоны через турфирму (условия уже проверены выше)
+	if target_zone > max_zone_reached:
+		max_zone_reached = target_zone
+	current_zone = target_zone
 	var gm: Node = get_node("/root/GameManager")
 	gm.save_game()
 	_travel_teleport = true
