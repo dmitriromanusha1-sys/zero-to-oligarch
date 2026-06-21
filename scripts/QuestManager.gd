@@ -115,7 +115,15 @@ func _is_active(id: String) -> bool:
 		if q.id == id: return true
 	return false
 
+var _checking: bool = false
+
 func _check_quests(_val) -> void:
+	# Во время загрузки сейва квесты не выполняем (иначе деньги/прогресс меняются)
+	if gm and gm.get("_loading"):
+		return
+	if _checking:
+		return
+	_checking = true
 	var to_complete: Array = []
 	for q in active_quests:
 		if _is_quest_done(q):
@@ -123,6 +131,7 @@ func _check_quests(_val) -> void:
 	for q in to_complete:
 		_complete_quest(q)
 	_unlock_available()
+	_checking = false
 
 func _is_quest_done(q: Dictionary) -> bool:
 	match q.type:
@@ -149,6 +158,8 @@ func _biz_level() -> int:
 
 func _complete_quest(q: Dictionary) -> void:
 	active_quests.erase(q)
+	if completed_ids.has(q.id):
+		return   # уже выполнен — без повторной награды и дубликатов
 	completed_ids.append(q.id)
 	if q.reward_money > 0:
 		gm.add_money(q.reward_money)
