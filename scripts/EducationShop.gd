@@ -231,29 +231,29 @@ func _buy() -> void:
 	if _gm.money < price:
 		if am: am.play_negative()
 		return
-	# Экзамен — запускаем мини-игру; уровень выдаётся по её завершении
-	var mg = get_tree().get_first_node_in_group("minigame")
-	if mg == null:
-		# Резерв: без мини-игры
+	# Экзамен — запускаем викторину; уровень выдаётся только при сдаче
+	var exam = get_tree().get_first_node_in_group("exam_ui")
+	if exam == null:
+		# Резерв: без экзамена
 		if _em.buy_next():
 			if am: am.play_level_up()
 			_refresh()
 		return
-	if mg.finished.is_connected(_on_exam_done):
-		mg.finished.disconnect(_on_exam_done)
-	mg.finished.connect(_on_exam_done, CONNECT_ONE_SHOT)
-	mg.start("Экзамен: " + _em.LEVELS[next_i].name, 1.0)
+	if exam.finished.is_connected(_on_exam_done):
+		exam.finished.disconnect(_on_exam_done)
+	exam.finished.connect(_on_exam_done, CONNECT_ONE_SHOT)
+	exam.start(_em.LEVELS[next_i].name, next_i)
 
 func _on_exam_done(mult: float) -> void:
 	var am: Node = get_node_or_null("/root/AudioManager")
-	# Экзамен сдаётся при завершении (оплата = поступление); зоны мини-игры
-	# зависят от текущего образования — чем выше уровень, тем легче сдавать дальше
-	if _em.buy_next():
-		if am: am.play_level_up()
-		# Отличная сдача (🌟/🟢) — небольшой бонус к репутации
-		if mult >= 1.5:
-			var rm = get_node_or_null("/root/ReputationManager")
-			if rm: rm.add(3)
+	# mult >= 1.0 — экзамен сдан (тогда списывается оплата и выдаётся уровень)
+	if mult >= 1.0:
+		if _em.buy_next():
+			if am: am.play_level_up()
+			# Отличная сдача — небольшой бонус к репутации
+			if mult >= 1.5:
+				var rm = get_node_or_null("/root/ReputationManager")
+				if rm: rm.add(3)
 	else:
 		if am: am.play_negative()
 	if visible:
