@@ -353,11 +353,13 @@ func _build_gameplay(pg: VBoxContainer) -> void:
 	_section(pg, _t("difficulty_section", "СЛОЖНОСТЬ"))
 	var DIFFS: Array = [
 		{"id": "easy", "label": _t("diff_easy", "🌱 Лёгкая"),
-		 "desc": _t("diff_easy_desc", "Штрафы и налоги ×0.5, голод медленнее"), "col": Color(0.30, 0.72, 0.35)},
+		 "desc": _t("diff_easy_desc", "Штрафы и налоги ×0.5, голод медленнее. Старт весной 🌸"), "col": Color(0.30, 0.72, 0.35)},
 		{"id": "normal", "label": _t("diff_normal", "⚖ Нормальная"),
-		 "desc": _t("diff_normal_desc", "Стандартный баланс"), "col": Color(0.65, 0.65, 0.85)},
+		 "desc": _t("diff_normal_desc", "Стандартный баланс. Старт летом ☀"), "col": Color(0.65, 0.65, 0.85)},
+		{"id": "hard", "label": _t("diff_hard", "🔥 Тяжёлая"),
+		 "desc": _t("diff_hard_desc", "Штрафы и налоги ×1.25. Старт осенью 🍂"), "col": Color(0.92, 0.60, 0.25)},
 		{"id": "hardcore", "label": _t("diff_hardcore", "💀 Хардкор"),
-		 "desc": _t("diff_hardcore_desc", "Штрафы и налоги ×1.5, голод быстрее"), "col": Color(0.90, 0.35, 0.35)},
+		 "desc": _t("diff_hardcore_desc", "Штрафы и налоги ×1.5, голод быстрее. Старт зимой ❄"), "col": Color(0.90, 0.35, 0.35)},
 	]
 	var cur_diff: String = _sm.difficulty if _sm else "normal"
 	var diff_btns: Array = []

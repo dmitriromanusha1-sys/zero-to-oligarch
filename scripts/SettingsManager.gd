@@ -48,6 +48,7 @@ func clear_log() -> void:
 const DIFFICULTY_PRESETS := {
 	"easy":     {"penalty": 0.50, "tax": 0.50, "drain": 0.70, "health": 0.50},
 	"normal":   {"penalty": 1.00, "tax": 1.00, "drain": 1.00, "health": 1.00},
+	"hard":     {"penalty": 1.25, "tax": 1.25, "drain": 1.25, "health": 1.25},
 	"hardcore": {"penalty": 1.50, "tax": 1.50, "drain": 1.50, "health": 1.50},
 }
 

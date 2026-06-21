@@ -730,12 +730,14 @@ func _setup_season_label() -> void:
 	_refresh_season()
 	if gm.has_signal("season_changed"):
 		gm.season_changed.connect(func(_i): _refresh_season())
+	gm.day_changed.connect(func(_d): _refresh_season())
 
 func _refresh_season() -> void:
 	if _season_lbl == null:
 		return
 	var s: Dictionary = gm.get_season()
-	_season_lbl.text = "%s %s" % [s.get("icon", ""), s.get("name", "")]
+	var date_str: String = gm.get_date_string() if gm.has_method("get_date_string") else ""
+	_season_lbl.text = "%s %s · %s" % [s.get("icon", ""), s.get("name", ""), date_str]
 
 func _setup_autosave_label() -> void:
 	_autosave_lbl = Label.new()

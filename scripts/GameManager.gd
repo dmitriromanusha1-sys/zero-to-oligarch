@@ -13,18 +13,42 @@ signal energy_changed(val: float)
 signal view_zoom_changed(zoom: float)
 signal season_changed(index: int)
 
-# ── Времена года ──────────────────────────────────────────────────────────────
-# Сезон зависит от дня. Влияет на расход еды/воды и (зимой) на здоровье без жилья.
-const SEASON_LENGTH := 20
+# ── Календарь и времена года ──────────────────────────────────────────────────
+# Год как в реальной жизни: 12 месяцев по 30 дней, день 1 = 1 января (зима).
+# Сезон определяется месяцем. Влияет на расход еды/воды и (зимой) на здоровье.
+const DAYS_PER_MONTH := 30
+const MONTHS_GEN := [
+	"января", "февраля", "марта", "апреля", "мая", "июня",
+	"июля", "августа", "сентября", "октября", "ноября", "декабря",
+]
+# Месяц (0=январь … 11=декабрь) → индекс сезона в SEASONS
+const MONTH_SEASON := [3, 3, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3]
 const SEASONS := [
-	{"name": "Весна", "icon": "🌸", "hunger": 1.00, "thirst": 1.05, "cold": 0.0, "fx": "rain",   "tint": Color(0.92, 1.02, 0.92)},
-	{"name": "Лето",  "icon": "☀",  "hunger": 0.95, "thirst": 1.35, "cold": 0.0, "fx": "sun",    "tint": Color(1.05, 1.00, 0.84)},
-	{"name": "Осень", "icon": "🍂", "hunger": 1.10, "thirst": 0.95, "cold": 0.0, "fx": "leaves", "tint": Color(1.05, 0.90, 0.78)},
-	{"name": "Зима",  "icon": "❄",  "hunger": 1.30, "thirst": 0.85, "cold": 5.0, "fx": "snow",   "tint": Color(0.84, 0.91, 1.08)},
+	{"name": "Весна", "icon": "🌸", "hunger": 1.00, "thirst": 1.05, "cold": 0.0, "fx": "rain",   "tint": Color(0.93, 1.03, 0.93)},
+	{"name": "Лето",  "icon": "☀",  "hunger": 0.95, "thirst": 1.35, "cold": 0.0, "fx": "sun",    "tint": Color(1.06, 1.00, 0.82)},
+	{"name": "Осень", "icon": "🍂", "hunger": 1.10, "thirst": 0.95, "cold": 0.0, "fx": "leaves", "tint": Color(1.07, 0.88, 0.74)},
+	{"name": "Зима",  "icon": "❄",  "hunger": 1.30, "thirst": 0.85, "cold": 5.0, "fx": "snow",   "tint": Color(0.82, 0.90, 1.10)},
 ]
 
+# Стартовый сезон зависит от сложности (задаётся при новой игре). Хранится как
+# смещение в днях, чтобы счётчик "day" по-прежнему начинался с 1 (квесты,
+# месячные циклы, "прожито дней" не ломаются).
+var season_start_offset: int = 0
+# Сложность → первый месяц сезона старта (0=янв): легко-весна, средне-лето,
+# тяжело-осень, хардкор-зима.
+const DIFF_START_MONTH := {"easy": 2, "normal": 5, "hard": 8, "hardcore": 11}
+
+func get_month_index() -> int:
+	return int((day - 1 + season_start_offset) / DAYS_PER_MONTH) % 12
+
+func get_day_of_month() -> int:
+	return ((day - 1 + season_start_offset) % DAYS_PER_MONTH) + 1
+
+func get_date_string() -> String:
+	return "%d %s" % [get_day_of_month(), MONTHS_GEN[get_month_index()]]
+
 func get_season_index() -> int:
-	return int((day - 1) / SEASON_LENGTH) % SEASONS.size()
+	return MONTH_SEASON[get_month_index()]
 
 func get_season() -> Dictionary:
 	return SEASONS[get_season_index()]
@@ -700,6 +724,7 @@ func save_game() -> void:
 	cfg.set_value("player", "minute", current_minute)
 	cfg.set_value("player", "meal_buff_days", meal_buff_days)
 	cfg.set_value("player", "meal_drain_bonus", meal_drain_bonus)
+	cfg.set_value("player", "season_start_offset", season_start_offset)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.save(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -760,6 +785,7 @@ func load_game() -> void:
 	current_minute = cfg.get_value("player", "minute", 0)
 	meal_buff_days  = cfg.get_value("player", "meal_buff_days", 0)
 	meal_drain_bonus = cfg.get_value("player", "meal_drain_bonus", 0.0)
+	season_start_offset = cfg.get_value("player", "season_start_offset", 0)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.load(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -791,6 +817,10 @@ func reset_game() -> void:
 	day = 1; current_hour = 8; current_minute = 0
 	money_history.clear()
 	meal_buff_days = 0; meal_drain_bonus = 0.0
+	# Стартовый сезон по сложности: легко-весна, средне-лето, тяжело-осень, хардкор-зима
+	var sm_diff = get_node_or_null("/root/SettingsManager")
+	var diff: String = sm_diff.difficulty if sm_diff else "normal"
+	season_start_offset = int(DIFF_START_MONTH.get(diff, 5)) * DAYS_PER_MONTH
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm:
 		bm.owned_business_id = ""; bm.employees.clear(); bm.bank_deposit = 0.0
