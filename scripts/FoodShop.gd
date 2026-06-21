@@ -216,9 +216,9 @@ func _refresh_work_tab() -> void:
 	var can_work: bool = true
 	var edu_level: int = _em.level if _em else 0
 
-	# Зарплата
+	# Ставка/смена (та же механика, что и у обычной работы)
 	var salary_lbl := Label.new()
-	salary_lbl.text = "💼 Зарплата: +" + _gm.format_money(_work_reward) + "  ⚡ -10 энергии"
+	salary_lbl.text = "💼 Ставка: " + _gm.format_money(_work_reward / 8.0) + " / час   🕒 смена 4–12 ч"
 	salary_lbl.add_theme_font_size_override("font_size", 15)
 	salary_lbl.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))
 	salary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -260,7 +260,7 @@ func _refresh_work_tab() -> void:
 
 	# Кнопка работать
 	var btn := Button.new()
-	btn.text = "💼  Работать"
+	btn.text = "💼  Выбрать смену"
 	btn.custom_minimum_size = Vector2(200, 44)
 	btn.add_theme_font_size_override("font_size", 15)
 	if can_work:

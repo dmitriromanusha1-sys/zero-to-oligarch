@@ -233,7 +233,8 @@ func _do_action() -> void:
 			if money_reward > 0:
 				var gm_ref := gm
 				var am_ref := am
-				work_cb = func(): _do_simple_work(gm_ref, am_ref)
+				# Подработка в магазине идёт по той же механике смен, что и обычная работа
+				work_cb = func(): _open_shift_picker(gm_ref, am_ref)
 			fs.open(food_shop_name, food_shop_items, money_reward, edu_req, work_cb)
 		return
 
@@ -345,24 +346,6 @@ func _do_heal(gm: Node, am) -> void:
 	_flash_visual(Color(0.4, 1.0, 0.6))
 	if am: am.play_buy()
 	FloatingText.spawn(get_tree(), global_position, "❤ +%.0f" % heal_amount, Color(0.4, 1.0, 0.5))
-	_start_cooldown()
-
-# Простая подработка (например, при продуктовом) — фикс. оплата без выбора смены
-func _do_simple_work(gm: Node, am) -> void:
-	if gm.energy <= 0:
-		_flash_sub("😴 Энергия на нуле! Поспи.", Color(1.0, 0.4, 0.3))
-		return
-	var housing_bonus: float = gm.get_housing_energy_drain_bonus() if gm.has_method("get_housing_energy_drain_bonus") else 0.0
-	gm.energy = clamp(gm.energy - 10.0 * (1.0 - housing_bonus), 0.0, 100.0)
-	gm.emit_signal("energy_changed", gm.energy)
-	gm.hunger = clamp(gm.hunger - 4.0, 0.0, 100.0)
-	gm.emit_signal("hunger_changed", gm.hunger)
-	gm.thirst = clamp(gm.thirst - 5.0, 0.0, 100.0)
-	gm.emit_signal("thirst_changed", gm.thirst)
-	if am: am.play_coin()
-	gm.add_money(money_reward)
-	_flash_result("✅ +" + gm.format_money(money_reward), Color(0.4, 1.0, 0.4))
-	FloatingText.spawn(get_tree(), global_position, "+" + gm.format_money(money_reward), Color(0.4, 1.0, 0.4))
 	_start_cooldown()
 
 # ── Кулдаун ───────────────────────────────────────────────────────────────────
