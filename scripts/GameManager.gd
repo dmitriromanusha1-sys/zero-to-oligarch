@@ -331,6 +331,19 @@ func buy_housing(index: int) -> bool:
 
 # --- Следующий день ---
 
+# Прокрутка времени на N часов (рабочая смена). Если смена выходит за полночь —
+# просто наступает следующий день (с его обработкой), иначе сдвигаем часы.
+func advance_time(hours: int) -> void:
+	if hours <= 0:
+		return
+	if current_hour + hours >= 24:
+		next_day()
+	else:
+		current_hour += hours
+		current_minute = 0
+		_time_acc = 0.0
+		emit_signal("time_changed", current_hour, current_minute)
+
 func next_day() -> void:
 	day += 1
 	current_hour = 8
