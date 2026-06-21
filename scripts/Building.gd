@@ -257,10 +257,10 @@ func _do_action() -> void:
 # ── Работа сменами ────────────────────────────────────────────────────────────
 # Доход = ставка/час × часы × коэффициент мини-игры. Ставка берётся из money_reward
 # (8-часовая смена ≈ старый баланс). Расход ресурсов в час:
-const ENERGY_PER_H := {"light": 1.25, "heavy": 2.0}
+const ENERGY_PER_H := {"light": 3.125, "heavy": 5.0}
 const HUNGER_PER_H := {"light": 0.5,  "heavy": 0.9}
 const THIRST_PER_H := {"light": 0.6,  "heavy": 1.1}
-const HEALTH_PER_H_HEAVY := 0.4
+const HEALTH_PER_H_HEAVY := 1.0
 
 func _hourly_rate() -> float:
 	return money_reward / 8.0

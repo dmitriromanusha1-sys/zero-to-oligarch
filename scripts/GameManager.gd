@@ -343,7 +343,7 @@ func get_sleep_energy_per_hour() -> float:
 
 func get_sleep_health_per_hour() -> float:
 	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
-	return lerpf(-0.6, 1.5, clampf(tier / 10.0, 0.0, 1.0))
+	return lerpf(-0.8, 2.5, clampf(tier / 10.0, 0.0, 1.0))
 
 # Возвращает сводку: {energy_gain, robbed, robbed_amount}
 func sleep_hours(hours: int) -> Dictionary:
@@ -362,11 +362,13 @@ func sleep_hours(hours: int) -> Dictionary:
 	health = clamp(health + get_sleep_health_per_hour() * hours, 0.0, 100.0)
 	emit_signal("health_changed", health)
 
-	# Кража во сне на небезопасном жилье
+	# Кража во сне — только если нет крыши над головой (бомж, tier 0).
+	# В любом помещении (палатка и выше) деньги в безопасности.
 	var robbed: bool = false
 	var robbed_amount: float = 0.0
+	var tier_now: int = h.get("tier", 0) as int
 	var crime: float = h.get("crime_risk", 0.0) as float
-	if crime > 0.0 and money > 0.0:
+	if tier_now == 0 and crime > 0.0 and money > 0.0:
 		var chance: float = clampf(crime * (hours / 8.0), 0.0, 0.9)
 		if randf() < chance:
 			robbed = true
@@ -422,10 +424,8 @@ func next_day() -> void:
 				current_housing_index = 0
 				emit_signal("housing_changed", HOUSINGS[0].name)
 
-	# Здоровье — бонус/дебаф от жилья
-	var h_regen: float = h.get("health_regen", 0.0) as float
-	health = clamp(health + h_regen, 0.0, 100.0)
-	emit_signal("health_changed", health)
+	# Здоровье от жилья теперь начисляется ПОЧАСОВО во время сна (см. sleep_hours),
+	# а не раз в день — поэтому здесь больше ничего не делаем.
 
 	# Репутация от жилья
 	var rep_day: float = h.get("rep_per_day", 0.0) as float

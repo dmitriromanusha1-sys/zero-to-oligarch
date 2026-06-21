@@ -648,7 +648,9 @@ func _build_bank_tab() -> void:
 		pct_row.add_theme_constant_override("separation", 6)
 		vb.add_child(pct_row)
 		for pct in [25, 50, 75, 100]:
-			var amount = snappedf(gm.money * pct / 100.0, 1.0)
+			# 100% — ровно все наличные; иначе округляем ВНИЗ, чтобы сумма
+			# никогда не превышала наличные (иначе вылетает «недостаточно»)
+			var amount = gm.money if pct == 100 else floorf(gm.money * pct / 100.0)
 			var pbtn   = Button.new()
 			pbtn.text  = "%d%%  (%s)" % [pct, gm.format_money(amount)]
 			pbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL

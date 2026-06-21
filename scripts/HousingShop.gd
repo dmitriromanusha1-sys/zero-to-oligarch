@@ -214,12 +214,14 @@ func _sleep_energy_per_h(h: Dictionary) -> float:
 	var tier: int = h.get("tier", 0) as int
 	return lerpf(4.0, 16.0, clampf(tier / 10.0, 0.0, 1.0))
 
+func _sleep_health_per_h(h: Dictionary) -> float:
+	var tier: int = h.get("tier", 0) as int
+	return lerpf(-0.8, 2.5, clampf(tier / 10.0, 0.0, 1.0))
+
 func _perks_summary(h: Dictionary) -> String:
 	var parts: Array = []
 	parts.append("😴%.0f эн/ч" % _sleep_energy_per_h(h))
-	var h_regen: float = h.get("health_regen", 0.0) as float
-	if h_regen != 0.0:
-		parts.append("❤%+.1f/д" % h_regen)
+	parts.append("❤%+.1f/ч сон" % _sleep_health_per_h(h))
 	var hunger_d: float = h.get("hunger_drain", 1.0) as float
 	if hunger_d != 1.0:
 		parts.append("🍖×%.2f" % hunger_d)
@@ -291,7 +293,6 @@ func _show_tooltip_for_target() -> void:
 	vbox.add_child(_sep())
 
 	# Бонусы
-	var h_regen: float = h.get("health_regen", 0.0) as float
 	var hunger_d: float = h.get("hunger_drain", 1.0) as float
 	var income_m: float = h.get("income_mult", 1.0) as float
 	var expense_m: float = h.get("expense_mult", 1.0) as float
@@ -301,7 +302,8 @@ func _show_tooltip_for_target() -> void:
 	var happy: float = h.get("happiness", 0.0) as float
 
 	_add_stat(vbox, "😴 Сон", "%.0f эн/час" % _sleep_energy_per_h(h), true)
-	_add_stat(vbox, "❤ Здоровье", "%+.1f/день" % h_regen, h_regen >= 0)
+	var shp: float = _sleep_health_per_h(h)
+	_add_stat(vbox, "❤ Здоровье (сон)", "%+.1f/час" % shp, shp >= 0)
 	_add_stat(vbox, "🍖 Голод", "×%.2f" % hunger_d, hunger_d <= 1.0)
 	if income_m != 1.0:
 		_add_stat(vbox, "💰 Доход", "×%.2f" % income_m, income_m > 1.0)
