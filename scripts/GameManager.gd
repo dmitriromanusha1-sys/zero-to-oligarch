@@ -11,6 +11,23 @@ signal hunger_changed(val: float)
 signal thirst_changed(val: float)
 signal energy_changed(val: float)
 signal view_zoom_changed(zoom: float)
+signal season_changed(index: int)
+
+# ── Времена года ──────────────────────────────────────────────────────────────
+# Сезон зависит от дня. Влияет на расход еды/воды и (зимой) на здоровье без жилья.
+const SEASON_LENGTH := 20
+const SEASONS := [
+	{"name": "Весна", "icon": "🌸", "hunger": 1.00, "thirst": 1.05, "cold": 0.0, "fx": "rain",   "tint": Color(0.92, 1.02, 0.92)},
+	{"name": "Лето",  "icon": "☀",  "hunger": 0.95, "thirst": 1.35, "cold": 0.0, "fx": "sun",    "tint": Color(1.05, 1.00, 0.84)},
+	{"name": "Осень", "icon": "🍂", "hunger": 1.10, "thirst": 0.95, "cold": 0.0, "fx": "leaves", "tint": Color(1.05, 0.90, 0.78)},
+	{"name": "Зима",  "icon": "❄",  "hunger": 1.30, "thirst": 0.85, "cold": 5.0, "fx": "snow",   "tint": Color(0.84, 0.91, 1.08)},
+]
+
+func get_season_index() -> int:
+	return int((day - 1) / SEASON_LENGTH) % SEASONS.size()
+
+func get_season() -> Dictionary:
+	return SEASONS[get_season_index()]
 
 # Зум камеры/интерфейса: 0.6 (макс. обзор, камера далеко) .. 1.8 (макс. приближение), меняется Ctrl+колесо мыши
 var view_zoom: float = 1.0
@@ -404,12 +421,15 @@ func advance_time(hours: int) -> void:
 		emit_signal("time_changed", current_hour, current_minute)
 
 func next_day() -> void:
+	var old_season: int = get_season_index()
 	day += 1
 	current_hour = 8
 	current_minute = 0
 	_time_acc = 0.0
 	emit_signal("day_changed", day)
 	emit_signal("time_changed", current_hour, current_minute)
+	if get_season_index() != old_season:
+		emit_signal("season_changed", get_season_index())
 
 	var h = HOUSINGS[current_housing_index]
 
@@ -442,8 +462,12 @@ func next_day() -> void:
 	var h_hunger: float = h.get("hunger_drain", 1.0) as float
 	var h_thirst: float = h.get("thirst_drain", 1.0) as float
 	var meal_m: float = 1.0 - meal_drain_bonus
-	hunger = clamp(hunger - 15.0 * drain_m * h_hunger * meal_m, 0.0, 100.0)
-	thirst = clamp(thirst - 20.0 * drain_m * h_thirst * meal_m, 0.0, 100.0)
+	# Сезон влияет на расход: лето → больше пить, зима → больше есть
+	var season: Dictionary = get_season()
+	var s_hunger: float = season.get("hunger", 1.0) as float
+	var s_thirst: float = season.get("thirst", 1.0) as float
+	hunger = clamp(hunger - 15.0 * drain_m * h_hunger * meal_m * s_hunger, 0.0, 100.0)
+	thirst = clamp(thirst - 20.0 * drain_m * h_thirst * meal_m * s_thirst, 0.0, 100.0)
 	if meal_buff_days > 0:
 		meal_buff_days -= 1
 		if meal_buff_days <= 0:
@@ -458,6 +482,18 @@ func next_day() -> void:
 	if thirst <= 0.0:
 		health = clamp(health - 4.0 * health_m, 0.0, 100.0)
 		emit_signal("health_changed", health)
+	# Зимний холод бьёт по здоровью, если нет крыши над головой (бомж, tier 0)
+	var cold: float = season.get("cold", 0.0) as float
+	var h_tier: int = h.get("tier", 0) as int
+	if cold > 0.0 and h_tier == 0:
+		health = clamp(health - cold * health_m, 0.0, 100.0)
+		emit_signal("health_changed", health)
+		var es_cold = get_node_or_null("/root/EventSystem")
+		if es_cold:
+			es_cold.event_triggered.emit({
+				"text": "❄ Зимний холод! Без жилья ты теряешь здоровье (−%d). Найди крышу!" % int(cold),
+				"money": 0, "health": -int(cold)
+			})
 
 	# Энергия за смену дня НЕ восстанавливается — только сном (см. sleep_hours)
 

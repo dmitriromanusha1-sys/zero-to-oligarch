@@ -85,28 +85,28 @@ const ZONE_BUILDINGS: Array = [
 		# ── Западный проспект ───────────────────────────────────────────────────────
 		{"name":"🏦 Банк",               "action":"Банк и бизнес",                   "reward":0,   "cd":999,  "pos":Vector2(-900,  80), "color":Color(0.10,0.28,0.55), "biz":true,                   "tex":"res://assets/textures/Sber bank.png"},
 		# ── Торговая улица ──────────────────────────────────────────────────────────
-		{"name":"🏪 Продукты «24»",      "action":"Работать грузчиком (+200 ₽)",     "reward":200, "cd":3.0,  "pos":Vector2(-480, 100), "color":Color(0.72,0.08,0.08), "minigame":true, "heavy":true, "edu_req":1, "food_shop":"🏪 Продукты «24»", "food_items":["bread","hotdog","water","kvas","tea","vitamins","bandage"], "tex":"res://assets/textures/Paterochka.png"},
-		{"name":"🍖 Шаурмячная",         "action":"Поесть / Поработать (+150 ₽)",    "reward":150, "cd":2.5,  "pos":Vector2( 180, 100), "color":Color(0.52,0.28,0.10), "minigame":true, "edu_req":1, "food_shop":"🍖 Шаурмячная", "food_items":["shawarma","hotdog","soup","kvas","juice","meal_cheap"], "tex":"res://assets/textures/Shaverma.png"},
+		{"name":"🏪 Продукты «24»",      "action":"Работать грузчиком (+250 ₽)",     "reward":250, "cd":3.0,  "pos":Vector2(-480, 100), "color":Color(0.72,0.08,0.08), "minigame":true, "heavy":true, "edu_req":1, "food_shop":"🏪 Продукты «24»", "food_items":["bread","hotdog","water","kvas","tea","vitamins","bandage"], "tex":"res://assets/textures/Paterochka.png"},
+		{"name":"🍖 Шаурмячная",         "action":"Готовить шаурму (+150 ₽)",        "reward":150, "cd":2.5,  "pos":Vector2( 180, 100), "color":Color(0.52,0.28,0.10), "minigame":true, "edu_req":1, "food_shop":"🍖 Шаурмячная", "food_items":["shawarma","hotdog","soup","kvas","juice","meal_cheap"], "tex":"res://assets/textures/Shaverma.png"},
 		{"name":"🏥 Поликлиника",        "action":"Пройти осмотр (+25 здоровья)",    "reward":0,   "cd":10.0, "pos":Vector2( 820, 100), "color":Color(0.18,0.45,0.50), "heal":25,                    "tex":"res://assets/textures/Poliklinika.png"},
 		# ── Центральный хаб ─────────────────────────────────────────────────────────
 		{"name":"🚌 Автовокзал",         "action":"Уехать в другой район",           "reward":0,   "cd":999,  "pos":Vector2(   0, 320), "color":Color(0.16,0.26,0.46), "travel":true,                "tex":"res://assets/textures/Avtovoczal.png"},
 		# ── Начальная работа (дворы) ────────────────────────────────────────────────
 		{"name":"🗑 Мусорные баки",      "action":"Собирать бутылки (+100 ₽)",       "reward":100, "cd":2.0,  "pos":Vector2(-850, 720), "color":Color(0.28,0.26,0.20), "minigame":true, "heavy":true, "tex":"res://assets/textures/trash_bins.png"},
-		{"name":"🧹 Подъезды",           "action":"Подметать двор (+80 ₽)",          "reward":80,  "cd":1.5,  "pos":Vector2(-200, 680), "color":Color(0.40,0.35,0.28), "minigame":true, "heavy":true, "tex":"res://assets/textures/podyezd.png"},
-		{"name":"🍺 Ларёк «Уют»",        "action":"Купить / Поработать (+60 ₽)",     "reward":60,  "cd":1.5,  "pos":Vector2( 350, 680), "color":Color(0.48,0.32,0.12), "minigame":true, "food_shop":"🍺 Ларёк «Уют»", "food_items":["bread","water","kvas","tea","pills"], "tex":"res://assets/textures/laryok.png"},
+		{"name":"🧹 Подъезды",           "action":"Работать дворником (+80 ₽)",      "reward":80,  "cd":1.5,  "pos":Vector2(-200, 680), "color":Color(0.40,0.35,0.28), "minigame":true, "heavy":true, "tex":"res://assets/textures/podyezd.png"},
+		{"name":"🍺 Ларёк «Уют»",        "action":"Подработать в ларьке (+60 ₽)",    "reward":60,  "cd":1.5,  "pos":Vector2( 350, 680), "color":Color(0.48,0.32,0.12), "minigame":true, "food_shop":"🍺 Ларёк «Уют»", "food_items":["bread","water","kvas","tea","pills"], "tex":"res://assets/textures/laryok.png"},
 		# ── Стройка (северо-восток) ─────────────────────────────────────────────────
-		{"name":"🏗 Стройка",            "action":"Разнорабочий (+350 ₽)",           "reward":350, "cd":4.0,  "pos":Vector2( 900,-480), "color":Color(0.40,0.32,0.18), "minigame":true, "heavy":true, "edu_req":2, "tex":"res://assets/textures/Stroika.png"},
+		{"name":"🏗 Стройка",            "action":"Разнорабочий (+400 ₽)",           "reward":400, "cd":4.0,  "pos":Vector2( 900,-480), "color":Color(0.40,0.32,0.18), "minigame":true, "heavy":true, "edu_req":2, "tex":"res://assets/textures/Stroika.png"},
 	],
 
 	# ── Зона 1: Рабочий квартал ───────────────────────────────────────────────
 	[
 		# ── Промзона (север) ──────────────────────────────────────────────────────
-		{"name":"🏭 Завод «ГлавПром»",  "action":"Работать на заводе (+600 ₽)",   "reward":600,  "cd":5.0,  "pos":Vector2(-900,-350), "color":Color(0.28,0.28,0.38), "minigame":true, "heavy":true, "edu_req":3, "tex":"res://assets/textures/Factory.png"},
-		{"name":"🏗 Стройка «Монолит»", "action":"Работать на стройке (+450 ₽)",  "reward":450,  "cd":4.0,  "pos":Vector2( 700,-400), "color":Color(0.45,0.35,0.20), "minigame":true, "heavy":true, "edu_req":3, "tex":"res://assets/textures/Stroika.png"},
-		{"name":"🚛 Склад №7",          "action":"Грузчик / экспедитор (+500 ₽)", "reward":500,  "cd":4.5,  "pos":Vector2( 300,-600), "color":Color(0.28,0.28,0.32), "minigame":true, "heavy":true, "edu_req":3, "tex":"res://assets/textures/sklad.png"},
+		{"name":"🏭 Завод «ГлавПром»",  "action":"Рабочий завода (+1 100 ₽)",     "reward":1100, "cd":5.0,  "pos":Vector2(-900,-350), "color":Color(0.28,0.28,0.38), "minigame":true, "heavy":true, "edu_req":3, "tex":"res://assets/textures/Factory.png"},
+		{"name":"🏗 Стройка «Монолит»", "action":"Работать строителем (+800 ₽)",  "reward":800,  "cd":4.0,  "pos":Vector2( 700,-400), "color":Color(0.45,0.35,0.20), "minigame":true, "heavy":true, "edu_req":3, "tex":"res://assets/textures/Stroika.png"},
+		{"name":"🚛 Склад №7",          "action":"Грузчик / экспедитор (+950 ₽)", "reward":950,  "cd":4.5,  "pos":Vector2( 300,-600), "color":Color(0.28,0.28,0.32), "minigame":true, "heavy":true, "edu_req":3, "tex":"res://assets/textures/sklad.png"},
 		# ── Торговая улица (центр) ────────────────────────────────────────────────
-		{"name":"🏪 Рынок «Удача»",     "action":"Торговать на рынке (+350 ₽)",   "reward":350,  "cd":3.0,  "pos":Vector2(-600, 450), "color":Color(0.40,0.50,0.18), "minigame":true, "edu_req":2, "tex":"res://assets/textures/Rynok.png"},
-		{"name":"🔧 Авторемонт",        "action":"Ремонт авто (+850 ₽)",          "reward":850,  "cd":6.0,  "pos":Vector2( 900, 300), "color":Color(0.42,0.30,0.18), "minigame":true, "heavy":true, "edu_req":4, "tex":"res://assets/textures/Avtomasterskaa.png"},
+		{"name":"🏪 Рынок «Удача»",     "action":"Продавец на рынке (+600 ₽)",    "reward":600,  "cd":3.0,  "pos":Vector2(-600, 450), "color":Color(0.40,0.50,0.18), "minigame":true, "edu_req":2, "tex":"res://assets/textures/Rynok.png"},
+		{"name":"🔧 Авторемонт",        "action":"Работать автомехаником (+1 600 ₽)", "reward":1600, "cd":6.0,  "pos":Vector2( 900, 300), "color":Color(0.42,0.30,0.18), "minigame":true, "heavy":true, "edu_req":4, "tex":"res://assets/textures/Avtomasterskaa.png"},
 		{"name":"🍺 Пивная «Факел»",    "action":"Купить еду и напитки",          "reward":0,    "cd":999,  "pos":Vector2(-300, 600), "color":Color(0.50,0.28,0.08), "food_shop":"🍺 Пивная «Факел»", "food_items":["bread","hotdog","water","kvas","tea","pills","bandage"], "tex":"res://assets/textures/pivnaya.png"},
 		# ── Социальная инфраструктура (запад) ─────────────────────────────────────
 		{"name":"🏥 Медпункт",          "action":"Первая помощь (+20 здоровья)",  "reward":0,    "cd":8.0,  "pos":Vector2(-900, 200), "color":Color(0.18,0.48,0.45), "heal":20, "tex":"res://assets/textures/medpunkt.png"},
@@ -121,24 +121,24 @@ const ZONE_BUILDINGS: Array = [
 
 	# ── Зона 2: Спальный район «Северный» ───────────────────────────────────────
 	[
-		{"name":"☕ Кафе «Берёзка»",        "action":"Работать официантом (+600 ₽)",    "reward":600,  "cd":5.0,  "pos":Vector2(-800,-300), "color":Color(0.50,0.35,0.25), "minigame":true, "edu_req":5, "food_shop":"☕ Кафе «Берёзка»", "food_items":["pie","soup","burger","coffee","juice","tea","smoothie","vitamins","meal_cafe"], "tex":"res://assets/textures/Cafe.png"},
-		{"name":"🍕 Пиццерия «Итальяно»",   "action":"Курьер / Купить еду (+400 ₽)",    "reward":400,  "cd":3.5,  "pos":Vector2(-200,-350), "color":Color(0.55,0.28,0.18), "minigame":true, "edu_req":4, "food_shop":"🍕 Пиццерия «Итальяно»", "food_items":["pizza_margherita","pizza_pepperoni","pizza_hawaii","pizza_quattro","cocktail","juice","coffee","water"], "tex":"res://assets/textures/pizzeria.png"},
-		{"name":"🛒 Супермаркет «Магнит»",  "action":"Работать кассиром (+500 ₽)",      "reward":500,  "cd":4.0,  "pos":Vector2( 700, 350), "color":Color(0.25,0.45,0.35), "minigame":true, "edu_req":5, "food_shop":"🛒 Супермаркет", "food_items":["bread","hotdog","burger","pizza","water","juice","coffee","tea","smoothie","bandage","pills","medkit","vitamins"], "tex":"res://assets/textures/Supermarket.png"},
+		{"name":"☕ Кафе «Берёзка»",        "action":"Работать бариста (+2 800 ₽)",     "reward":2800, "cd":5.0,  "pos":Vector2(-800,-300), "color":Color(0.50,0.35,0.25), "minigame":true, "edu_req":4, "food_shop":"☕ Кафе «Берёзка»", "food_items":["pie","soup","burger","coffee","juice","tea","smoothie","vitamins","meal_cafe"], "tex":"res://assets/textures/Cafe.png"},
+		{"name":"🍕 Пиццерия «Итальяно»",   "action":"Курьер пиццерии (+2 000 ₽)",      "reward":2000, "cd":3.5,  "pos":Vector2(-200,-350), "color":Color(0.55,0.28,0.18), "minigame":true, "edu_req":4, "food_shop":"🍕 Пиццерия «Итальяно»", "food_items":["pizza_margherita","pizza_pepperoni","pizza_hawaii","pizza_quattro","cocktail","juice","coffee","water"], "tex":"res://assets/textures/pizzeria.png"},
+		{"name":"🛒 Супермаркет «Магнит»",  "action":"Работать кассиром (+2 400 ₽)",    "reward":2400, "cd":4.0,  "pos":Vector2( 700, 350), "color":Color(0.25,0.45,0.35), "minigame":true, "edu_req":4, "food_shop":"🛒 Супермаркет", "food_items":["bread","hotdog","burger","pizza","water","juice","coffee","tea","smoothie","bandage","pills","medkit","vitamins"], "tex":"res://assets/textures/Supermarket.png"},
 		{"name":"🏥 Поликлиника №5",        "action":"Пройти осмотр (+35 здоровья)",    "reward":0,    "cd":10.0, "pos":Vector2(-900, 400), "color":Color(0.30,0.55,0.55), "heal":35,        "tex":"res://assets/textures/Poliklinika.png"},
 		{"name":"💊 Аптека «36.6»",         "action":"Купить лекарства (+15 здоровья)", "reward":0,    "cd":5.0,  "pos":Vector2( 800, 400), "color":Color(0.18,0.58,0.42), "heal":15, "tex":"res://assets/textures/apteka_366.png"},
 		{"name":"🏋 Фитнес-центр «Энергия»","action":"Тренировка (+25 здоровья)",       "reward":0,    "cd":8.0,  "pos":Vector2( 600,-600), "color":Color(0.25,0.40,0.35), "heal":25,        "tex":"res://assets/textures/Sport club.png"},
 		{"name":"🏦 ВТБ Банк",              "action":"Открыть меню банка",              "reward":0,    "cd":999,  "pos":Vector2(-500,-600), "color":Color(0.20,0.40,0.60), "biz":true,       "tex":"res://assets/textures/Sber bank.png"},
 		{"name":"📋 Колледж «Ломоносов»",   "action":"Получить образование",            "reward":0,    "cd":999,  "pos":Vector2(-700, 600), "color":Color(0.25,0.30,0.48), "edu_shop":true,  "edu_max":5, "tex":"res://assets/textures/Univerciti.png"},
-		{"name":"🎭 Кинотеатр «Октябрь»",   "action":"Работать билетёром (+350 ₽)",     "reward":350,  "cd":3.5,  "pos":Vector2( 500, 600), "color":Color(0.38,0.22,0.48), "minigame":true,  "edu_req":4, "tex":"res://assets/textures/kinoteatr.png"},
+		{"name":"🎭 Кинотеатр «Октябрь»",   "action":"Работать киномехаником (+3 600 ₽)", "reward":3600, "cd":3.5,  "pos":Vector2( 500, 600), "color":Color(0.38,0.22,0.48), "minigame":true,  "edu_req":5, "tex":"res://assets/textures/kinoteatr.png"},
 		{"name":"✈ Тур.агентство",          "action":"Переехать в следующий район",     "reward":0,    "cd":999,  "pos":Vector2(  0, 250), "color":Color(0.15,0.30,0.50), "travel":true,    "tex":"res://assets/textures/Travel agency office.png"},
 	],
 
 	# ── Зона 3: Средний класс ─────────────────────────────────────────────────
 	[
-		{"name":"🏦 Инвест. банк",   "action":"Инвестировать (+4 000 ₽)",       "reward":4000,  "cd":7.0,  "pos":Vector2(-800,-300), "color":Color(0.20,0.40,0.55), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Bank investment.png"},
-		{"name":"🚘 Автосервис",     "action":"Открыть автосервис (+3 000 ₽)",  "reward":3000,  "cd":6.0,  "pos":Vector2( 800, 400), "color":Color(0.45,0.35,0.25), "minigame":true, "edu_req":4, "tex":"res://assets/textures/Avtomasterskaa.png"},
+		{"name":"🏦 Инвест. банк",   "action":"Работать финансистом (+8 000 ₽)", "reward":8000,  "cd":7.0,  "pos":Vector2(-800,-300), "color":Color(0.20,0.40,0.55), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Bank investment.png"},
+		{"name":"🚘 Автосервис",     "action":"Работать менеджером по продажам (+6 000 ₽)",  "reward":6000,  "cd":6.0,  "pos":Vector2( 800, 400), "color":Color(0.45,0.35,0.25), "minigame":true, "edu_req":5, "tex":"res://assets/textures/Avtomasterskaa.png"},
 		{"name":"🏋 Фитнес-клуб",    "action":"Тренировка (+20 здоровья)",      "reward":0,     "cd":8.0,  "pos":Vector2(-600, 500), "color":Color(0.25,0.40,0.35), "heal":20,   "tex":"res://assets/textures/Sport club.png"},
-		{"name":"🍽 Ресторан",       "action":"Бизнес-ланч (+2 000 ₽)",         "reward":2000,  "cd":5.0,  "pos":Vector2( 700,-500), "color":Color(0.55,0.35,0.20), "minigame":true, "food_shop":"🍽 Ресторан", "food_items":["pizza","sushi","steak","smoothie","cocktail","elite_medkit","meal_restaurant"], "edu_req":5, "tex":"res://assets/textures/Restoran.png"},
+		{"name":"🍽 Ресторан",       "action":"Работать в ресторане (+4 500 ₽)", "reward":4500,  "cd":5.0,  "pos":Vector2( 700,-500), "color":Color(0.55,0.35,0.20), "minigame":true, "food_shop":"🍽 Ресторан", "food_items":["pizza","sushi","steak","smoothie","cocktail","elite_medkit","meal_restaurant"], "edu_req":5, "tex":"res://assets/textures/Restoran.png"},
 		{"name":"🏛 Налоговая",      "action":"Открыть бизнес",                 "reward":0,     "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.50,0.45,0.20), "biz":true,  "tex":"res://assets/textures/Nalogovaa.png"},
 		{"name":"🏫 Университет",    "action":"Получить образование (бакалавр)","reward":0,     "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.30,0.35,0.50), "edu_shop":true, "edu_max":6, "tex":"res://assets/textures/Univerciti.png"},
 		{"name":"✈ Тур.фирма",       "action":"Переехать в следующий район",    "reward":0,     "cd":999,  "pos":Vector2(  0, 250), "color":Color(0.15,0.30,0.50), "travel":true, "tex":"res://assets/textures/Travel agency office.png"},
@@ -147,13 +147,13 @@ const ZONE_BUILDINGS: Array = [
 	# ── Зона 4: Бизнес-квартал ───────────────────────────────────────────────
 	[
 		{"name":"📈 Биржа",           "action":"Открыть торговую платформу",      "reward":0,     "cd":999,  "pos":Vector2(-800,-300), "color":Color(0.20,0.35,0.55), "stock":true,    "edu_req":6, "tex":"res://assets/textures/Birza.png"},
-		{"name":"🏢 Офис-центр",      "action":"Переговоры (+8 000 ₽)",           "reward":8000,  "cd":5.0,  "pos":Vector2( 700,-400), "color":Color(0.25,0.30,0.45), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Office.png"},
-		{"name":"💻 Технопарк",       "action":"Разработка стартапа (+12 000 ₽)", "reward":12000, "cd":6.0,  "pos":Vector2(-200,-700), "color":Color(0.18,0.32,0.52), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Office.png"},
-		{"name":"💹 Торговый зал",    "action":"Форекс-сделка (+6 000 ₽)",        "reward":6000,  "cd":4.0,  "pos":Vector2( 600,-200), "color":Color(0.22,0.38,0.58), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Birza.png"},
-		{"name":"🎯 Венчурный фонд",  "action":"Питч стартапа (+25 000 ₽)",       "reward":25000, "cd":14.0, "pos":Vector2( 800,-600), "color":Color(0.28,0.22,0.52), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Board of directors.png"},
-		{"name":"🏛 Конгресс-холл",   "action":"Бизнес-конференция (+5 000 ₽)",   "reward":5000,  "cd":8.0,  "pos":Vector2(-800, 400), "color":Color(0.28,0.36,0.56), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Board of directors.png"},
-		{"name":"☕ Бизнес-кафе",     "action":"Кофе и нетворкинг (+800 ₽)",     "reward":800,   "cd":3.0,  "pos":Vector2(-250,-150), "color":Color(0.42,0.28,0.18), "minigame":true, "food_shop":"☕ Бизнес-кафе", "food_items":["coffee","pie","burger","smoothie","juice","vitamins","meal_cafe"], "tex":"res://assets/textures/Cafe.png"},
-		{"name":"🍽 Ресторан",        "action":"Бизнес-ланч (+3 500 ₽)",          "reward":3500,  "cd":5.0,  "pos":Vector2(-600, 500), "color":Color(0.55,0.35,0.20), "minigame":true, "food_shop":"🍽 Ресторан", "food_items":["pizza","sushi","steak","smoothie","cocktail","elite_medkit","meal_restaurant"], "edu_req":5, "tex":"res://assets/textures/Restoran.png"},
+		{"name":"🏢 Офис-центр",      "action":"Работать менеджером (+18 000 ₽)", "reward":18000, "cd":5.0,  "pos":Vector2( 700,-400), "color":Color(0.25,0.30,0.45), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Office.png"},
+		{"name":"💻 Технопарк",       "action":"Разработчик стартапа (+24 000 ₽)", "reward":24000, "cd":6.0,  "pos":Vector2(-200,-700), "color":Color(0.18,0.32,0.52), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Office.png"},
+		{"name":"💹 Торговый зал",    "action":"Работать трейдером (+15 000 ₽)",  "reward":15000, "cd":4.0,  "pos":Vector2( 600,-200), "color":Color(0.22,0.38,0.58), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Birza.png"},
+		{"name":"🎯 Венчурный фонд",  "action":"Венчурный инвестор (+30 000 ₽)",  "reward":30000, "cd":14.0, "pos":Vector2( 800,-600), "color":Color(0.28,0.22,0.52), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Board of directors.png"},
+		{"name":"🏛 Конгресс-холл",   "action":"Организатор конференций (+13 000 ₽)", "reward":13000, "cd":8.0,  "pos":Vector2(-800, 400), "color":Color(0.28,0.36,0.56), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Board of directors.png"},
+		{"name":"☕ Бизнес-кафе",     "action":"Работать в бизнес-кафе (+10 000 ₽)", "reward":10000, "cd":3.0,  "pos":Vector2(-250,-150), "color":Color(0.42,0.28,0.18), "minigame":true, "edu_req":6, "food_shop":"☕ Бизнес-кафе", "food_items":["coffee","pie","burger","smoothie","juice","vitamins","meal_cafe"], "tex":"res://assets/textures/Cafe.png"},
+		{"name":"🍽 Ресторан",        "action":"Работать в ресторане (+11 000 ₽)", "reward":11000, "cd":5.0,  "pos":Vector2(-600, 500), "color":Color(0.55,0.35,0.20), "minigame":true, "edu_req":6, "food_shop":"🍽 Ресторан", "food_items":["pizza","sushi","steak","smoothie","cocktail","elite_medkit","meal_restaurant"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"🏋 Фитнес Premium",  "action":"Тренировка (+40 здоровья)",       "reward":0,     "cd":8.0,  "pos":Vector2( 300, 650), "color":Color(0.22,0.40,0.38), "heal":40,        "tex":"res://assets/textures/Sport club.png"},
 		{"name":"🏛 Мэрия",           "action":"Открыть бизнес",                  "reward":0,     "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.50,0.50,0.30), "biz":true,        "tex":"res://assets/textures/Meria.png"},
 		{"name":"🏥 Клиника",         "action":"Лечиться (+45 здоровья)",         "reward":0,     "cd":10.0, "pos":Vector2( 800, 400), "color":Color(0.30,0.55,0.55), "heal":45,         "tex":"res://assets/textures/Poliklinika.png"},
@@ -163,8 +163,8 @@ const ZONE_BUILDINGS: Array = [
 
 	# ── Зона 5: Элитный район ─────────────────────────────────────────────────
 	[
-		{"name":"🛥 Яхт-клуб",       "action":"Приём на яхте (+15 000 ₽)",      "reward":15000, "cd":10.0, "pos":Vector2(-800,-300), "color":Color(0.15,0.30,0.50), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Yacht club.png"},
-		{"name":"✈ Аэропорт",        "action":"Вылет за границу (+100 000 ₽)",  "reward":100000,"cd":20.0, "pos":Vector2( 700,-400), "color":Color(0.30,0.30,0.50), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Private airport.png"},
+		{"name":"🛥 Яхт-клуб",       "action":"Менеджер яхт-клуба (+40 000 ₽)", "reward":40000, "cd":10.0, "pos":Vector2(-800,-300), "color":Color(0.15,0.30,0.50), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Yacht club.png"},
+		{"name":"✈ Аэропорт",        "action":"Деловой рейс за границу (+150 000 ₽)", "reward":150000,"cd":20.0, "pos":Vector2( 700,-400), "color":Color(0.30,0.30,0.50), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Private airport.png"},
 		{"name":"🎰 Казино",         "action":"Сыграть в казино (±50 000 ₽)",   "reward":50000, "cd":5.0,  "pos":Vector2(-500, 500), "color":Color(0.50,0.20,0.40), "casino":true, "tex":"res://assets/textures/Casino.png"},
 		{"name":"🏡 Агентство",      "action":"Купить элитное жильё",           "reward":0,     "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.40,0.35,0.25), "biz":true, "tex":"res://assets/textures/Office.png"},
 		{"name":"🥂 VIP-Ресторан",  "action":"Гастрономический ужин",          "reward":0,     "cd":999,  "pos":Vector2( 700, 600), "color":Color(0.50,0.28,0.38), "food_shop":"🥂 VIP-Ресторан", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_elite"], "tex":"res://assets/textures/Restoran.png"},
@@ -176,10 +176,10 @@ const ZONE_BUILDINGS: Array = [
 
 	# ── Зона 6: Район олигархов ───────────────────────────────────────────────
 	[
-		{"name":"🏰 Дворец",         "action":"Приём гостей (+500 000 ₽)",      "reward":500000,  "cd":30.0, "pos":Vector2(-800,-300), "color":Color(0.50,0.45,0.15), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Oligarch's palace.png"},
-		{"name":"🛩 Частный аэропорт","action":"Деловой рейс (+1 млн ₽)",       "reward":1000000, "cd":40.0, "pos":Vector2( 700,-400), "color":Color(0.25,0.25,0.40), "minigame":true, "edu_req":9, "tex":"res://assets/textures/Private airport.png"},
-		{"name":"🛢 Нефтяная вышка", "action":"Качать нефть (+2 млн ₽)",        "reward":2000000, "cd":60.0, "pos":Vector2(-600, 500), "color":Color(0.20,0.20,0.20), "minigame":true, "heavy":true, "edu_req":8, "tex":"res://assets/textures/Oil derrick industrial facility.png"},
-		{"name":"🎭 Опера",          "action":"Меценатство (+50 000 ₽)",         "reward":50000,   "cd":15.0, "pos":Vector2( 700, 500), "color":Color(0.40,0.25,0.45), "minigame":true, "tex":"res://assets/textures/Opera house building.png"},
+		{"name":"🏰 Дворец",         "action":"Приём гостей (+900 000 ₽)",      "reward":900000,  "cd":30.0, "pos":Vector2(-800,-300), "color":Color(0.50,0.45,0.15), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Oligarch's palace.png"},
+		{"name":"🛩 Частный аэропорт","action":"Деловой рейс (+2 млн ₽)",       "reward":2000000, "cd":40.0, "pos":Vector2( 700,-400), "color":Color(0.25,0.25,0.40), "minigame":true, "edu_req":9, "tex":"res://assets/textures/Private airport.png"},
+		{"name":"🛢 Нефтяная вышка", "action":"Качать нефть (+600 000 ₽)",      "reward":600000,  "cd":60.0, "pos":Vector2(-600, 500), "color":Color(0.20,0.20,0.20), "minigame":true, "heavy":true, "edu_req":8, "tex":"res://assets/textures/Oil derrick industrial facility.png"},
+		{"name":"🎭 Опера",          "action":"Работать в опере (+200 000 ₽)",   "reward":200000,  "cd":15.0, "pos":Vector2( 700, 500), "color":Color(0.40,0.25,0.45), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Opera house building.png"},
 		{"name":"🍾 Ресторан Мишлен","action":"Обед от шефа",                   "reward":0,       "cd":999,  "pos":Vector2(-400, 700), "color":Color(0.55,0.30,0.15), "food_shop":"🍾 Ресторан Мишлен", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_elite"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"🏦 Офшор",          "action":"Перевести деньги в офшор",        "reward":0,       "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.20,0.35,0.50), "biz":true, "tex":"res://assets/textures/Generic bank branch building.png"},
 		{"name":"🧠 НИИ (Наука)",    "action":"Получить образование (гений)",    "reward":0,       "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.15,0.20,0.40), "edu_shop":true, "edu_max":10, "tex":"res://assets/textures/NIИ.png"},
@@ -190,10 +190,10 @@ const ZONE_BUILDINGS: Array = [
 
 	# ── Зона 7: Правительственный квартал ─────────────────────────────────────
 	[
-		{"name":"🏛 Минфин",          "action":"Госконтракт (+200 000 ₽)",       "reward":200000,  "cd":25.0, "pos":Vector2(-800,-300), "color":Color(0.28,0.32,0.50), "minigame":true, "edu_req":9, "tex":"res://assets/textures/Russian Ministry of Finance building.png"},
+		{"name":"🏛 Минфин",          "action":"Госконтракт (+5 млн ₽)",         "reward":5000000, "cd":25.0, "pos":Vector2(-800,-300), "color":Color(0.28,0.32,0.50), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Russian Ministry of Finance building.png"},
 		{"name":"🏦 Госбанк",         "action":"Открыть счёт",                   "reward":0,       "cd":999,  "pos":Vector2( 700,-400), "color":Color(0.18,0.28,0.55), "biz":true, "tex":"res://assets/textures/Generic bank branch building.png"},
-		{"name":"🤝 Посольство",      "action":"Контракт (+500 000 ₽)",          "reward":500000,  "cd":30.0, "pos":Vector2(-600, 500), "color":Color(0.32,0.38,0.55), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Embassy building.png"},
-		{"name":"💼 Совет директоров","action":"Заседание (+300 000 ₽)",         "reward":300000,  "cd":20.0, "pos":Vector2( 700, 500), "color":Color(0.25,0.30,0.48), "minigame":true, "edu_req":9, "tex":"res://assets/textures/Board of directors.png"},
+		{"name":"🤝 Посольство",      "action":"Контракт (+9 млн ₽)",            "reward":9000000, "cd":30.0, "pos":Vector2(-600, 500), "color":Color(0.32,0.38,0.55), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Embassy building.png"},
+		{"name":"💼 Совет директоров","action":"Заседание (+2,5 млн ₽)",         "reward":2500000, "cd":20.0, "pos":Vector2( 700, 500), "color":Color(0.25,0.30,0.48), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Board of directors.png"},
 		{"name":"🏥 VIP-Клиника",     "action":"Лечение (+60 здоровья)",         "reward":0,       "cd":12.0, "pos":Vector2( 900, 300), "color":Color(0.25,0.50,0.50), "heal":60, "tex":"res://assets/textures/Medical clinic building.png"},
 		{"name":"🔬 Академия наук",   "action":"Получить образование (гений)",   "reward":0,       "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.15,0.20,0.40), "edu_shop":true, "edu_max":10, "tex":"res://assets/textures/Academy of sciences.png"},
 		{"name":"🏛 Налог.служба",    "action":"Открыть бизнес",                 "reward":0,       "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.42,0.40,0.18), "biz":true, "tex":"res://assets/textures/Nalogovaa.png"},
@@ -203,9 +203,9 @@ const ZONE_BUILDINGS: Array = [
 
 	# ── Зона 8: Высший свет (ФИНАЛ) ──────────────────────────────────────────
 	[
-		{"name":"🛢 Нефтекорпорация", "action":"Нефтяная сделка (+5 млн ₽)",    "reward":5000000,  "cd":45.0, "pos":Vector2(-800,-300), "color":Color(0.18,0.18,0.25), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Oil derrick industrial facility.png"},
-		{"name":"📡 Медиа-империя",   "action":"Медиасделка (+3 млн ₽)",         "reward":3000000,  "cd":35.0, "pos":Vector2( 700,-400), "color":Color(0.22,0.22,0.32), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Media empire.png"},
-		{"name":"📜 Госконтракт",     "action":"Тендер (+10 млн ₽)",             "reward":10000000, "cd":60.0, "pos":Vector2(-600, 500), "color":Color(0.20,0.20,0.30), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Gov contract.png"},
+		{"name":"🛢 Нефтекорпорация", "action":"Нефтяная сделка (+25 млн ₽)",   "reward":25000000, "cd":45.0, "pos":Vector2(-800,-300), "color":Color(0.18,0.18,0.25), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Oil derrick industrial facility.png"},
+		{"name":"📡 Медиа-империя",   "action":"Медиасделка (+12 млн ₽)",        "reward":12000000, "cd":35.0, "pos":Vector2( 700,-400), "color":Color(0.22,0.22,0.32), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Media empire.png"},
+		{"name":"📜 Госконтракт",     "action":"Тендер (+60 млн ₽)",             "reward":60000000, "cd":60.0, "pos":Vector2(-600, 500), "color":Color(0.20,0.20,0.30), "minigame":true, "edu_req":10, "tex":"res://assets/textures/Gov contract.png"},
 		{"name":"🎰 Казино-Роял",     "action":"Играть (±2 млн ₽)",              "reward":2000000,  "cd":5.0,  "pos":Vector2( 700, 500), "color":Color(0.50,0.18,0.42), "casino":true, "tex":"res://assets/textures/Royal casino Casino-Royal.png"},
 		{"name":"🏦 Частный банк",    "action":"Управление капиталом",            "reward":0,        "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.16,0.24,0.48), "biz":true, "tex":"res://assets/textures/Generic bank branch building.png"},
 		{"name":"🏥 Медцентр",        "action":"Лечение (+80 здоровья)",         "reward":0,        "cd":12.0, "pos":Vector2( 900, 300), "color":Color(0.22,0.48,0.48), "heal":80, "tex":"res://assets/textures/Medical clinic building.png"},
@@ -300,7 +300,7 @@ const ZONE_NPC: Array = [
 		{"name":"👩 Продавщица Люда",    "pos":Vector2( 600,-500), "lines":["Берёшь что-нибудь или так стоишь?","У нас всё свежее! Почти...","В Спальном районе неплохо жить. Тихо, зелено."], "title_lines":[
 			["Берёшь что-нибудь? У нас свежая выпечка из кафе рядом!"],
 			["Слыхала, ты подрабатываешь. Молодец, так и надо."],
-			["Официантом работаешь? Я тоже начинала с этого."],
+			["Бариста работаешь? Я тоже начинала с этого."],
 			["В средний класс выбился уже? Хороший район стал мал?"],
 			["Богатый человек, а всё равно к нам заходишь. Уважаю!"],
 			["Говорят ты миллионер? Может нашу Пиццерию купишь?"],
@@ -318,7 +318,7 @@ const ZONE_NPC: Array = [
 		{"name":"👴 Дедушка Иван",       "pos":Vector2( 300, 380), "lines":["Раньше тут поля были. Теперь сплошные дома.","Пенсия маленькая, но в кафе иногда захожу.","Молодёжь бегает в фитнес. Я предпочитаю сквер."], "title_lines":[
 			["Раньше тут поля были. Ты тоже новенький в районе?"],
 			["На кафе или Пиццерию хожу иногда. Жить можно."],
-			["Работаешь официантом? Хорошая работа, уважаемая."],
+			["Работаешь бариста? Хорошая работа, уважаемая."],
 			["Средний класс достиг? Дай бог тебе здоровья, сынок."],
 			["Богатый человек. Помни откуда пришёл — вот мой тебе совет."],
 			["Миллионер! Я ещё помню, как ты в этот район приехал."],
@@ -2337,14 +2337,21 @@ func _setup_day_night() -> void:
 	add_child(_canvas_modulate)
 	var gm: Node = get_node_or_null("/root/GameManager")
 	if gm:
-		_canvas_modulate.color = _daynight_color(gm.current_hour, gm.current_minute)
 		gm.time_changed.connect(_on_world_time_changed)
+		if gm.has_signal("season_changed"):
+			gm.season_changed.connect(func(_i): _on_world_time_changed(gm.current_hour, gm.current_minute))
+		_on_world_time_changed(gm.current_hour, gm.current_minute)
 	else:
 		_canvas_modulate.color = Color(1.0, 1.0, 1.0)
 
 func _on_world_time_changed(h: int, m: int) -> void:
 	if _canvas_modulate:
-		_canvas_modulate.color = _daynight_color(h, m)
+		var col: Color = _daynight_color(h, m)
+		var gm: Node = get_node_or_null("/root/GameManager")
+		if gm and gm.has_method("get_season"):
+			var tint: Color = gm.get_season().get("tint", Color(1, 1, 1))
+			col = Color(col.r * tint.r, col.g * tint.g, col.b * tint.b)
+		_canvas_modulate.color = col
 
 # Ключевые точки цикла (час -> цвет); между ними плавная интерполяция
 const DAYNIGHT_KEYS: Array = [

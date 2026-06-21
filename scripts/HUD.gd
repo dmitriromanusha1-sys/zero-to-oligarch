@@ -153,6 +153,7 @@ func _ready() -> void:
 	_setup_invest_btn(am)
 	_setup_journal_and_system(am)
 	_setup_autosave_label()
+	_setup_season_label()
 
 	var es = get_node_or_null("/root/EventSystem")
 	if es:
@@ -716,6 +717,25 @@ func _style_dock_btn(btn: Button, icon: String, primary: bool = false) -> void:
 	var sp := sn.duplicate() as StyleBoxFlat
 	sp.bg_color = bg.darkened(0.10)
 	btn.add_theme_stylebox_override("pressed", sp)
+
+var _season_lbl: Label = null
+
+func _setup_season_label() -> void:
+	if gm == null or not gm.has_method("get_season"):
+		return
+	_season_lbl = Label.new()
+	_season_lbl.add_theme_font_size_override("font_size", 12)
+	_season_lbl.add_theme_color_override("font_color", Color(0.78, 0.80, 0.88))
+	$TopBar/Row/StatusCol/StatusRow2.add_child(_season_lbl)
+	_refresh_season()
+	if gm.has_signal("season_changed"):
+		gm.season_changed.connect(func(_i): _refresh_season())
+
+func _refresh_season() -> void:
+	if _season_lbl == null:
+		return
+	var s: Dictionary = gm.get_season()
+	_season_lbl.text = "%s %s" % [s.get("icon", ""), s.get("name", "")]
 
 func _setup_autosave_label() -> void:
 	_autosave_lbl = Label.new()
