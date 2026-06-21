@@ -12,13 +12,13 @@ const ALL_QUESTS = [
 	# Обучение — цепочка "найди школу, получи образование" идёт сразу после
 	# первого денежного квеста, чтобы игрок встретил её в первые дни игры,
 	# а не после 21 другого выполненного задания
-	{"id":"q22","title":"Найти школу",          "desc":"Получи начальное образование (3 класса)", "type":"education","target":1, "reward_money":1000,   "reward_health":5},
+	{"id":"q22","title":"Найти школу",          "desc":"Научись читать (запишись в школу)", "type":"education","target":1, "reward_money":1000,   "reward_health":5},
 	{"id":"q02","title":"Крыша над головой",     "desc":"Купи палатку",                "type":"housing",  "target":2,            "reward_money":1000,   "reward_health":10},
-	{"id":"q23","title":"Школьник",             "desc":"Закончи 9 классов",            "type":"education","target":2,           "reward_money":4000,   "reward_health":5},
+	{"id":"q23","title":"Школьник",             "desc":"Закончи 9 классов",            "type":"education","target":3,           "reward_money":4000,   "reward_health":5},
 	{"id":"q03","title":"Нищий, но гордый",      "desc":"Накопи 5 000 ₽",             "type":"money",    "target":5000,         "reward_money":2000,   "reward_health":5},
-	{"id":"q24","title":"Студент",              "desc":"Получи ПТУ или колледж",       "type":"education","target":4,           "reward_money":15000,  "reward_health":10},
+	{"id":"q24","title":"Студент",              "desc":"Получи ПТУ или колледж",       "type":"education","target":5,           "reward_money":15000,  "reward_health":10},
 	{"id":"q04","title":"Своя комната",          "desc":"Сними комнату",               "type":"housing",  "target":6,            "reward_money":5000,   "reward_health":10},
-	{"id":"q25","title":"Дипломированный",      "desc":"Закончи ВУЗ (бакалавр)",       "type":"education","target":5,           "reward_money":60000,  "reward_health":10},
+	{"id":"q25","title":"Дипломированный",      "desc":"Закончи ВУЗ (бакалавр)",       "type":"education","target":6,           "reward_money":60000,  "reward_health":10},
 	# Средний уровень
 	{"id":"q05","title":"Первые 50 тысяч",       "desc":"Накопи 50 000 ₽",            "type":"money",    "target":50000,        "reward_money":10000,  "reward_health":0},
 	{"id":"q06","title":"Предприниматель",        "desc":"Открой ИП или ООО",           "type":"business", "target":1,            "reward_money":20000,  "reward_health":5},
