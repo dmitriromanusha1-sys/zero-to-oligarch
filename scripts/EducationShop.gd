@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	header.add_child(cls)
 
 	var hint := Label.new()
-	hint.text = "Образование открывает новые рабочие места и улучшает мини-игру"
+	hint.text = "Чтобы получить уровень — сдай экзамен (мини-игра). Образование открывает новые работы и улучшает зоны мини-игры."
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -192,7 +192,7 @@ func _refresh() -> void:
 				var price: float = lvl.price
 				var can_afford: bool = _gm.money >= price
 				var buy_btn := Button.new()
-				buy_btn.text = "Получить\n%s" % _gm.format_money(price)
+				buy_btn.text = "📝 Сдать экзамен\n%s" % _gm.format_money(price)
 				buy_btn.custom_minimum_size = Vector2(100, 44)
 				buy_btn.add_theme_font_size_override("font_size", 11)
 				if can_afford:
@@ -223,8 +223,38 @@ func _refresh() -> void:
 
 func _buy() -> void:
 	var am: Node = get_node_or_null("/root/AudioManager")
+	var next_i: int = _em.level + 1
+	if next_i >= _em.LEVELS.size() or next_i > _max_level:
+		if am: am.play_negative()
+		return
+	var price: float = _em.LEVELS[next_i].price
+	if _gm.money < price:
+		if am: am.play_negative()
+		return
+	# Экзамен — запускаем мини-игру; уровень выдаётся по её завершении
+	var mg = get_tree().get_first_node_in_group("minigame")
+	if mg == null:
+		# Резерв: без мини-игры
+		if _em.buy_next():
+			if am: am.play_level_up()
+			_refresh()
+		return
+	if mg.finished.is_connected(_on_exam_done):
+		mg.finished.disconnect(_on_exam_done)
+	mg.finished.connect(_on_exam_done, CONNECT_ONE_SHOT)
+	mg.start("Экзамен: " + _em.LEVELS[next_i].name, 1.0)
+
+func _on_exam_done(mult: float) -> void:
+	var am: Node = get_node_or_null("/root/AudioManager")
+	# Экзамен сдаётся при завершении (оплата = поступление); зоны мини-игры
+	# зависят от текущего образования — чем выше уровень, тем легче сдавать дальше
 	if _em.buy_next():
 		if am: am.play_level_up()
-		_refresh()
+		# Отличная сдача (🌟/🟢) — небольшой бонус к репутации
+		if mult >= 1.5:
+			var rm = get_node_or_null("/root/ReputationManager")
+			if rm: rm.add(3)
 	else:
 		if am: am.play_negative()
+	if visible:
+		_refresh()
