@@ -292,6 +292,8 @@ var current_slot: int = 1
 var _loaded_once: bool = false
 # Пока идёт загрузка сейва — квесты не должны авто-выполняться и платить награды
 var _loading: bool = false
+# Стартовое обучение: false у новой игры (показываем), сохраняется как пройденное
+var tutorial_done: bool = false
 
 # ── Асинхронная запись сейва ──────────────────────────────────────────────────
 # Запись ConfigFile на диск делается в отдельном потоке, иначе при сне/работе/
@@ -865,6 +867,7 @@ func save_game() -> void:
 	cfg.set_value("player", "max_stat", max_stat)
 	cfg.set_value("player", "max_stat_days", max_stat_days)
 	cfg.set_value("player", "season_start_offset", season_start_offset)
+	cfg.set_value("player", "tutorial_done", tutorial_done)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.save(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -973,6 +976,8 @@ func load_game() -> void:
 	max_stat        = cfg.get_value("player", "max_stat", 100.0)
 	max_stat_days   = cfg.get_value("player", "max_stat_days", 0)
 	season_start_offset = cfg.get_value("player", "season_start_offset", season_start_offset)
+	# Старые сейвы без ключа — игрок уже играет, обучение не показываем
+	tutorial_done = cfg.get_value("player", "tutorial_done", true)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.load(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -1007,6 +1012,7 @@ func _reset_state() -> void:
 	money_history.clear()
 	meal_buff_days = 0; meal_drain_bonus = 0.0
 	max_stat = 100.0; max_stat_days = 0; _collapsing = false
+	tutorial_done = false   # новая игра — показать обучение
 	# Стартовый сезон по сложности: легко-весна, средне-лето, тяжело-осень, хардкор-зима
 	var sm_diff = get_node_or_null("/root/SettingsManager")
 	var diff: String = sm_diff.difficulty if sm_diff else "normal"
