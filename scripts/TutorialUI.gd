@@ -207,6 +207,7 @@ func _process(delta: float) -> void:
 	var rect := _current_target_rect(s)
 	_spot.target_rect = rect
 	_spot.pulse = _pulse
+	_spot.show_arrow = (String(s.target) == "job") and rect.size.y > 1.0
 	_spot.queue_redraw()
 	_layout_panel(rect)
 
