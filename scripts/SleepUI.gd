@@ -94,18 +94,29 @@ func _refresh() -> void:
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_list.add_child(sub)
 
+	# Предупреждение перед сном: при низких еде/воде сон отнимет здоровье — можно не проснуться
+	if _gm.hunger <= 25.0 or _gm.thirst <= 25.0:
+		var warn := Label.new()
+		if _gm.hunger <= 0.0 or _gm.thirst <= 0.0:
+			warn.text = "💀 Опасно спать! Голод/жажда на нуле — во сне будешь терять здоровье. Поешь и попей до сна!"
+		else:
+			warn.text = "⚠ Мало еды (%d) и воды (%d). Долгий сон может оставить тебя голодным и без здоровья — пополни запасы." % [int(_gm.hunger), int(_gm.thirst)]
+		warn.add_theme_font_size_override("font_size", 12)
+		warn.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
+		warn.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_list.add_child(warn)
+
 	var sep := ColorRect.new()
 	sep.custom_minimum_size = Vector2(0, 1)
 	sep.color = Color(0.30, 0.30, 0.45, 0.6)
 	_list.add_child(sep)
 
-	var meal_m: float = 1.0 - _gm.meal_drain_bonus
 	for hours in SLEEP_HOURS:
 		var e_gain: float = minf(e_per * hours, 100.0 - _gm.energy)
-		var hunger_cost: float = _gm.SLEEP_HUNGER_PER_H * hours * meal_m
-		var thirst_cost: float = _gm.SLEEP_THIRST_PER_H * hours * meal_m
+		# Во сне расход еды/воды вдвое меньше обычного (10/12 в час → 5/6)
+		var hunger_cost: float = _gm.get_hourly_hunger_drain() * hours * _gm.SLEEP_DRAIN_MULT
+		var thirst_cost: float = _gm.get_hourly_thirst_drain() * hours * _gm.SLEEP_DRAIN_MULT
 		var hp_delta: float = hp_per * hours
-		var full: bool = _gm.energy >= 99.9
 
 		var card := PanelContainer.new()
 		var card_s := StyleBoxFlat.new()

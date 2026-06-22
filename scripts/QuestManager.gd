@@ -164,7 +164,7 @@ func _complete_quest(q: Dictionary) -> void:
 	if q.reward_money > 0:
 		gm.add_money(q.reward_money)
 	if q.reward_health > 0:
-		gm.health = minf(gm.health + q.reward_health, 100.0)
+		gm.health = minf(gm.health + q.reward_health, gm.stat_max())
 		gm.emit_signal("health_changed", gm.health)
 	emit_signal("quest_completed", q)
 	add_diary_entry("✅ Цель выполнена: «" + q.title + "»")

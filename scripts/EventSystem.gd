@@ -115,7 +115,7 @@ func roll_event() -> Dictionary:
 				gm.spend_money(loss)
 
 	if picked.health != 0:
-		gm.health = clamp(gm.health + picked.health, 0, 100)
+		gm.health = clamp(gm.health + picked.health, 0, gm.stat_max())
 		gm.emit_signal("health_changed", gm.health)
 
 	if picked.get("rep", 0) != 0:

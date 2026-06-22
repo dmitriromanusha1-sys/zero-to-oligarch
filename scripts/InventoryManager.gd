@@ -35,10 +35,16 @@ const ITEMS: Dictionary = {
 	"antibiotic":  {"name":"Антибиотик",    "icon":"🧪", "type":"heal",  "hunger":0,  "thirst":0,   "health":50, "price":1500},
 	"elite_medkit":{"name":"Элит. аптечка","icon":"🏥", "type":"heal",  "hunger":0,  "thirst":0,   "health":75, "price":5000},
 	# ─── Обеды (потребляются сразу в ресторане, снижают расход сытости/жажды на N дней) ──
-	"meal_cheap":      {"name":"Комплексный обед",   "icon":"🥗", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":500,   "drain_bonus":0.10, "buff_days":2},
-	"meal_cafe":       {"name":"Обед в кафе",         "icon":"🍽", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":1500,  "drain_bonus":0.20, "buff_days":5},
-	"meal_restaurant": {"name":"Обед в ресторане",    "icon":"🥘", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":5000,  "drain_bonus":0.35, "buff_days":9},
-	"meal_elite":      {"name":"Гастрономический ужин","icon":"🍾","type":"meal", "hunger":100,"thirst":100,"health":0,"price":25000, "drain_bonus":0.50, "buff_days":14},
+	# Чем дальше зона — тем выше бонус и дольше эффект (раскладка по зонам в World.gd)
+	"meal_cheap":      {"name":"Комплексный обед",     "icon":"🥗", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":500,      "drain_bonus":0.10, "buff_days":2},
+	"meal_canteen":    {"name":"Рабочий обед",         "icon":"🍲", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":900,      "drain_bonus":0.15, "buff_days":4},
+	"meal_cafe":       {"name":"Обед в кафе",          "icon":"🍽", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":1500,     "drain_bonus":0.20, "buff_days":5},
+	"meal_restaurant": {"name":"Обед в ресторане",     "icon":"🥘", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":5000,     "drain_bonus":0.35, "buff_days":9},
+	"meal_business":   {"name":"Деловой обед",         "icon":"🍱", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":60000,    "drain_bonus":0.45, "buff_days":12},
+	"meal_elite":      {"name":"Гастрономический ужин","icon":"🍾", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":150000,   "drain_bonus":0.55, "buff_days":15},
+	"meal_michelin":   {"name":"Ужин от шефа",         "icon":"👨‍🍳","type":"meal", "hunger":100,"thirst":100,"health":0,"price":400000,   "drain_bonus":0.65, "buff_days":19},
+	"meal_reception":  {"name":"Банкетный обед",       "icon":"🍽", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":1000000,  "drain_bonus":0.72, "buff_days":24},
+	"meal_imperial":   {"name":"Императорский ужин",   "icon":"🥂", "type":"meal", "hunger":100,"thirst":100,"health":0,"price":2500000,  "drain_bonus":0.80, "buff_days":30},
 }
 
 var inventory: Dictionary = {}   # item_id -> count
@@ -60,13 +66,13 @@ func use_item(item_id: String) -> bool:
 		apply_meal_effect(item, gm)
 	else:
 		if item.hunger > 0:
-			gm.hunger = clamp(gm.hunger + item.hunger, 0.0, 100.0)
+			gm.hunger = clamp(gm.hunger + item.hunger, 0.0, gm.stat_max())
 			gm.emit_signal("hunger_changed", gm.hunger)
 		if item.thirst > 0:
-			gm.thirst = clamp(gm.thirst + item.thirst, 0.0, 100.0)
+			gm.thirst = clamp(gm.thirst + item.thirst, 0.0, gm.stat_max())
 			gm.emit_signal("thirst_changed", gm.thirst)
 		if item.health > 0:
-			gm.health = clamp(gm.health + item.health, 0.0, 100.0)
+			gm.health = clamp(gm.health + item.health, 0.0, gm.stat_max())
 			gm.emit_signal("health_changed", gm.health)
 	inventory[item_id] -= 1
 	if inventory[item_id] <= 0:
@@ -77,9 +83,9 @@ func use_item(item_id: String) -> bool:
 func apply_meal_effect(item: Dictionary, gm: Node = null) -> void:
 	if gm == null:
 		gm = get_node("/root/GameManager")
-	gm.hunger = 100.0
+	gm.hunger = gm.stat_max()
 	gm.emit_signal("hunger_changed", gm.hunger)
-	gm.thirst = 100.0
+	gm.thirst = gm.stat_max()
 	gm.emit_signal("thirst_changed", gm.thirst)
 	var bonus: float = item.get("drain_bonus", 0.0)
 	var days: int = item.get("buff_days", 0)

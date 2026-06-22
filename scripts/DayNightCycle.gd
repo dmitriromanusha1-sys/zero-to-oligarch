@@ -11,8 +11,10 @@ const RAIN_CHANCE  := 0.18        # 18% per day
 var _overlay: ColorRect
 var _weather_label: Label
 var _weather_panel: PanelContainer
-var _rain_particle_timer: Timer
-var _particles: Array[Node] = []
+const RAIN_POOL_SIZE := 30
+var _rain_pool: Array = []     # пул капель [{n: ColorRect, sp: float}], переиспользуется
+var _vw: float = 1280.0
+var _vh: float = 720.0
 
 var is_raining: bool = false
 var _gm: Node
@@ -60,11 +62,22 @@ func _ready() -> void:
 	_weather_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.70))
 	weather_panel.add_child(_weather_label)
 
-	_rain_particle_timer = Timer.new()
-	_rain_particle_timer.wait_time = 0.08
-	_rain_particle_timer.autostart = false
-	_rain_particle_timer.timeout.connect(_spawn_rain_drop)
-	add_child(_rain_particle_timer)
+	var vp := get_viewport().get_visible_rect().size
+	_vw = vp.x
+	_vh = vp.y
+	# Пул капель дождя: создаётся один раз и переиспользуется. Анимируется в _process
+	# только когда идёт дождь — никаких аллокаций узлов/твинов в кадре.
+	for i in RAIN_POOL_SIZE:
+		var drop := ColorRect.new()
+		drop.size = Vector2(1.5, randf_range(14.0, 28.0))
+		drop.rotation = deg_to_rad(-18.0)
+		drop.color = Color(0.55, 0.72, 1.0, randf_range(0.30, 0.55))
+		drop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		drop.position = Vector2(randf_range(0.0, _vw), randf_range(0.0, _vh))
+		drop.visible = false
+		add_child(drop)
+		_rain_pool.append({"n": drop, "sp": randf_range(760.0, 1050.0)})
+	set_process(false)
 
 	_gm = get_node("/root/GameManager")
 	_gm.day_changed.connect(_on_day_changed)
@@ -87,6 +100,11 @@ func _ready() -> void:
 	_meteor_timer.start()
 
 func _on_weather_changed(raining: bool) -> void:
+	# На время погодного дождя глушим сезонные частицы (SeasonFX), чтобы не
+	# рендерить две системы дождя/частиц разом.
+	var sfx := get_tree().get_first_node_in_group("season_fx")
+	if sfx and sfx.has_method("set_suppressed"):
+		sfx.set_suppressed(raining)
 	var am: Node = get_node_or_null("/root/AudioManager")
 	if am == null:
 		return
@@ -138,7 +156,7 @@ func _spawn_stars() -> void:
 	_stars_visible = true
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 12345
-	for i in 55:
+	for i in 36:
 		var star := ColorRect.new()
 		var sz: float = rng.randf_range(1.0, 3.5)
 		star.size = Vector2(sz, sz)
@@ -187,7 +205,7 @@ func _roll_weather(_day: int) -> void:
 		_weather_panel.visible = true
 		_weather_panel.modulate.a = 0.0
 		tw.tween_property(_weather_panel, "modulate:a", 1.0, 0.50)
-		_rain_particle_timer.start()
+		_set_rain_active(true)
 
 		if housing in outdoor_housings:
 			_gm.health = max(5.0, _gm.health - 8.0)
@@ -196,38 +214,26 @@ func _roll_weather(_day: int) -> void:
 		tw.tween_property(_weather_panel, "modulate:a", 0.0, 0.40)
 		await tw.finished
 		_weather_panel.visible = false
-		_rain_particle_timer.stop()
-		_clear_particles()
+		_set_rain_active(false)
 
-func _spawn_rain_drop() -> void:
-	if _particles.size() > 55:
-		_clear_particles()
-	# Полоска дождя из ColorRect — тонкая диагональная черта
-	var drop := ColorRect.new()
-	var streak_h: float = randf_range(14.0, 28.0)
-	drop.size = Vector2(1.5, streak_h)
-	drop.rotation = deg_to_rad(-18.0)  # лёгкий наклон
-	drop.color = Color(0.55, 0.72, 1.0, randf_range(0.30, 0.55))
-	drop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	drop.position = Vector2(randf_range(0, 1280), randf_range(-30, 0))
-	add_child(drop)
-	_particles.append(drop)
+func _set_rain_active(active: bool) -> void:
+	for d in _rain_pool:
+		d.n.visible = active
+	set_process(active)
 
-	var fall_dist := Vector2(-28.0, randf_range(700, 780))
-	var duration: float = randf_range(0.75, 1.10)
-	var tween := create_tween()
-	tween.tween_property(drop, "position", drop.position + fall_dist, duration)
-	tween.tween_callback(func():
-		if drop and is_instance_valid(drop):
-			_particles.erase(drop)
-			drop.queue_free()
-	)
-
-func _clear_particles() -> void:
-	for p in _particles:
-		if is_instance_valid(p):
-			p.queue_free()
-	_particles.clear()
+func _process(delta: float) -> void:
+	if not is_raining:
+		return
+	# Двигаем капли пула; ушедшую за низ переносим наверх в случайную точку
+	for d in _rain_pool:
+		var n: ColorRect = d.n
+		n.position.y += d.sp * delta
+		n.position.x -= d.sp * 0.05 * delta   # лёгкий снос по наклону
+		if n.position.y > _vh + 20.0:
+			n.position.y = randf_range(-40.0, -10.0)
+			n.position.x = randf_range(0.0, _vw + 30.0)
+		elif n.position.x < -30.0:
+			n.position.x = _vw + 10.0
 
 func _spawn_meteor() -> void:
 	_meteor_timer.wait_time = randf_range(12.0, 32.0)

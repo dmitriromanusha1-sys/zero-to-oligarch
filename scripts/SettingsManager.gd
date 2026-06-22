@@ -11,7 +11,7 @@ var fps_cap:    int   = 60   # 0 = unlimited
 var locale:     String = "ru"
 
 # Геймплей
-var difficulty:      String = "normal"  # "easy" | "normal" | "hardcore"
+var difficulty:      String = "normal"  # "easy" | "normal" | "hard" | "hardcore"
 var default_speed:   float  = 1.0       # множитель времени при старте
 var autopause:       bool   = true      # пауза при открытии меню
 

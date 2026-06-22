@@ -4,6 +4,7 @@ const PasserbyScript = preload("res://scripts/Passerby.gd")
 
 var _spawn_timer: Timer
 var _gm: Node
+var _buildings_node: Node = null
 
 # Спаун каждые 12-25 секунд
 const MIN_INTERVAL := 12.0
@@ -44,7 +45,9 @@ func _spawn_passerby() -> void:
 
 	var ptype := _pick_type()
 
-	var buildings_node = get_tree().get_root().find_child("Buildings", true, false)
+	if _buildings_node == null or not is_instance_valid(_buildings_node):
+		_buildings_node = get_tree().get_root().find_child("Buildings", true, false)
+	var buildings_node = _buildings_node
 
 	var npc = Area2D.new()
 	npc.set_script(PasserbyScript)

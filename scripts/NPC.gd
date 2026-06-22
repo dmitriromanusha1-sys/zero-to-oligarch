@@ -69,6 +69,8 @@ func _ready() -> void:
 	_build_dialog()
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	# Оптимизация: опрашиваем ввод только когда игрок рядом с NPC
+	set_process(false)
 
 func _build_hint() -> void:
 	# Иконка-облачко всегда видна над NPC
@@ -289,6 +291,8 @@ func _next_line() -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if body.name == "Player":
 		player_inside = true
+		e_was_pressed = Input.is_key_pressed(KEY_E)
+		set_process(true)
 		hint_label.visible = true
 		# Пульсирующее кольцо под NPC
 		_approach_ring = ColorRect.new()
@@ -313,6 +317,7 @@ func _on_body_entered(body: Node2D) -> void:
 func _on_body_exited(body: Node2D) -> void:
 	if body.name == "Player":
 		player_inside = false
+		set_process(false)
 		hint_label.visible = false
 		dialog_layer.visible = false
 		dialog_open = false

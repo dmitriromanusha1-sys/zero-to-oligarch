@@ -107,7 +107,7 @@ const ZONE_BUILDINGS: Array = [
 		# ── Торговая улица (центр) ────────────────────────────────────────────────
 		{"name":"🏪 Рынок «Удача»",     "action":"Продавец на рынке (+600 ₽)",    "reward":600,  "cd":3.0,  "pos":Vector2(-600, 450), "color":Color(0.40,0.50,0.18), "minigame":true, "edu_req":2, "tex":"res://assets/textures/Rynok.png"},
 		{"name":"🔧 Авторемонт",        "action":"Работать автомехаником (+1 600 ₽)", "reward":1600, "cd":6.0,  "pos":Vector2( 900, 300), "color":Color(0.42,0.30,0.18), "minigame":true, "heavy":true, "edu_req":4, "tex":"res://assets/textures/Avtomasterskaa.png"},
-		{"name":"🍺 Пивная «Факел»",    "action":"Купить еду и напитки",          "reward":0,    "cd":999,  "pos":Vector2(-300, 600), "color":Color(0.50,0.28,0.08), "food_shop":"🍺 Пивная «Факел»", "food_items":["bread","hotdog","water","kvas","tea","pills","bandage"], "tex":"res://assets/textures/pivnaya.png"},
+		{"name":"🍺 Пивная «Факел»",    "action":"Купить еду и напитки",          "reward":0,    "cd":999,  "pos":Vector2(-300, 600), "color":Color(0.50,0.28,0.08), "food_shop":"🍺 Пивная «Факел»", "food_items":["bread","hotdog","water","kvas","tea","pills","bandage","meal_canteen"], "tex":"res://assets/textures/pivnaya.png"},
 		# ── Социальная инфраструктура (запад) ─────────────────────────────────────
 		{"name":"🏥 Медпункт",          "action":"Первая помощь (+20 здоровья)",  "reward":0,    "cd":8.0,  "pos":Vector2(-900, 200), "color":Color(0.18,0.48,0.45), "heal":20, "tex":"res://assets/textures/medpunkt.png"},
 		{"name":"🏦 Банк «Труд»",       "action":"Открыть меню банка",            "reward":0,    "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.20,0.38,0.60), "biz":true, "tex":"res://assets/textures/Sber bank.png"},
@@ -152,8 +152,8 @@ const ZONE_BUILDINGS: Array = [
 		{"name":"💹 Торговый зал",    "action":"Работать трейдером (+15 000 ₽)",  "reward":15000, "cd":4.0,  "pos":Vector2( 600,-200), "color":Color(0.22,0.38,0.58), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Birza.png"},
 		{"name":"🎯 Венчурный фонд",  "action":"Венчурный инвестор (+30 000 ₽)",  "reward":30000, "cd":14.0, "pos":Vector2( 800,-600), "color":Color(0.28,0.22,0.52), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Board of directors.png"},
 		{"name":"🏛 Конгресс-холл",   "action":"Организатор конференций (+13 000 ₽)", "reward":13000, "cd":8.0,  "pos":Vector2(-800, 400), "color":Color(0.28,0.36,0.56), "minigame":true, "edu_req":6, "tex":"res://assets/textures/Board of directors.png"},
-		{"name":"☕ Бизнес-кафе",     "action":"Работать в бизнес-кафе (+10 000 ₽)", "reward":10000, "cd":3.0,  "pos":Vector2(-250,-150), "color":Color(0.42,0.28,0.18), "minigame":true, "edu_req":6, "food_shop":"☕ Бизнес-кафе", "food_items":["coffee","pie","burger","smoothie","juice","vitamins","meal_cafe"], "tex":"res://assets/textures/Cafe.png"},
-		{"name":"🍽 Ресторан",        "action":"Работать в ресторане (+11 000 ₽)", "reward":11000, "cd":5.0,  "pos":Vector2(-600, 500), "color":Color(0.55,0.35,0.20), "minigame":true, "edu_req":6, "food_shop":"🍽 Ресторан", "food_items":["pizza","sushi","steak","smoothie","cocktail","elite_medkit","meal_restaurant"], "tex":"res://assets/textures/Restoran.png"},
+		{"name":"☕ Бизнес-кафе",     "action":"Работать в бизнес-кафе (+10 000 ₽)", "reward":10000, "cd":3.0,  "pos":Vector2(-250,-150), "color":Color(0.42,0.28,0.18), "minigame":true, "edu_req":6, "food_shop":"☕ Бизнес-кафе", "food_items":["coffee","pie","burger","smoothie","juice","vitamins","meal_business"], "tex":"res://assets/textures/Cafe.png"},
+		{"name":"🍽 Ресторан",        "action":"Работать в ресторане (+11 000 ₽)", "reward":11000, "cd":5.0,  "pos":Vector2(-600, 500), "color":Color(0.55,0.35,0.20), "minigame":true, "edu_req":6, "food_shop":"🍽 Ресторан", "food_items":["pizza","sushi","steak","smoothie","cocktail","elite_medkit","meal_business"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"🏋 Фитнес Premium",  "action":"Тренировка (+40 здоровья)",       "reward":0,     "cd":8.0,  "pos":Vector2( 300, 650), "color":Color(0.22,0.40,0.38), "heal":40,        "tex":"res://assets/textures/Sport club.png"},
 		{"name":"🏛 Мэрия",           "action":"Открыть бизнес",                  "reward":0,     "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.50,0.50,0.30), "biz":true,        "tex":"res://assets/textures/Meria.png"},
 		{"name":"🏥 Клиника",         "action":"Лечиться (+45 здоровья)",         "reward":0,     "cd":10.0, "pos":Vector2( 800, 400), "color":Color(0.30,0.55,0.55), "heal":45,         "tex":"res://assets/textures/Poliklinika.png"},
@@ -180,7 +180,7 @@ const ZONE_BUILDINGS: Array = [
 		{"name":"🛩 Частный аэропорт","action":"Деловой рейс (+2 млн ₽)",       "reward":2000000, "cd":40.0, "pos":Vector2( 700,-400), "color":Color(0.25,0.25,0.40), "minigame":true, "edu_req":9, "tex":"res://assets/textures/Private airport.png"},
 		{"name":"🛢 Нефтяная вышка", "action":"Качать нефть (+600 000 ₽)",      "reward":600000,  "cd":60.0, "pos":Vector2(-600, 500), "color":Color(0.20,0.20,0.20), "minigame":true, "heavy":true, "edu_req":8, "tex":"res://assets/textures/Oil derrick industrial facility.png"},
 		{"name":"🎭 Опера",          "action":"Работать в опере (+200 000 ₽)",   "reward":200000,  "cd":15.0, "pos":Vector2( 700, 500), "color":Color(0.40,0.25,0.45), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Opera house building.png"},
-		{"name":"🍾 Ресторан Мишлен","action":"Обед от шефа",                   "reward":0,       "cd":999,  "pos":Vector2(-400, 700), "color":Color(0.55,0.30,0.15), "food_shop":"🍾 Ресторан Мишлен", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_elite"], "tex":"res://assets/textures/Restoran.png"},
+		{"name":"🍾 Ресторан Мишлен","action":"Обед от шефа",                   "reward":0,       "cd":999,  "pos":Vector2(-400, 700), "color":Color(0.55,0.30,0.15), "food_shop":"🍾 Ресторан Мишлен", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_michelin"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"🏦 Офшор",          "action":"Перевести деньги в офшор",        "reward":0,       "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.20,0.35,0.50), "biz":true, "tex":"res://assets/textures/Generic bank branch building.png"},
 		{"name":"🧠 НИИ (Наука)",    "action":"Получить образование (гений)",    "reward":0,       "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.15,0.20,0.40), "edu_shop":true, "edu_max":10, "tex":"res://assets/textures/NIИ.png"},
 		{"name":"🎰 Казино VIP",     "action":"Сыграть в казино (±500 000 ₽)",   "reward":500000,  "cd":5.0,  "pos":Vector2(-400,-500), "color":Color(0.55,0.22,0.45), "casino":true, "tex":"res://assets/textures/Casino.png"},
@@ -197,7 +197,7 @@ const ZONE_BUILDINGS: Array = [
 		{"name":"🏥 VIP-Клиника",     "action":"Лечение (+60 здоровья)",         "reward":0,       "cd":12.0, "pos":Vector2( 900, 300), "color":Color(0.25,0.50,0.50), "heal":60, "tex":"res://assets/textures/Medical clinic building.png"},
 		{"name":"🔬 Академия наук",   "action":"Получить образование (гений)",   "reward":0,       "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.15,0.20,0.40), "edu_shop":true, "edu_max":10, "tex":"res://assets/textures/Academy of sciences.png"},
 		{"name":"🏛 Налог.служба",    "action":"Открыть бизнес",                 "reward":0,       "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.42,0.40,0.18), "biz":true, "tex":"res://assets/textures/Nalogovaa.png"},
-		{"name":"🍽 Дом приёмов",     "action":"Банкетный стол",                 "reward":0,       "cd":999,  "pos":Vector2( 300, 300), "color":Color(0.45,0.30,0.20), "food_shop":"🍽 Дом приёмов", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_elite"], "tex":"res://assets/textures/Restoran.png"},
+		{"name":"🍽 Дом приёмов",     "action":"Банкетный стол",                 "reward":0,       "cd":999,  "pos":Vector2( 300, 300), "color":Color(0.45,0.30,0.20), "food_shop":"🍽 Дом приёмов", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_reception"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"✈ Тур.фирма",        "action":"Переехать в следующий район",    "reward":0,       "cd":999,  "pos":Vector2(   0,  250), "color":Color(0.15,0.30,0.50), "travel":true, "tex":"res://assets/textures/Travel agency office.png"},
 	],
 
@@ -210,7 +210,7 @@ const ZONE_BUILDINGS: Array = [
 		{"name":"🏦 Частный банк",    "action":"Управление капиталом",            "reward":0,        "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.16,0.24,0.48), "biz":true, "tex":"res://assets/textures/Generic bank branch building.png"},
 		{"name":"🏥 Медцентр",        "action":"Лечение (+80 здоровья)",         "reward":0,        "cd":12.0, "pos":Vector2( 900, 300), "color":Color(0.22,0.48,0.48), "heal":80, "tex":"res://assets/textures/Medical clinic building.png"},
 		{"name":"🧠 НИИ Элит",        "action":"Получить образование (гений)",   "reward":0,        "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.10,0.15,0.35), "edu_shop":true, "edu_max":10, "tex":"res://assets/textures/NIИ.png"},
-		{"name":"🥂 Императорский зал","action":"Приём гостей",                  "reward":0,        "cd":999,  "pos":Vector2( 300, 300), "color":Color(0.48,0.30,0.22), "food_shop":"🥂 Императорский зал", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_elite"], "tex":"res://assets/textures/Restoran.png"},
+		{"name":"🥂 Императорский зал","action":"Приём гостей",                  "reward":0,        "cd":999,  "pos":Vector2( 300, 300), "color":Color(0.48,0.30,0.22), "food_shop":"🥂 Императорский зал", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_imperial"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"✈ Тур.фирма",        "action":"Переехать на Остров",            "reward":0,        "cd":999,  "pos":Vector2(   0,  250), "color":Color(0.15,0.30,0.50), "travel":true, "tex":"res://assets/textures/Travel agency office.png"},
 	],
 ]
@@ -1411,7 +1411,23 @@ const DECO_ZONES: Array = [
 # ─── Runtime ─────────────────────────────────────────────────────────────────
 var _last_zone: int = -1
 var _traffic_cars: Array = []
+var _zm_cached: Node = null
+var _player_cached: Node2D = null
 var _zone_lock_overlays: Dictionary = {}
+
+# Отсев далёких объектов. Вся карта (9 зон, ~15k узлов) загружена сразу, и рендер
+# каждый кадр перебирает все CanvasItem. Поэтому всё, что дальше «обзора + размера»
+# от игрока, прячем (visible=false — скрытое поддерево рендер не обходит) и переводим
+# в PROCESS_MODE_DISABLED (стоп _process/физике/привязанным твинам). Карта-спан
+# объекты (главные дороги) не отсеваются. Раскладку это не трогает — только видимость.
+const CULL_VIEW: float = 1900.0   # половина обзора с запасом (учитывает зум-аут)
+# Параллельные массивы (быстрее словарей в горячем цикле). Отсев инкрементальный:
+# каждый кадр обрабатываем срез (~1/15 списка), без всплеска раз в 0.25 с.
+var _cull_nodes: Array = []
+var _cull_cx: PackedFloat32Array = PackedFloat32Array()
+var _cull_cy: PackedFloat32Array = PackedFloat32Array()
+var _cull_thr2: PackedFloat32Array = PackedFloat32Array()
+var _cull_idx: int = 0
 
 # ─── Анти-коллизия для зданий и жилых домов ──────────────────────────────────
 # Дороги регистрируются первыми (_spawn_map_roads / _spawn_zoneN_streets),
@@ -1499,6 +1515,7 @@ func _ready() -> void:
 	_spawn_bus_stop_ui()
 	_spawn_outer_walls()
 	_spawn_all_zone_parked_cars()
+	_register_cullables()
 	_spawn_road_traffic()
 	_setup_camera_limits()
 	_setup_zone_lock_overlays(zm)
@@ -1534,15 +1551,20 @@ func _pos_to_zone(pos: Vector2) -> int:
 	return 0
 
 func _process(delta: float) -> void:
-	var zm: Node = get_node("/root/ZoneManager")
-	var player_node = get_node_or_null("Player")
-	if not player_node:
+	if _player_cached == null or not is_instance_valid(_player_cached):
+		_player_cached = get_node_or_null("Player")
+	if _player_cached == null:
 		return
-	var detected: int = _pos_to_zone(player_node.global_position)
+	var detected: int = _pos_to_zone(_player_cached.global_position)
 	if detected != _last_zone:
-		zm.register_visit(detected)
+		if _zm_cached == null:
+			_zm_cached = get_node("/root/ZoneManager")
+		_zm_cached.register_visit(detected)
 		_last_zone = detected
 		emit_signal("zone_auto_changed", detected)
+
+	# Отсев далёких объектов — инкрементально, по срезу каждый кадр (без всплесков)
+	_cull_step()
 
 	# Движение дорожного трафика
 	for tc in _traffic_cars:
@@ -1561,6 +1583,67 @@ func _process(delta: float) -> void:
 				nd.position.y = tc["min"]
 			elif nd.position.y < tc["min"]:
 				nd.position.y = tc["max"]
+
+# Собирает все статичные визуальные узлы зон (здания, NPC, декор, фоны) с их
+# центром и порогом дистанции. Карта-спан объекты (главные дороги) пропускаются —
+# они должны быть видны всегда.
+func _register_cullables() -> void:
+	_cull_nodes.clear(); _cull_cx.clear(); _cull_cy.clear(); _cull_thr2.clear()
+	for parent in [$Districts, $Buildings]:
+		for child in parent.get_children():
+			var radius := 110.0
+			var cx: float = child.global_position.x
+			var cy: float = child.global_position.y
+			if child is Control:
+				var sz: Vector2 = child.size
+				var span: float = maxf(sz.x, sz.y)
+				if span > ZONE_SIZE * 1.4:
+					continue   # карта-спан (главные дороги/линии) — не отсеваем
+				radius = span * 0.5 + 30.0
+				cx += sz.x * 0.5
+				cy += sz.y * 0.5
+			var thr: float = CULL_VIEW + radius
+			_cull_nodes.append(child)
+			_cull_cx.append(cx)
+			_cull_cy.append(cy)
+			_cull_thr2.append(thr * thr)
+
+# Один кадр отсева: обрабатываем срез списка от _cull_idx (без всплеска).
+func _cull_step() -> void:
+	var total: int = _cull_nodes.size()
+	if total == 0 or _player_cached == null:
+		return
+	var px: float = _player_cached.global_position.x
+	var py: float = _player_cached.global_position.y
+	var batch: int = (total / 15) + 1
+	for k in batch:
+		var i: int = _cull_idx
+		_cull_idx += 1
+		if _cull_idx >= total:
+			_cull_idx = 0
+		_apply_cull(i, px, py)
+
+# Полный проход (при телепорте — мгновенно обновить всю карту).
+func _cull_all() -> void:
+	if _player_cached == null:
+		return
+	var px: float = _player_cached.global_position.x
+	var py: float = _player_cached.global_position.y
+	for i in _cull_nodes.size():
+		_apply_cull(i, px, py)
+
+func _apply_cull(i: int, px: float, py: float) -> void:
+	var node: Node = _cull_nodes[i]
+	if not is_instance_valid(node):
+		return
+	var dx: float = px - _cull_cx[i]
+	var dy: float = py - _cull_cy[i]
+	var near: bool = (dx * dx + dy * dy) < _cull_thr2[i]
+	if node.visible != near:
+		node.visible = near
+	var pm: int = PROCESS_MODE_INHERIT if near else PROCESS_MODE_DISABLED
+	if node.process_mode != pm:
+		node.process_mode = pm
 
 signal zone_auto_changed(zone_index: int)
 
@@ -2544,6 +2627,8 @@ func teleport_to_zone(z: int) -> void:
 	var player_node = get_node_or_null("Player")
 	if player_node:
 		player_node.global_position = _zone_center(z) + Vector2(0, 150)
+		_player_cached = player_node
+		_cull_all()
 
 # ─── Вспомогательные системы (один экземпляр на всю карту) ──────────────────
 func _spawn_common_systems() -> void:
@@ -2612,6 +2697,9 @@ func _setup_camera_limits() -> void:
 	cam.limit_bottom =  mh
 
 # ─── Здание ──────────────────────────────────────────────────────────────────
+# Стоимость лечения за 1 ед. здоровья по зонам (растёт вместе с экономикой зоны)
+const HEAL_COST_PER_HP := [10, 25, 45, 120, 220, 700, 3500, 30000, 180000]
+
 func _spawn_building(d: Dictionary) -> void:
 	var b = BuildingScene.instantiate()
 	b.building_name        = d.name
@@ -2636,6 +2724,8 @@ func _spawn_building(d: Dictionary) -> void:
 		b.is_casino    = true
 	if d.get("heal", 0) > 0:
 		b.heal_amount = d.get("heal", 0)
+		var hz: int = clampi(d.get("zone", 0), 0, HEAL_COST_PER_HP.size() - 1)
+		b.heal_cost = b.heal_amount * HEAL_COST_PER_HP[hz]
 
 	var bc: Color = d.get("color", Color(0.4, 0.3, 0.1))
 	var zone: int = d.get("zone", 0)

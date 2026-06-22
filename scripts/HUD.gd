@@ -159,7 +159,25 @@ func _ready() -> void:
 	if es:
 		es.event_triggered.connect(_on_event)
 
+	var gm_warn = get_node_or_null("/root/GameManager")
+	if gm_warn and gm_warn.has_signal("survival_warning"):
+		gm_warn.survival_warning.connect(_on_survival_warning)
+
 	_refresh()
+
+const _MODAL_GROUPS := ["shift_ui", "sleep_ui", "food_shop", "business_shop",
+	"education_shop", "transport_shop", "radio_shop", "casino_ui", "stock_ui",
+	"travel_agency_ui", "loan_ui", "exam_ui", "quest_ui", "settings_ui",
+	"bus_stop_ui", "minigame", "newspaper"]
+
+func _is_blocking_ui_open() -> bool:
+	if _game_over_shown or pause_menu.visible:
+		return true
+	for g in _MODAL_GROUPS:
+		for n in get_tree().get_nodes_in_group(g):
+			if "visible" in n and n.visible:
+				return true
+	return false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -170,6 +188,44 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			pause_menu.open()
 		get_viewport().set_input_as_handled()
+		return
+	# Горячая клавиша T — пропуск суток (до утра следующего дня)
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_T:
+		if not _is_blocking_ui_open():
+			gm.skip_day()
+			_show_popup("⏭ Пропущены сутки · День %d" % gm.day)
+			get_viewport().set_input_as_handled()
+	# F3 — отладочный оверлей производительности (FPS / кадр / узлы / сироты)
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
+		_toggle_perf_overlay()
+		get_viewport().set_input_as_handled()
+
+var _perf_lbl: Label = null
+var _perf_acc: float = 0.0
+
+func _toggle_perf_overlay() -> void:
+	if _perf_lbl == null:
+		_perf_lbl = Label.new()
+		_perf_lbl.add_theme_font_size_override("font_size", 13)
+		_perf_lbl.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
+		_perf_lbl.add_theme_constant_override("outline_size", 3)
+		_perf_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		_perf_lbl.position = Vector2(12, 172)
+		_perf_lbl.z_index = 20
+		add_child(_perf_lbl)
+	_perf_lbl.visible = not _perf_lbl.visible
+
+func _update_perf_overlay(delta: float) -> void:
+	if _perf_lbl == null or not _perf_lbl.visible:
+		return
+	_perf_acc += delta
+	if _perf_acc < 0.25:
+		return
+	_perf_acc = 0.0
+	var fps: float = Engine.get_frames_per_second()
+	var orphans: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	_perf_lbl.text = "FPS %d · кадр %.1f мс · узлов %d · сирот %d" % [
+		int(fps), 1000.0 / maxf(fps, 1.0), get_tree().get_node_count(), orphans]
 
 var _last_hp: float = 100.0
 var _fade_rect: ColorRect = null
@@ -309,6 +365,7 @@ func _setup_damage_vignette() -> void:
 	add_child(_damage_vignette)
 
 func _process(delta: float) -> void:
+	_update_perf_overlay(delta)
 	if gm == null:
 		return
 	# Мини-карта: позиция игрока
@@ -596,6 +653,13 @@ func _style_hud() -> void:
 	money_label.add_theme_color_override("font_color", HUD_GOLD)
 	money_label.add_theme_constant_override("outline_size", 2)
 	money_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+	# Тултип при наведении на деньги: доход / расход / капитал
+	var money_col: Control = $TopBar/Row/MoneyCol
+	money_col.mouse_filter = Control.MOUSE_FILTER_STOP
+	money_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	income_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	money_col.mouse_entered.connect(_show_money_tooltip)
+	money_col.mouse_exited.connect(_hide_money_tooltip)
 
 	# ── Информационные метки — единый светлый серо-голубой тон ───────────────
 	for lbl in [title_label, housing_label, day_label, time_label,
@@ -797,6 +861,57 @@ func _refresh_reputation() -> void:
 	reputation_label.text = "⭐ " + rm.get_level_name() + " (%d)" % rm.reputation
 	reputation_label.add_theme_color_override("font_color", rm.get_level_color())
 
+var _money_tip: PanelContainer = null
+var _money_tip_vb: VBoxContainer = null
+
+func _show_money_tooltip() -> void:
+	if gm == null:
+		return
+	if _money_tip == null:
+		_money_tip = PanelContainer.new()
+		_money_tip.add_theme_stylebox_override("panel", UITheme.panel_box())
+		_money_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_money_tip.z_index = 30
+		_money_tip.custom_minimum_size = Vector2(248, 0)
+		add_child(_money_tip)
+		_money_tip_vb = VBoxContainer.new()
+		_money_tip_vb.add_theme_constant_override("separation", 4)
+		_money_tip.add_child(_money_tip_vb)
+	for c in _money_tip_vb.get_children():
+		c.queue_free()
+	var fin: Dictionary = gm.get_finance()
+	_tip_row("📈 Доход",  "+" + gm.format_money(fin.income) + " /день", UITheme.GREEN)
+	_tip_row("📉 Расход", "−" + gm.format_money(fin.expense) + " /день", UITheme.RED)
+	var net: float = fin.income - fin.expense
+	var net_col: Color = UITheme.GREEN if net >= 0 else UITheme.RED
+	_tip_row("≈ Итог", ("+" if net >= 0 else "−") + gm.format_money(absf(net)) + " /день", net_col)
+	_money_tip_vb.add_child(UITheme.gold_rule())
+	_tip_row("💼 Капитал", gm.format_money(fin.networth), UITheme.GOLD)
+	_money_tip.visible = true
+	_money_tip.reset_size()
+	_money_tip.position = Vector2(14, 172)
+
+func _hide_money_tooltip() -> void:
+	if _money_tip:
+		_money_tip.visible = false
+
+func _tip_row(label_text: String, value_text: String, col: Color) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	var l := Label.new()
+	l.text = label_text
+	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_color_override("font_color", UITheme.TEXT_DIM)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	var v := Label.new()
+	v.text = value_text
+	v.add_theme_font_size_override("font_size", 13)
+	v.add_theme_color_override("font_color", col)
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(v)
+	_money_tip_vb.add_child(row)
+
 func _refresh_income() -> void:
 	var income = bm.get_daily_income()
 	if income > 0:
@@ -874,8 +989,12 @@ func _on_health_changed(hp: float) -> void:
 				player.shake_camera(minf(dmg * 0.8, 12.0), 0.25)
 	_last_hp = hp
 	if hp <= 0 and not _game_over_shown:
-		_game_over_shown = true
-		_show_game_over()
+		if gm.is_hardcore():
+			_game_over_shown = true
+			_show_game_over()
+		else:
+			# Лёгкая/средняя/тяжёлая: не смерть, а коллапс со штрафом максимума
+			gm.survive_collapse()
 
 var _quest_tracker: Panel = null
 var _quest_tracker_vbox: VBoxContainer = null
@@ -1243,6 +1362,7 @@ func _on_day_changed(d: int) -> void:
 	dtw.tween_property(day_label, "scale", Vector2(1.0, 1.0), 0.28).set_ease(Tween.EASE_IN_OUT).set_delay(0.14)
 
 var _meal_buff_lbl: Label = null
+var _penalty_lbl: Label = null
 
 func _refresh_meal_buff() -> void:
 	if _meal_buff_lbl == null:
@@ -1255,6 +1375,17 @@ func _refresh_meal_buff() -> void:
 		_meal_buff_lbl.visible = true
 	else:
 		_meal_buff_lbl.visible = false
+	# Индикатор штрафа истощения (ограничение максимума показателей)
+	if _penalty_lbl == null:
+		_penalty_lbl = Label.new()
+		_penalty_lbl.add_theme_font_size_override("font_size", 11)
+		_penalty_lbl.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
+		$TopBar/Row/StatusCol/StatusRow3.add_child(_penalty_lbl)
+	if gm.max_stat_days > 0:
+		_penalty_lbl.text = "🩹 Истощение: макс %d (%d дн.)" % [int(gm.max_stat), gm.max_stat_days]
+		_penalty_lbl.visible = true
+	else:
+		_penalty_lbl.visible = false
 
 func _on_event(event: Dictionary) -> void:
 	var sm := get_node_or_null("/root/SettingsManager")
@@ -1293,6 +1424,10 @@ func _time_str(h: int, m: int) -> String:
 	return "%s %02d:%02d" % [icon, h, m]
 
 var _popup_tween: Tween = null
+
+func _on_survival_warning(text: String) -> void:
+	# Почасовое предупреждение о голоде/жажде — отдельный канал, без записи в дневник
+	_show_popup(text)
 
 func _show_popup(text: String) -> void:
 	title_popup.text = text

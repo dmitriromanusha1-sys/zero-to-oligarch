@@ -10,9 +10,11 @@ var _vw: float = 1280.0
 var _vh: float = 720.0
 var _t: float = 0.0
 var _warm: ColorRect = null
+var _suppressed: bool = false   # глушится во время погодного дождя (DayNightCycle)
 
 func _ready() -> void:
 	layer = 1
+	add_to_group("season_fx")
 	_gm = get_node_or_null("/root/GameManager")
 	var vp := get_viewport().get_visible_rect().size
 	_vw = vp.x
@@ -37,10 +39,23 @@ func _rebuild() -> void:
 		"rain":   _make_rain()
 		"leaves": _make_leaves()
 		"sun":    _make_sun()
+	if _suppressed:
+		set_suppressed(true)   # пересоздали частицы — вернуть скрытие, если идёт дождь
+
+# Глушит сезонные частицы (вызывает DayNightCycle на время погодного дождя),
+# чтобы не рендерить две системы частиц разом.
+func set_suppressed(on: bool) -> void:
+	_suppressed = on
+	for d in _parts:
+		if is_instance_valid(d.n):
+			d.n.visible = not on
+	if _warm and is_instance_valid(_warm):
+		_warm.visible = not on
+	set_process(not on)
 
 # ── Генераторы частиц ─────────────────────────────────────────────────────────
 func _make_snow() -> void:
-	for i in 60:
+	for i in 44:
 		var p := ColorRect.new()
 		var sz := randf_range(2.0, 5.0)
 		p.size = Vector2(sz, sz)
@@ -51,7 +66,7 @@ func _make_snow() -> void:
 		_parts.append({"n": p, "sp": randf_range(25.0, 60.0), "sw": randf_range(12.0, 34.0), "ph": randf() * TAU, "rot": 0.0})
 
 func _make_rain() -> void:
-	for i in 70:
+	for i in 44:
 		var p := ColorRect.new()
 		p.size = Vector2(2.0, randf_range(10.0, 18.0))
 		p.color = Color(0.6, 0.75, 1.0, randf_range(0.25, 0.5))
@@ -63,7 +78,7 @@ func _make_rain() -> void:
 
 func _make_leaves() -> void:
 	var glyphs := ["🍂", "🍁", "🍃"]
-	for i in 22:
+	for i in 16:
 		var p := Label.new()
 		p.text = glyphs[randi() % glyphs.size()]
 		p.add_theme_font_size_override("font_size", randi_range(16, 26))
@@ -81,7 +96,7 @@ func _make_sun() -> void:
 	_warm.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_warm)
 	# Редкие парящие пылинки/блики
-	for i in 16:
+	for i in 12:
 		var p := ColorRect.new()
 		var sz := randf_range(2.0, 4.0)
 		p.size = Vector2(sz, sz)
@@ -93,7 +108,7 @@ func _make_sun() -> void:
 		_parts.append({"n": p, "sp": randf_range(-18.0, -6.0), "sw": randf_range(8.0, 20.0), "ph": randf() * TAU, "rot": 0.0})
 
 func _process(delta: float) -> void:
-	if _parts.is_empty():
+	if _suppressed or _parts.is_empty():
 		return
 	_t += delta
 	for d in _parts:

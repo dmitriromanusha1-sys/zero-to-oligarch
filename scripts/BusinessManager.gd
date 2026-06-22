@@ -168,9 +168,11 @@ func get_business() -> Dictionary:
 func get_daily_income() -> float:
 	if owned_business_id == "": return 0.0
 	var bt := get_business()
+	if bt.is_empty(): return 0.0   # неизвестный/устаревший id бизнеса — без дохода, без краша
 	var income: float = bt.income_per_day * get_level_income_mult()
 	for e in employees:
 		var et := _get_employee_type(e.type_id)
+		if et.is_empty(): continue
 		income += et.income_bonus - et.salary_per_day
 	income *= get_synergy_mult()
 	return income
@@ -420,6 +422,12 @@ func load(cfg: ConfigFile) -> void:
 	total_earned      = cfg.get_value("business", "total_earned",  0.0)
 	business_days     = cfg.get_value("business", "business_days", 0)
 	security_level    = cfg.get_value("business", "security_level", 0)
+	# Самолечение: id бизнеса из старого сохранения, которого больше нет в списке
+	# типов, сбрасываем — иначе UI/доход обращаются к пустому словарю и падают.
+	if owned_business_id != "" and _get_type(owned_business_id).is_empty():
+		owned_business_id = ""
+		employees = []
+		business_level = 0
 
 func _get_type(type_id: String) -> Dictionary:
 	for bt in BUSINESS_TYPES:

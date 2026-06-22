@@ -8,6 +8,7 @@ const FloatingText = preload("res://scripts/FloatingText.gd")
 @export var cooldown_seconds: float = 3.0
 @export var opens_business_shop: bool = false
 @export var heal_amount: float = 0.0
+@export var heal_cost: float = 0.0
 @export var is_casino: bool = false
 @export var use_minigame: bool = false
 @export var is_heavy_labor: bool = false
@@ -47,6 +48,10 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+
+	# Оптимизация: пока игрок не у здания, _process не нужен (вся карта 9 зон
+	# заспавнена сразу — иначе сотни зданий опрашивали бы ввод каждый кадр).
+	set_process(false)
 
 # ── Панель подсказки ──────────────────────────────────────────────────────────
 func _build_hint_panel() -> void:
@@ -118,18 +123,31 @@ func _build_hint_panel() -> void:
 func _show_hint() -> void:
 	var gm: Node = get_node_or_null("/root/GameManager")
 	_hint_name_lbl.text = building_name
-	_hint_action_lbl.text = "[E]  " + action_label
+	var act := _action_verb()
+	if _is_paid_work() and gm:
+		act += "  (" + gm.format_money(roundf(_hourly_rate())) + "/ч)"
+	_hint_action_lbl.text = "[E]  " + act
+
+	# Не хватает образования для этой работы — покажем требование прямо в подсказке
+	var locked_req := ""
+	if _is_paid_work() and edu_req > 0:
+		var em: Node = get_node_or_null("/root/EducationManager")
+		if em and not em.can_work_at(edu_req):
+			locked_req = em.LEVELS[edu_req].name
 
 	var sub := ""
 	if money_reward > 0 and gm:
 		if is_casino:
 			sub = "±" + gm.format_money(money_reward) + "  |  🎰 Казино"
-		elif _is_job():
-			sub = "🕒 Смена 4–12 ч  •  " + gm.format_money(_hourly_rate()) + "/ч"
+		elif _is_paid_work():
+			sub = ("🎓 Нужно: " + locked_req) if locked_req != "" else "🕒 Смена 4–12 ч"
 		else:
 			sub = "+" + gm.format_money(money_reward)
 	elif heal_amount > 0:
-		sub = "❤ +%.0f здоровья" % heal_amount
+		if heal_cost > 0.0 and gm:
+			sub = "❤ +%.0f здоровья   −%s" % [heal_amount, gm.format_money(heal_cost)]
+		else:
+			sub = "❤ +%.0f здоровья" % heal_amount
 	elif opens_education_shop:
 		sub = "📚 Образование"
 	elif opens_travel_agency:
@@ -145,8 +163,11 @@ func _show_hint() -> void:
 
 	_hint_sub_lbl.text = sub
 	_hint_sub_lbl.visible = sub != ""
+	_hint_sub_lbl.add_theme_color_override("font_color",
+		Color(1.0, 0.55, 0.45) if locked_req != "" else Color(0.55, 0.85, 0.55))
 	_cd_bar.visible = false
 	_cd_timer_lbl.visible = false
+	_center_hint_panel()
 	# Анимация появления: slide up + fade in
 	_hint_panel.modulate.a = 0.0
 	_hint_panel.position.y = 67.0
@@ -163,7 +184,13 @@ func _show_cooldown_ui() -> void:
 	_hint_sub_lbl.visible = false
 	_cd_bar.visible = true
 	_cd_timer_lbl.visible = true
+	_center_hint_panel()
 	_hint_panel.visible = true
+
+# Горизонтально центрируем подсказку под зданием независимо от её ширины
+func _center_hint_panel() -> void:
+	_hint_panel.reset_size()
+	_hint_panel.position.x = -_hint_panel.get_combined_minimum_size().x / 2.0
 
 func _reset_action_color() -> void:
 	_hint_action_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
@@ -265,6 +292,19 @@ const HEALTH_PER_H_HEAVY := 1.0
 func _hourly_rate() -> float:
 	return money_reward / 8.0
 
+# Любая оплачиваемая смена (включая подработку в магазинах еды), но не казино/лечение
+func _is_paid_work() -> bool:
+	return money_reward > 0.0 and use_minigame and not is_casino
+
+# Текст действия без денежного «(+N ₽)» хвоста — ставку показываем отдельно как ₽/ч
+func _action_verb() -> String:
+	var act := action_label
+	if act.ends_with("₽)"):
+		var p := act.rfind(" (")
+		if p != -1:
+			act = act.substr(0, p)
+	return act
+
 func _is_job() -> bool:
 	return money_reward > 0.0 and not is_casino and heal_amount <= 0.0 \
 		and not opens_business_shop and not opens_stock_ui and not opens_travel_agency \
@@ -287,17 +327,12 @@ func _open_shift_picker(gm: Node, am) -> void:
 
 func _begin_shift(hours: int, gm: Node, am) -> void:
 	var housing_bonus: float = gm.get_housing_energy_drain_bonus() if gm.has_method("get_housing_energy_drain_bonus") else 0.0
-	var kind := "heavy" if is_heavy_labor else "light"
 	gm.energy = clamp(gm.energy - _energy_cost(hours, housing_bonus), 0.0, 100.0)
 	gm.emit_signal("energy_changed", gm.energy)
-	gm.hunger = clamp(gm.hunger - HUNGER_PER_H[kind] * hours, 0.0, 100.0)
-	gm.emit_signal("hunger_changed", gm.hunger)
-	gm.thirst = clamp(gm.thirst - THIRST_PER_H[kind] * hours, 0.0, 100.0)
-	gm.emit_signal("thirst_changed", gm.thirst)
 	if is_heavy_labor:
 		gm.health = clamp(gm.health - HEALTH_PER_H_HEAVY * hours, 0.0, 100.0)
 		gm.emit_signal("health_changed", gm.health)
-	# Смена занимает игровое время
+	# Смена занимает игровое время. Расход еды/воды (10/12 в час) — в advance_time.
 	gm.advance_time(hours)
 	var base_pay: float = _hourly_rate() * hours
 	if use_minigame:
@@ -323,7 +358,7 @@ func _launch_minigame(base_pay: float, gm: Node, am) -> void:
 	_hint_sub_lbl.visible = false
 
 	var title_idx: int = gm.current_title_index
-	mg.start(action_label, minf(1.0 + title_idx * 0.08, 1.60))
+	mg.start(_action_verb(), minf(1.0 + title_idx * 0.08, 1.60))
 	mg.finished.connect(_on_minigame_done.bind(base_pay, gm, am), CONNECT_ONE_SHOT)
 
 func _on_minigame_done(mult: float, base_pay: float, gm: Node, am) -> void:
@@ -340,9 +375,14 @@ func _on_minigame_done(mult: float, base_pay: float, gm: Node, am) -> void:
 
 # Лечение (поликлиника) — без смены
 func _do_heal(gm: Node, am) -> void:
-	gm.health = minf(gm.health + heal_amount, 100.0)
+	if heal_cost > 0.0 and not gm.spend_money(heal_cost):
+		_flash_sub("💸 Нужно %s" % gm.format_money(heal_cost), Color(1.0, 0.45, 0.4))
+		return
+	gm.health = minf(gm.health + heal_amount, gm.stat_max())
 	gm.emit_signal("health_changed", gm.health)
-	_flash_result("❤ +%.0f здоровья" % heal_amount, Color(0.4, 1.0, 0.5))
+	var heal_msg := "❤ +%.0f здоровья" % heal_amount
+	if heal_cost > 0.0: heal_msg += "  −" + gm.format_money(heal_cost)
+	_flash_result(heal_msg, Color(0.4, 1.0, 0.5))
 	_flash_visual(Color(0.4, 1.0, 0.6))
 	if am: am.play_buy()
 	FloatingText.spawn(get_tree(), global_position, "❤ +%.0f" % heal_amount, Color(0.4, 1.0, 0.5))
@@ -425,6 +465,9 @@ func _on_body_entered(body: Node2D) -> void:
 	if body.name != "Player":
 		return
 	player_inside = true
+	# Синхронизируем состояние клавиши, чтобы вход с зажатой E не сработал как нажатие
+	_e_was_pressed = Input.is_key_pressed(KEY_E)
+	set_process(true)
 	if on_cooldown:
 		_show_cooldown_ui()
 	else:
@@ -439,6 +482,7 @@ func _on_body_exited(body: Node2D) -> void:
 	if body.name != "Player":
 		return
 	player_inside = false
+	set_process(false)
 	var tw := create_tween()
 	tw.tween_property(_hint_panel, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(func(): _hint_panel.visible = false; _hint_panel.modulate.a = 1.0)

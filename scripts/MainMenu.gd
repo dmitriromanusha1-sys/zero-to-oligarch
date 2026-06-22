@@ -262,7 +262,7 @@ func _build_ui() -> void:
 
 	# ── Версия — нижний левый угол ───────────────────────────────────────────
 	var ver := Label.new()
-	ver.text = "v0.6.3 beta — Godot 4"
+	ver.text = "v1.0.0 — Godot 4"
 	ver.add_theme_font_size_override("font_size", 10)
 	ver.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55, 0.70))
 	ver.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -642,14 +642,78 @@ func _make_slot_handler(mode: String, slot: int, has_save: bool) -> Callable:
 			dlg.ok_button_text = "Да, сбросить и начать"
 			dlg.cancel_button_text = "Отмена"
 			add_child(dlg)
-			dlg.confirmed.connect(func(): _start_new(slot))
+			dlg.confirmed.connect(func(): _show_difficulty_dialog(slot))
 			dlg.confirmed.connect(dlg.queue_free)
 			dlg.canceled.connect(dlg.queue_free)
 			dlg.popup_centered()
 		elif mode == "new":
-			_start_new(slot)
+			_show_difficulty_dialog(slot)
 		else:
 			_continue_game(slot)
+
+# Окно выбора сложности перед стартом новой игры в слоте
+func _show_difficulty_dialog(slot: int) -> void:
+	if _slot_panel and is_instance_valid(_slot_panel):
+		_slot_panel.queue_free()
+		_slot_panel = null
+	var sm = get_node_or_null("/root/SettingsManager")
+
+	var panel := Panel.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.size = Vector2(480, 430)
+	panel.position = Vector2(-240, -215)
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.05, 0.05, 0.09, 0.97)
+	ps.border_color = Color(0.72, 0.56, 0.10, 0.85)
+	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(side, 2)
+		ps.set_corner_radius(side, 12)
+	ps.content_margin_left = 18; ps.content_margin_right = 18
+	ps.content_margin_top = 16; ps.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", ps)
+	panel.modulate.a = 0.0
+	panel.scale = Vector2(0.92, 0.92)
+	_ui_canvas.add_child(panel)
+	_slot_panel = panel
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 9)
+	panel.add_child(vbox)
+
+	var header := Label.new()
+	header.text = "Выбери сложность · Слот %d" % slot
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 18)
+	header.add_theme_color_override("font_color", Color(0.90, 0.78, 0.35))
+	vbox.add_child(header)
+
+	# [ключ, подпись, цвет рамки]
+	var diffs := [
+		["easy",     "🟢 Лёгкая — при истощении максимум 75 (3 дн.)", Color(0.20, 0.55, 0.25)],
+		["normal",   "🟡 Средняя — при истощении максимум 50 (3 дн.)", Color(0.62, 0.55, 0.15)],
+		["hard",     "🟠 Тяжёлая — при истощении максимум 25 (3 дн.)", Color(0.62, 0.38, 0.12)],
+		["hardcore", "🔴 Хардкор — при 0 здоровья смерть",              Color(0.60, 0.18, 0.18)],
+	]
+	for d in diffs:
+		var key: String = d[0]
+		var btn := _make_button(d[1], Color(0.07, 0.10, 0.18), d[2])
+		btn.pressed.connect(func():
+			if sm: sm.set_difficulty(key)
+			_start_new(slot))
+		vbox.add_child(btn)
+
+	var cancel := _make_button("Отмена", Color(0.10, 0.07, 0.07), Color(0.50, 0.20, 0.20))
+	cancel.pressed.connect(func():
+		if _slot_panel and is_instance_valid(_slot_panel):
+			_slot_panel.queue_free()
+			_slot_panel = null)
+	vbox.add_child(cancel)
+
+	var tw := _ui_canvas.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(panel, "modulate:a", 1.0, 0.20)
+	tw.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.20).set_ease(Tween.EASE_OUT)
 
 func _start_new(slot: int) -> void:
 	var gm = get_node_or_null("/root/GameManager")

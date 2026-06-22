@@ -12,6 +12,7 @@ signal thirst_changed(val: float)
 signal energy_changed(val: float)
 signal view_zoom_changed(zoom: float)
 signal season_changed(index: int)
+signal survival_warning(text: String)
 
 # ── Календарь и времена года ──────────────────────────────────────────────────
 # Год как в реальной жизни: 12 месяцев по 30 дней, день 1 = 1 января (зима).
@@ -277,7 +278,7 @@ var current_hour: int = 8
 var current_minute: int = 0
 var money_history: Array = []   # [{day, money}] — каждые 5 дней
 var meal_buff_days: int = 0       # оставшихся дней бонуса после обеда
-var meal_drain_bonus: float = 0.0 # снижение расхода еды/воды (0.0–0.50, чем дороже обед — тем больше % и дольше срок)
+var meal_drain_bonus: float = 0.0 # снижение расхода еды/воды (0.0–0.80, чем дальше зона/дороже обед — тем больше % и дольше срок)
 
 const SAVE_PATH_LEGACY = "user://savegame.cfg"   # старое единое сохранение (миграция)
 const SECS_PER_GAME_MIN: float = 0.5   # 1 сек реального времени = 2 игровых минуты
@@ -291,6 +292,18 @@ var current_slot: int = 1
 var _loaded_once: bool = false
 # Пока идёт загрузка сейва — квесты не должны авто-выполняться и платить награды
 var _loading: bool = false
+
+# ── Асинхронная запись сейва ──────────────────────────────────────────────────
+# Запись ConfigFile на диск делается в отдельном потоке, иначе при сне/работе/
+# покупке (любой save_game) кадр фризит на время дискового I/O. «Почтовый ящик»
+# на один слот: хранит ПОСЛЕДНИЙ снимок — серии быстрых сохранений схлопываются,
+# порядок не нарушается (один поток), на выходе из игры — дозаписывается.
+var _save_thread: Thread = null
+var _save_sem: Semaphore = null
+var _save_mutex: Mutex = null
+var _save_pending_cfg: ConfigFile = null
+var _save_pending_path: String = ""
+var _save_quit: bool = false
 
 func slot_path(slot: int) -> String:
 	return "user://savegame_slot%d.cfg" % slot
@@ -319,6 +332,10 @@ func delete_slot(slot: int) -> void:
 var _time_acc: float = 0.0
 
 func _ready() -> void:
+	_save_mutex = Mutex.new()
+	_save_sem = Semaphore.new()
+	_save_thread = Thread.new()
+	_save_thread.start(_save_loop)
 	_migrate_legacy_save()
 	load_game()
 	var sm := get_node_or_null("/root/SettingsManager")
@@ -338,6 +355,7 @@ func _process(delta: float) -> void:
 	if current_minute >= 60:
 		current_minute = 0
 		current_hour += 1
+		apply_time_passage(1)
 		if current_hour >= 24:
 			current_hour = 0
 			next_day()
@@ -385,6 +403,113 @@ func buy_housing(index: int) -> bool:
 const SLEEP_HUNGER_PER_H := 4.0
 const SLEEP_THIRST_PER_H := 5.0
 
+# Пассивный расход еды/воды за КАЖДЫЙ игровой час (× бонус обеда meal_drain_bonus).
+# Во сне и расход, и урон голодом вдвое меньше — SLEEP_DRAIN_MULT.
+const HUNGER_PER_HOUR := 3.0
+const THIRST_PER_HOUR := 4.0
+const SLEEP_DRAIN_MULT := 0.5
+# Урон здоровью в час, пока стат на нуле (оба нуля → 1.0+1.5 = 2.5 ХП/час),
+# пока не поешь/попьёшь.
+const STARVE_HP_PER_HOUR := 1.0
+const DEHYDRATE_HP_PER_HOUR := 1.5
+
+var _warned_low: bool = false
+
+func get_hourly_hunger_drain() -> float:
+	return HUNGER_PER_HOUR * (1.0 - meal_drain_bonus)
+
+func get_hourly_thirst_drain() -> float:
+	return THIRST_PER_HOUR * (1.0 - meal_drain_bonus)
+
+# Применяет расход еды/воды и почасовой урон здоровью за каждый прошедший час.
+# drain_mult: 1.0 обычно, 0.5 во сне.
+func apply_time_passage(hours: int, drain_mult: float = 1.0) -> void:
+	if hours <= 0:
+		return
+	hunger = clamp(hunger - get_hourly_hunger_drain() * hours * drain_mult, 0.0, 100.0)
+	thirst = clamp(thirst - get_hourly_thirst_drain() * hours * drain_mult, 0.0, 100.0)
+	emit_signal("hunger_changed", hunger)
+	emit_signal("thirst_changed", thirst)
+	# Пока еда/вода = 0, теряем здоровье (во сне вдвое меньше)
+	var hp_loss := 0.0
+	if hunger <= 0.0: hp_loss += STARVE_HP_PER_HOUR
+	if thirst <= 0.0: hp_loss += DEHYDRATE_HP_PER_HOUR
+	if hp_loss > 0.0:
+		health = clamp(health - hp_loss * drain_mult * hours, 0.0, 100.0)
+		emit_signal("health_changed", health)
+	_check_survival_warning()
+
+# Предупреждение, чтобы игрок не умер: каждый час при низких/нулевых еде/воде.
+func _check_survival_warning() -> void:
+	if hunger <= 0.0 or thirst <= 0.0:
+		# Теряем здоровье — напоминаем каждый час
+		var txt := ""
+		if hunger <= 0.0 and thirst <= 0.0:
+			txt = "💀 Голод и жажда! Здоровье тает (−2.5/ч). Срочно поешь и попей!"
+		elif hunger <= 0.0:
+			txt = "🍖 Голод! Здоровье падает (−1/ч). Поешь!"
+		else:
+			txt = "💧 Обезвоживание! Здоровье падает (−1.5/ч). Попей!"
+		emit_signal("survival_warning", txt)
+		_warned_low = true
+	elif hunger <= 25.0 or thirst <= 25.0:
+		# В «жёлтой зоне» предупреждаем один раз при входе — без спама каждый час
+		if not _warned_low:
+			emit_signal("survival_warning", "⚠ Мало ресурсов — еда %d, вода %d. Пополни запасы!" % [int(hunger), int(thirst)])
+			_warned_low = true
+	else:
+		_warned_low = false
+
+# ── Выживание / штраф истощения ───────────────────────────────────────────────
+# Потолок всех показателей (обычно 100, во время штрафа истощения — ниже).
+var max_stat: float = 100.0
+var max_stat_days: int = 0
+var _collapsing: bool = false
+
+func stat_max() -> float:
+	return max_stat
+
+func is_hardcore() -> bool:
+	var sm := get_node_or_null("/root/SettingsManager")
+	return sm != null and sm.difficulty == "hardcore"
+
+# Потолок показателей при коллапсе по сложности: лёгкая 75, средняя 50, тяжёлая 25.
+func survival_cap() -> float:
+	var sm := get_node_or_null("/root/SettingsManager")
+	var diff: String = sm.difficulty if sm else "normal"
+	match diff:
+		"easy": return 75.0
+		"hard": return 25.0
+		_:      return 50.0
+
+# Длительность штрафа истощения в днях
+const COLLAPSE_PENALTY_DAYS := 3
+
+# Здоровье дошло до 0 (не хардкор): игрока спасает скорая, он переходит на следующий
+# день, а максимум здоровья/сытости/жажды/бодрости ограничен на COLLAPSE_PENALTY_DAYS.
+func survive_collapse() -> void:
+	if _collapsing:
+		return
+	_collapsing = true
+	next_day()
+	var cap := survival_cap()
+	max_stat = cap
+	max_stat_days = COLLAPSE_PENALTY_DAYS
+	health = cap; hunger = cap; thirst = cap; energy = cap
+	emit_signal("health_changed", health)
+	emit_signal("hunger_changed", hunger)
+	emit_signal("thirst_changed", thirst)
+	emit_signal("energy_changed", energy)
+	emit_signal("day_changed", day)   # обновить индикатор штрафа в HUD
+	_collapsing = false
+	var es = get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "🚑 Вас спасла скорая! Вы потеряли сознание от истощения и очнулись на следующий день. Максимум показателей ограничен %d на %d дн." % [int(cap), COLLAPSE_PENALTY_DAYS],
+			"money": 0, "health": 0,
+		})
+	save_game()
+
 func get_sleep_energy_per_hour() -> float:
 	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
 	return lerpf(4.0, 16.0, clampf(tier / 10.0, 0.0, 1.0))
@@ -399,17 +524,12 @@ func get_sleep_health_per_hour() -> float:
 func sleep_hours(hours: int) -> Dictionary:
 	var h: Dictionary = HOUSINGS[current_housing_index]
 	var before_e: float = energy
-	energy = clamp(energy + get_sleep_energy_per_hour() * hours, 0.0, 100.0)
+	energy = clamp(energy + get_sleep_energy_per_hour() * hours, 0.0, stat_max())
 	var energy_gain: float = energy - before_e
 	emit_signal("energy_changed", energy)
 
-	var meal_m: float = 1.0 - meal_drain_bonus
-	hunger = clamp(hunger - SLEEP_HUNGER_PER_H * hours * meal_m, 0.0, 100.0)
-	thirst = clamp(thirst - SLEEP_THIRST_PER_H * hours * meal_m, 0.0, 100.0)
-	emit_signal("hunger_changed", hunger)
-	emit_signal("thirst_changed", thirst)
-
-	health = clamp(health + get_sleep_health_per_hour() * hours, 0.0, 100.0)
+	# Расход еды/воды за сон считается в advance_time (вдвое меньше обычного).
+	health = clamp(health + get_sleep_health_per_hour() * hours, 0.0, stat_max())
 	emit_signal("health_changed", health)
 
 	# Кража во сне — только если нет крыши над головой (бомж, tier 0).
@@ -433,16 +553,17 @@ func sleep_hours(hours: int) -> Dictionary:
 					"money": -robbed_amount, "health": 0
 				})
 
-	# Сон тратит игровое время
-	advance_time(hours)
+	# Сон тратит игровое время (расход еды/воды вдвое меньше обычного)
+	advance_time(hours, SLEEP_DRAIN_MULT)
 	save_game()
 	return {"energy_gain": energy_gain, "robbed": robbed, "robbed_amount": robbed_amount}
 
 # Прокрутка времени на N часов (рабочая смена). Если смена выходит за полночь —
 # просто наступает следующий день (с его обработкой), иначе сдвигаем часы.
-func advance_time(hours: int) -> void:
+func advance_time(hours: int, drain_mult: float = 1.0) -> void:
 	if hours <= 0:
 		return
+	apply_time_passage(hours, drain_mult)
 	if current_hour + hours >= 24:
 		next_day()
 	else:
@@ -450,6 +571,11 @@ func advance_time(hours: int) -> void:
 		current_minute = 0
 		_time_acc = 0.0
 		emit_signal("time_changed", current_hour, current_minute)
+
+# Пропуск суток: прокручиваем до утра следующего дня (с расходом еды/воды за эти
+# часы и обработкой нового дня — аренда, события, доход бизнеса и т.д.).
+func skip_day() -> void:
+	advance_time(maxi(1, 24 - current_hour))
 
 func next_day() -> void:
 	var old_season: int = get_season_index()
@@ -486,33 +612,19 @@ func next_day() -> void:
 		var rm = get_node_or_null("/root/ReputationManager")
 		if rm: rm.add(int(rep_day))
 
-	# Сытость и жажда убывают каждый день (с множителем жилья)
-	var d: Dictionary = _diff()
-	var drain_m: float = d.drain as float
-	var health_m: float = d.health as float
-	var h_hunger: float = h.get("hunger_drain", 1.0) as float
-	var h_thirst: float = h.get("thirst_drain", 1.0) as float
-	var meal_m: float = 1.0 - meal_drain_bonus
-	# Сезон влияет на расход: лето → больше пить, зима → больше есть
-	var season: Dictionary = get_season()
-	var s_hunger: float = season.get("hunger", 1.0) as float
-	var s_thirst: float = season.get("thirst", 1.0) as float
-	hunger = clamp(hunger - 15.0 * drain_m * h_hunger * meal_m * s_hunger, 0.0, 100.0)
-	thirst = clamp(thirst - 20.0 * drain_m * h_thirst * meal_m * s_thirst, 0.0, 100.0)
+	# Сытость/жажда и урон от голода теперь почасовые (см. apply_time_passage),
+	# здесь только списываем дни баффа обеда.
 	if meal_buff_days > 0:
 		meal_buff_days -= 1
 		if meal_buff_days <= 0:
 			meal_drain_bonus = 0.0
-	emit_signal("hunger_changed", hunger)
-	emit_signal("thirst_changed", thirst)
-	# Штраф здоровью если голоден или обезвожен (смягчён, чтобы не убивать
-	# новичка за пару дней нищеты — это предупреждение, а не приговор)
-	if hunger <= 0.0:
-		health = clamp(health - 3.0 * health_m, 0.0, 100.0)
-		emit_signal("health_changed", health)
-	if thirst <= 0.0:
-		health = clamp(health - 4.0 * health_m, 0.0, 100.0)
-		emit_signal("health_changed", health)
+	# Штраф истощения: считаем дни и снимаем ограничение максимума по истечении
+	if max_stat_days > 0:
+		max_stat_days -= 1
+		if max_stat_days <= 0:
+			max_stat = 100.0
+	var health_m: float = _diff().health as float
+	var season: Dictionary = get_season()
 	# Зимний холод бьёт по здоровью, если нет крыши над головой (бомж, tier 0)
 	var cold: float = season.get("cold", 0.0) as float
 	var h_tier: int = h.get("tier", 0) as int
@@ -700,6 +812,25 @@ func get_monthly_income() -> float:
 	var biz_daily: float = bm.get_daily_income() if bm else 0.0
 	return biz_daily * 30.0
 
+# Сводка финансов в день: доход (бизнес + проценты по вкладу), расход (аренда +
+# платежи по кредитам) и суммарный капитал. Для тултипа по наведению на деньги.
+func get_finance() -> Dictionary:
+	var income: float = 0.0
+	var expense: float = 0.0
+	var bm: Node = get_node_or_null("/root/BusinessManager")
+	if bm:
+		income += bm.get_daily_income()
+		if bm.has_method("get_tiered_rate"):
+			income += bm.bank_deposit * bm.get_tiered_rate() / 30.0
+	var h: Dictionary = HOUSINGS[current_housing_index]
+	var monthly: float = h.get("monthly", 0) as float
+	if monthly > 0.0:
+		expense += monthly / 30.0
+	var lm: Node = get_node_or_null("/root/LoanManager")
+	if lm and lm.has_method("get_monthly_total"):
+		expense += (lm.get_monthly_total() as float) / 30.0
+	return {"income": income, "expense": expense, "networth": get_net_worth()}
+
 func format_money(amount: float) -> String:
 	var sign_str := "-" if amount < 0.0 else ""
 	var a := absf(amount)
@@ -726,11 +857,13 @@ func save_game() -> void:
 	cfg.set_value("player", "title_index", current_title_index)
 	cfg.set_value("player", "housing_index", current_housing_index)
 	cfg.set_value("player", "day", day)
-	cfg.set_value("player", "money_history", money_history)
+	cfg.set_value("player", "money_history", money_history.duplicate())  # копия для фоновой записи
 	cfg.set_value("player", "hour", current_hour)
 	cfg.set_value("player", "minute", current_minute)
 	cfg.set_value("player", "meal_buff_days", meal_buff_days)
 	cfg.set_value("player", "meal_drain_bonus", meal_drain_bonus)
+	cfg.set_value("player", "max_stat", max_stat)
+	cfg.set_value("player", "max_stat_days", max_stat_days)
 	cfg.set_value("player", "season_start_offset", season_start_offset)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.save(cfg)
@@ -756,11 +889,43 @@ func save_game() -> void:
 	if tm: tm.save(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.save(cfg)
-	cfg.save(slot_path(current_slot))
+	# Запись на диск — в фоновом потоке (ящик «последний снимок»), чтобы кадр не фризил
+	if _save_mutex:
+		_save_mutex.lock()
+		_save_pending_cfg = cfg
+		_save_pending_path = slot_path(current_slot)
+		_save_mutex.unlock()
+		_save_sem.post()
+	else:
+		cfg.save(slot_path(current_slot))
 	var hud := get_tree().get_first_node_in_group("hud") if get_tree() else null
 	var _sm := get_node_or_null("/root/SettingsManager")
 	if hud and hud.has_method("show_autosave_toast") and (not _sm or _sm.notify_autosave):
 		hud.show_autosave_toast()
+
+# Фоновый поток: пишет последний снимок сейва на диск, не трогая главный кадр
+func _save_loop() -> void:
+	while true:
+		_save_sem.wait()
+		_save_mutex.lock()
+		var cfg: ConfigFile = _save_pending_cfg
+		var path: String = _save_pending_path
+		_save_pending_cfg = null
+		var quit: bool = _save_quit
+		_save_mutex.unlock()
+		if cfg:
+			cfg.save(path)
+		if quit:
+			return
+
+# При выходе из игры дозаписываем последний сейв и корректно гасим поток
+func _exit_tree() -> void:
+	if _save_thread and _save_thread.is_started():
+		_save_mutex.lock()
+		_save_quit = true
+		_save_mutex.unlock()
+		_save_sem.post()
+		_save_thread.wait_to_finish()
 
 func _migrate_legacy_save() -> void:
 	# До введения слотов было одно сохранение — переносим его в слот 1,
@@ -805,6 +970,8 @@ func load_game() -> void:
 	current_minute = cfg.get_value("player", "minute", 0)
 	meal_buff_days  = cfg.get_value("player", "meal_buff_days", 0)
 	meal_drain_bonus = cfg.get_value("player", "meal_drain_bonus", 0.0)
+	max_stat        = cfg.get_value("player", "max_stat", 100.0)
+	max_stat_days   = cfg.get_value("player", "max_stat_days", 0)
 	season_start_offset = cfg.get_value("player", "season_start_offset", season_start_offset)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.load(cfg)
@@ -839,6 +1006,7 @@ func _reset_state() -> void:
 	day = 1; current_hour = 8; current_minute = 0
 	money_history.clear()
 	meal_buff_days = 0; meal_drain_bonus = 0.0
+	max_stat = 100.0; max_stat_days = 0; _collapsing = false
 	# Стартовый сезон по сложности: легко-весна, средне-лето, тяжело-осень, хардкор-зима
 	var sm_diff = get_node_or_null("/root/SettingsManager")
 	var diff: String = sm_diff.difficulty if sm_diff else "normal"
