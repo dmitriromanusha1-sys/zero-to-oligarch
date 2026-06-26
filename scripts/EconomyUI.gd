@@ -22,7 +22,11 @@ func _build_shell() -> void:
 	add_child(dim)
 
 	_panel = PanelContainer.new()
+	# Якорь по центру + симметричный рост, чтобы панель центрировалась, а не
+	# уезжала вниз-вправо от центральной точки.
 	_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.07, 0.08, 0.13, 0.98)
 	sb.border_color = Color(0.30, 0.50, 0.75, 0.9)
