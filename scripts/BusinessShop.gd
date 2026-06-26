@@ -136,6 +136,7 @@ func _build_business_tab() -> void:
 	if cnt > 0:
 		vb.add_child(_make_management())
 		vb.add_child(_make_ipo())
+		vb.add_child(_make_supply_chain())
 
 	# Переключатель активного бизнеса (если их несколько)
 	if cnt > 1:
@@ -160,6 +161,21 @@ func _build_business_tab() -> void:
 		var bt        : Dictionary = bm.BUSINESS_TYPES[i]
 		var is_locked = gm.current_title_index < bt.min_title
 		vb.add_child(_make_biz_card(bt, is_locked, at_cap, cur_idx))
+
+# Статус вертикальной интеграции (цепочка поставок).
+func _make_supply_chain() -> Control:
+	var box = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	var parts: Array = []
+	for s in bm.SUPPLY_CHAIN:
+		var mark: String = "✅" if bm.has_sector(s) else "⬜"
+		parts.append("%s%s" % [mark, bm.SECTOR_NAMES.get(s, s)])
+	var fin: String = "   ✅ 🏦 Финансы" if bm.has_sector("finance") else ""
+	_lbl(box, "🔗 Цепочка поставок: %s%s" % [" → ".join(parts), fin], Color(0.70, 0.80, 0.95), 12)
+	var bonus: int = int(round(bm.integration_bonus() * 100.0))
+	_lbl(box, "Вертикальная интеграция: +%d%% к доходу (звеньев замкнуто: %d)" % [bonus, bm.integration_links()],
+		Color(0.60, 0.85, 0.70) if bonus > 0 else Color(0.60, 0.62, 0.70), 11)
+	return box
 
 # Панель IPO / публичной компании.
 func _make_ipo() -> Control:

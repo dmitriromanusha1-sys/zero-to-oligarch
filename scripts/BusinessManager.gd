@@ -87,6 +87,14 @@ const FOREIGN_MARKETS: Array = [
 ]
 const FOREIGN_INCOME_FACTOR: float = 0.15   # доля внутреннего дохода на уровень присутствия
 
+# ── Вертикальная интеграция ───────────────────────────────────────────────────
+# Цепочка поставок: производство → дистрибуция → потребитель. Владея соседними
+# звеньями, снабжаешь себя сам и получаешь бонус к доходу. Финансы — поддержка.
+const SUPPLY_CHAIN: Array = ["industry", "retail", "food"]
+const INTEGRATION_LINK_BONUS: float = 0.12   # за каждое связанное звено
+const INTEGRATION_FINANCE_BONUS: float = 0.08 # за наличие финансов
+const INTEGRATION_MAX: float = 0.40
+
 # ── R&D / корпоративные технологии ────────────────────────────────────────────
 # Постоянные бонусы всей империи. requires — id предшествующих исследований.
 const TECHS: Array = [
@@ -344,6 +352,8 @@ func _domestic_income() -> float:
 			total *= cb.business_mult()
 	total *= efficiency_mult()
 	total *= research_income_mult()
+	# Вертикальная интеграция: связанные звенья цепочки поставок дают бонус
+	total *= (1.0 + integration_bonus())
 	return total
 
 # Доход одного зарубежного рынка (масштабируется внутренним доходом).
@@ -592,6 +602,27 @@ func active_sectors() -> Array:
 		var s := sector_of(String(biz.get("type_id", "")))
 		if s != "": seen[s] = true
 	return seen.keys()
+
+func has_sector(sector: String) -> bool:
+	for biz in businesses:
+		if sector_of(String(biz.get("type_id", ""))) == sector:
+			return true
+	return false
+
+# Число замкнутых соседних звеньев цепочки поставок (производство→дистрибуция→ретейл).
+func integration_links() -> int:
+	var links: int = 0
+	for i in range(SUPPLY_CHAIN.size() - 1):
+		if has_sector(SUPPLY_CHAIN[i]) and has_sector(SUPPLY_CHAIN[i + 1]):
+			links += 1
+	return links
+
+# Бонус вертикальной интеграции к доходу империи.
+func integration_bonus() -> float:
+	var b: float = integration_links() * INTEGRATION_LINK_BONUS
+	if has_sector("finance"):
+		b += INTEGRATION_FINANCE_BONUS
+	return minf(INTEGRATION_MAX, b)
 
 # Присутствие игрока в секторе (число точек с учётом уровней).
 func _presence_pts(sector: String) -> float:
