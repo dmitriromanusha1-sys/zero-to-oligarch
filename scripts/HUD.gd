@@ -1463,23 +1463,48 @@ func _time_str(h: int, m: int) -> String:
 	return "%s %02d:%02d" % [icon, h, m]
 
 var _popup_tween: Tween = null
+var _popup_queue: Array = []
+var _popup_active: bool = false
 
 func _on_survival_warning(text: String) -> void:
-	# Почасовое предупреждение о голоде/жажде — отдельный канал, без записи в дневник
-	_show_popup(text)
+	# Предупреждение о голоде/жажде — важнее экономических уведомлений,
+	# показываем его следующим (в начало очереди).
+	_show_popup(text, true)
 
-func _show_popup(text: String) -> void:
+# Уведомления показываются по очереди: если за один день срабатывает несколько
+# событий (аренда, налоги, ставка ЦБ, шоки…), игрок видит каждое, а не только
+# последнее. При длинной очереди показ короче.
+func _show_popup(text: String, priority: bool = false) -> void:
+	# Не плодим дубликаты подряд (например, одинаковые предупреждения)
+	if _popup_queue.has(text):
+		return
+	if _popup_queue.size() >= 12:
+		return
+	if priority:
+		_popup_queue.push_front(text)   # выживание — следующим
+	else:
+		_popup_queue.append(text)
+	if not _popup_active:
+		_pump_popups()
+
+func _pump_popups() -> void:
+	if _popup_queue.is_empty():
+		_popup_active = false
+		title_popup.visible = false
+		return
+	_popup_active = true
+	var text: String = _popup_queue.pop_front()
+	var hold: float = 1.4 if _popup_queue.size() > 0 else 3.2
 	title_popup.text = text
 	title_popup.visible = true
 	title_popup.modulate.a = 0.0
 	if _popup_tween and _popup_tween.is_valid():
 		_popup_tween.kill()
 	_popup_tween = create_tween()
-	_popup_tween.tween_property(title_popup, "modulate:a", 1.0, 0.20)
-	_popup_tween.tween_interval(3.5)
-	_popup_tween.tween_property(title_popup, "modulate:a", 0.0, 0.40)
-	await _popup_tween.finished
-	title_popup.visible = false
+	_popup_tween.tween_property(title_popup, "modulate:a", 1.0, 0.18)
+	_popup_tween.tween_interval(hold)
+	_popup_tween.tween_property(title_popup, "modulate:a", 0.0, 0.28)
+	_popup_tween.tween_callback(_pump_popups)
 
 func _setup_titles_handbook() -> void:
 	# Создаём TitlesHandbook и добавляем как дочерний узел HUD

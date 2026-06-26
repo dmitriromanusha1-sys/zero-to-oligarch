@@ -685,8 +685,7 @@ func next_day() -> void:
 			var aid: int = shop_price(500)
 			add_money(aid)
 			var es_w = get_node_or_null("/root/EventSystem")
-			var _smw = get_node_or_null("/root/SettingsManager")
-			if es_w and (not _smw or _smw.notify_taxes):
+			if es_w:
 				es_w.event_triggered.emit({
 					"text": "🤝 Социальное пособие: государство выделило %s на еду." % format_money(aid),
 					"money": aid, "health": 0
