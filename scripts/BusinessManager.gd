@@ -83,6 +83,11 @@ var active_loan      : float  = 0.0
 var total_earned     : float  = 0.0
 var business_days    : int    = 0
 var security_level   : int    = 0
+var month_income     : float  = 0.0   # доход бизнеса за месяц — база для налога
+var total_tax_paid   : float  = 0.0
+
+# Базовая ставка налога на прибыль бизнеса (× множитель сложности)
+const TAX_RATE: float = 0.13
 var last_event       : Dictionary = {}
 
 var gm: Node
@@ -175,6 +180,10 @@ func get_daily_income() -> float:
 		if et.is_empty(): continue
 		income += et.income_bonus - et.salary_per_day
 	income *= get_synergy_mult()
+	# Фаза экономического цикла: бум разгоняет доход, рецессия режет
+	var cb := get_node_or_null("/root/CentralBankManager")
+	if cb and cb.has_method("business_mult"):
+		income *= cb.business_mult()
 	return income
 
 func can_open(type_id: String) -> bool:
@@ -350,6 +359,25 @@ func process_day() -> void:
 		gm.add_money(net)
 		total_earned  += net
 		business_days += 1
+		month_income  += net
+	# Месячный налог на прибыль бизнеса (× множитель сложности)
+	if gm.day % 30 == 0:
+		if month_income > 0.0:
+			var sm := get_node_or_null("/root/SettingsManager")
+			var tax_mult: float = 1.0
+			if sm and sm.has_method("get_diff"):
+				tax_mult = sm.get_diff().get("tax", 1.0)
+			var tax: float = month_income * TAX_RATE * tax_mult
+			if tax > 0.0:
+				gm.spend_money(tax)
+				total_tax_paid += tax
+				var es := get_node_or_null("/root/EventSystem")
+				if es and (not sm or sm.notify_taxes):
+					es.event_triggered.emit({
+						"text": "🧾 Налог на прибыль: −%s (%.0f%% от дохода бизнеса за месяц)" % [gm.format_money(tax), TAX_RATE * tax_mult * 100.0],
+						"money": -tax, "health": 0
+					})
+		month_income = 0.0
 	if gm.day % 30 == 0 and bank_deposit > 0:
 		var interest := bank_deposit * get_tiered_rate()
 		bank_deposit += interest
@@ -412,6 +440,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "total_earned",  total_earned)
 	cfg.set_value("business", "business_days", business_days)
 	cfg.set_value("business", "security_level", security_level)
+	cfg.set_value("business", "month_income",  month_income)
+	cfg.set_value("business", "total_tax_paid", total_tax_paid)
 
 func load(cfg: ConfigFile) -> void:
 	owned_business_id = cfg.get_value("business", "owned_id",      "")
@@ -422,6 +452,8 @@ func load(cfg: ConfigFile) -> void:
 	total_earned      = cfg.get_value("business", "total_earned",  0.0)
 	business_days     = cfg.get_value("business", "business_days", 0)
 	security_level    = cfg.get_value("business", "security_level", 0)
+	month_income      = cfg.get_value("business", "month_income",  0.0)
+	total_tax_paid    = cfg.get_value("business", "total_tax_paid", 0.0)
 	# Самолечение: id бизнеса из старого сохранения, которого больше нет в списке
 	# типов, сбрасываем — иначе UI/доход обращаются к пустому словарю и падают.
 	if owned_business_id != "" and _get_type(owned_business_id).is_empty():

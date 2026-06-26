@@ -1040,6 +1040,7 @@ func _reset_state() -> void:
 		bm.owned_business_id = ""; bm.employees.clear(); bm.bank_deposit = 0.0
 		bm.business_level = 0; bm.active_loan = 0.0; bm.total_earned = 0.0
 		bm.business_days = 0; bm.security_level = 0; bm.last_event = {}
+		bm.month_income = 0.0; bm.total_tax_paid = 0.0
 	var lm = get_node_or_null("/root/LoanManager")
 	if lm:
 		lm.active_loans.clear(); lm.loan_history.clear()

@@ -783,6 +783,7 @@ func _style_dock_btn(btn: Button, icon: String, primary: bool = false) -> void:
 	btn.add_theme_stylebox_override("pressed", sp)
 
 var _season_lbl: Label = null
+var _econ_lbl: Label = null
 
 func _setup_season_label() -> void:
 	if gm == null or not gm.has_method("get_season"):
@@ -791,10 +792,16 @@ func _setup_season_label() -> void:
 	_season_lbl.add_theme_font_size_override("font_size", 12)
 	_season_lbl.add_theme_color_override("font_color", Color(0.78, 0.80, 0.88))
 	$TopBar/Row/StatusCol/StatusRow2.add_child(_season_lbl)
+	# Индикатор фазы экономики (виден только в бум/рецессию)
+	_econ_lbl = Label.new()
+	_econ_lbl.add_theme_font_size_override("font_size", 12)
+	_econ_lbl.visible = false
+	$TopBar/Row/StatusCol/StatusRow2.add_child(_econ_lbl)
 	_refresh_season()
+	_refresh_econ()
 	if gm.has_signal("season_changed"):
 		gm.season_changed.connect(func(_i): _refresh_season())
-	gm.day_changed.connect(func(_d): _refresh_season())
+	gm.day_changed.connect(func(_d): _refresh_season(); _refresh_econ())
 
 func _refresh_season() -> void:
 	if _season_lbl == null:
@@ -802,6 +809,24 @@ func _refresh_season() -> void:
 	var s: Dictionary = gm.get_season()
 	var date_str: String = gm.get_date_string() if gm.has_method("get_date_string") else ""
 	_season_lbl.text = "%s %s · %s" % [s.get("icon", ""), s.get("name", ""), date_str]
+
+func _refresh_econ() -> void:
+	if _econ_lbl == null:
+		return
+	var cb = get_node_or_null("/root/CentralBankManager")
+	if cb == null or not cb.has_method("phase_label"):
+		_econ_lbl.visible = false
+		return
+	if cb.is_recession():
+		_econ_lbl.text = "  ·  📉 Рецессия"
+		_econ_lbl.add_theme_color_override("font_color", Color(0.95, 0.45, 0.40))
+		_econ_lbl.visible = true
+	elif cb.is_boom():
+		_econ_lbl.text = "  ·  📈 Бум"
+		_econ_lbl.add_theme_color_override("font_color", Color(0.45, 0.90, 0.55))
+		_econ_lbl.visible = true
+	else:
+		_econ_lbl.visible = false
 
 func _setup_autosave_label() -> void:
 	_autosave_lbl = Label.new()

@@ -90,6 +90,20 @@ func phase_label() -> String:
 		"recession": return "📉 Рецессия"
 		_:           return "⚖ Стабильность"
 
+# Множитель дохода бизнеса в текущей фазе (бум разгоняет, рецессия режет)
+func business_mult() -> float:
+	match phase:
+		"boom":      return 1.20
+		"recession": return 0.80
+		_:           return 1.0
+
+# Дневное смещение дрейфа акций в фазе (бум — бычий рынок, рецессия — медвежий)
+func stock_bias() -> float:
+	match phase:
+		"boom":      return 0.010
+		"recession": return -0.012
+		_:           return 0.0
+
 # ── Ежемесячная обработка ────────────────────────────────────────────────────
 
 func process_month() -> void:

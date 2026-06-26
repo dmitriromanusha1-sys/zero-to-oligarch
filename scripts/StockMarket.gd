@@ -63,11 +63,13 @@ func _tick_event() -> void:
 		market_event_triggered.emit(ev.name, ev.desc, ev.pos)
 
 func _update_prices() -> void:
+	var cb := get_node_or_null("/root/CentralBankManager")
+	var cycle_bias: float = cb.stock_bias() if cb and cb.has_method("stock_bias") else 0.0
 	for s in STOCKS:
 		var old: float = prices[s.id]
 
-		# Базовое случайное движение + тренд
-		var change: float = randf_range(-s.volatility, s.volatility) + s.trend
+		# Базовое случайное движение + тренд + фаза экономического цикла
+		var change: float = randf_range(-s.volatility, s.volatility) + s.trend + cycle_bias
 
 		# Секторная корреляция: нефтяные акции движутся вместе
 		if s.sector == "energy":
