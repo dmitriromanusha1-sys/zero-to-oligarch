@@ -149,7 +149,8 @@ func _build_list() -> void:
 		if h.price > 0:
 			price_lbl.text = "Купить: " + gm.format_money(h.price)
 		elif h.monthly > 0:
-			price_lbl.text = "Аренда: " + gm.format_money(h.monthly) + "/мес"
+			var rent_now: int = gm.effective_rent(h.monthly) if gm.has_method("effective_rent") else int(h.monthly)
+			price_lbl.text = "Аренда: " + gm.format_money(rent_now) + "/мес"
 		else:
 			price_lbl.text = "Бесплатно"
 		price_lbl.add_theme_font_size_override("font_size", 10)

@@ -612,10 +612,9 @@ func next_day() -> void:
 		var cb: Node = get_node_or_null("/root/CentralBankManager")
 		if cb:
 			cb.process_month()
-		# Аренда с учётом накопленной инфляции
+		# Аренда с учётом накопленной инфляции и сложности
 		if h.monthly > 0:
-			var price_mult: float = cb.price_index if cb else 1.0
-			var rent: int = int(h.monthly * (_diff().penalty as float) * price_mult)
+			var rent: int = effective_rent(h.monthly)
 			if not spend_money(rent):
 				current_housing_index = 0
 				emit_signal("housing_changed", HOUSINGS[0].name)
@@ -900,7 +899,7 @@ func get_finance() -> Dictionary:
 	var h: Dictionary = HOUSINGS[current_housing_index]
 	var monthly: float = h.get("monthly", 0) as float
 	if monthly > 0.0:
-		expense += monthly / 30.0
+		expense += effective_rent(monthly) / 30.0
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm and lm.has_method("get_monthly_total"):
 		expense += (lm.get_monthly_total() as float) / 30.0
@@ -925,6 +924,15 @@ func shop_price(base: float) -> int:
 func wage_factor() -> float:
 	var cb := get_node_or_null("/root/CentralBankManager")
 	return cb.wage_index if cb else 1.0
+
+# Фактическая месячная аренда с учётом сложности и накопленной инфляции —
+# именно столько списывается раз в 30 дней. Используется и для показа, и для списания.
+func effective_rent(monthly: float) -> int:
+	if monthly <= 0.0:
+		return 0
+	var cb := get_node_or_null("/root/CentralBankManager")
+	var idx: float = cb.price_index if cb else 1.0
+	return int(monthly * (_diff().penalty as float) * idx)
 
 func format_money(amount: float) -> String:
 	var sign_str := "-" if amount < 0.0 else ""
