@@ -75,14 +75,45 @@ const SYN_MID_R         : float = 0.75
 const SYN_PENALTY_RATIO : float = 0.12   # corporation: 0.30 / 2.50 = 0.12 → штраф -30%
 const SYN_MID_RATIO     : float = 0.20   # corporation: 0.50 / 2.50 = 0.20 → средний бонус +50%
 
-var owned_business_id: String = ""
-var business_level   : int    = 0
-var employees        : Array  = []
+# ── Портфель бизнесов (империя) ───────────────────────────────────────────────
+# Каждый бизнес: {"type_id":String, "level":int, "employees":Array, "security_level":int}
+var businesses: Array = []
+var active_index: int = 0
+
+# Активный бизнес — то, что редактирует классический «магазин бизнеса».
+func active_business() -> Dictionary:
+	if active_index >= 0 and active_index < businesses.size():
+		return businesses[active_index]
+	return {}
+
+# Сколько бизнесов можно держать одновременно (растёт с титулом; Фаза 4 свяжет
+# с управлением). Бомж — 1, дальше +1 каждые 3 титула.
+func max_businesses() -> int:
+	var t: int = gm.current_title_index if gm else 0
+	return 1 + int(t / 3)
+
+# Старые поля как вид на активный бизнес — чтобы существующий код/UI работал.
+var owned_business_id: String:
+	get: return String(active_business().get("type_id", ""))
+var business_level: int:
+	get: return int(active_business().get("level", 0))
+	set(v):
+		var a := active_business()
+		if not a.is_empty(): a["level"] = v
+var employees: Array:
+	get:
+		var a := active_business()
+		return a["employees"] if a.has("employees") else []
+var security_level: int:
+	get: return int(active_business().get("security_level", 0))
+	set(v):
+		var a := active_business()
+		if not a.is_empty(): a["security_level"] = v
+
 var bank_deposit     : float  = 0.0
 var active_loan      : float  = 0.0
 var total_earned     : float  = 0.0
 var business_days    : int    = 0
-var security_level   : int    = 0
 var month_income     : float  = 0.0   # доход бизнеса за месяц — база для налога
 var total_tax_paid   : float  = 0.0
 
@@ -107,7 +138,7 @@ func get_tiered_rate() -> float:
 	return base * 0.60
 
 func get_loan_max() -> float:
-	return maxf(0.0, get_business_value() + bank_deposit * 0.5)
+	return maxf(0.0, get_empire_value() + bank_deposit * 0.5)
 
 func get_business_value() -> float:
 	var bt := get_business()
@@ -123,29 +154,39 @@ func get_upgrade_cost() -> float:
 	return bt.cost * LVL_COST_MULT * (business_level + 1)
 
 # ── Бизнес ────────────────────────────────────────────────────────────────────
+# Открыть новый бизнес — добавляет ещё одну компанию в портфель (в пределах лимита).
 func open_business(type_id: String) -> bool:
-	if owned_business_id != "": return false
+	if businesses.size() >= max_businesses(): return false
 	var bt := _get_type(type_id)
 	if bt.is_empty(): return false
 	if not gm.spend_money(bt.cost): return false
-	owned_business_id = type_id
-	business_level = 0
-	business_days  = 0
-	employees.clear()
+	businesses.append({"type_id": type_id, "level": 0, "employees": [], "security_level": 0})
+	active_index = businesses.size() - 1
 	emit_signal("business_changed")
 	gm.save_game()
 	return true
 
+# Сменить тип активного бизнеса (на более крупный) — сбрасывает уровень.
 func upgrade_business(new_type_id: String) -> bool:
-	if owned_business_id == "": return false
+	var a := active_business()
+	if a.is_empty(): return false
 	var bt := _get_type(new_type_id)
 	if bt.is_empty(): return false
 	if not gm.spend_money(bt.cost): return false
-	owned_business_id = new_type_id
-	business_level = 0
+	a["type_id"] = new_type_id
+	a["level"] = 0
 	emit_signal("business_changed")
 	gm.save_game()
 	return true
+
+# Переключить активный бизнес (для управления в магазине).
+func set_active(index: int) -> void:
+	if index >= 0 and index < businesses.size():
+		active_index = index
+		emit_signal("business_changed")
+
+func business_count() -> int:
+	return businesses.size()
 
 func upgrade_level() -> bool:
 	if business_level >= MAX_BIZ_LEVEL: return false
@@ -157,11 +198,12 @@ func upgrade_level() -> bool:
 	return true
 
 func sell_business() -> float:
+	var a := active_business()
+	if a.is_empty(): return 0.0
 	var value := get_business_value() * 0.50
 	gm.add_money(value)
-	owned_business_id = ""
-	business_level    = 0
-	employees.clear()
+	businesses.remove_at(active_index)
+	active_index = clampi(active_index, 0, maxi(0, businesses.size() - 1))
 	emit_signal("business_changed")
 	gm.save_game()
 	return value
@@ -170,21 +212,43 @@ func get_business() -> Dictionary:
 	if owned_business_id == "": return {}
 	return _get_type(owned_business_id)
 
-func get_daily_income() -> float:
-	if owned_business_id == "": return 0.0
-	var bt := get_business()
-	if bt.is_empty(): return 0.0   # неизвестный/устаревший id бизнеса — без дохода, без краша
-	var income: float = bt.income_per_day * get_level_income_mult()
-	for e in employees:
+# Доход одного бизнеса (тип, уровень, сотрудники, синергия).
+func _income_of(biz: Dictionary) -> float:
+	if biz.is_empty(): return 0.0
+	var bt := _get_type(String(biz.get("type_id", "")))
+	if bt.is_empty(): return 0.0
+	var lvl: int = int(biz.get("level", 0))
+	var income: float = bt.income_per_day * (1.0 + lvl * LVL_INCOME_MULT)
+	for e in biz.get("employees", []):
 		var et := _get_employee_type(e.type_id)
 		if et.is_empty(): continue
 		income += et.income_bonus - et.salary_per_day
-	income *= get_synergy_mult()
-	# Фаза экономического цикла: бум разгоняет доход, рецессия режет
-	var cb := get_node_or_null("/root/CentralBankManager")
-	if cb and cb.has_method("business_mult"):
-		income *= cb.business_mult()
+	income *= _synergy_mult_of(biz)
 	return income
+
+# Доход активного бизнеса (для карточки в магазине).
+func get_active_income() -> float:
+	return _income_of(active_business())
+
+# Суммарный доход всей империи в день (с учётом экономического цикла).
+func get_daily_income() -> float:
+	var total: float = 0.0
+	for biz in businesses:
+		total += _income_of(biz)
+	if total != 0.0:
+		var cb := get_node_or_null("/root/CentralBankManager")
+		if cb and cb.has_method("business_mult"):
+			total *= cb.business_mult()
+	return total
+
+# Суммарная стоимость всех бизнесов империи.
+func get_empire_value() -> float:
+	var total: float = 0.0
+	for biz in businesses:
+		var bt := _get_type(String(biz.get("type_id", "")))
+		if not bt.is_empty():
+			total += bt.cost * (1.0 + int(biz.get("level", 0)) * 0.25)
+	return total
 
 func can_open(type_id: String) -> bool:
 	var bt := _get_type(type_id)
@@ -268,13 +332,28 @@ func get_synergy_fulfillment() -> float:
 # Возвращает текущий множитель к прибыли по кривой синергии:
 # штраф ниже SYN_MIN_R → нейтрально до SYN_MID_R → бонус растёт до 100% рецепта.
 func get_synergy_mult() -> float:
-	var syn := get_synergy_recipe()
-	if syn.is_empty(): return 1.0
-	if employees.is_empty(): return 1.0  # без команды штраф синергии не действует
+	return _synergy_mult_of(active_business())
+
+# Множитель синергии для произвольного бизнеса (по его типу и сотрудникам).
+func _synergy_mult_of(biz: Dictionary) -> float:
+	var tid: String = String(biz.get("type_id", ""))
+	if tid == "" or not SYNERGY_RECIPES.has(tid): return 1.0
+	var emps: Array = biz.get("employees", [])
+	if emps.is_empty(): return 1.0  # без команды штраф синергии не действует
+	var syn: Dictionary = SYNERGY_RECIPES[tid]
+	var counts: Dictionary = {}
+	for e in emps:
+		counts[e.type_id] = counts.get(e.type_id, 0) + 1
+	var have_sum: float = 0.0
+	var need_sum: float = 0.0
+	for type_id in syn.recipe:
+		var need: int = syn.recipe[type_id]
+		need_sum += need
+		have_sum += mini(counts.get(type_id, 0), need)
+	var r: float = (have_sum / need_sum) if need_sum > 0.0 else 0.0
 	var max_bonus: float = syn.bonus
 	var penalty_max: float = max_bonus * SYN_PENALTY_RATIO
 	var mid_bonus  : float = max_bonus * SYN_MID_RATIO
-	var r := get_synergy_fulfillment()
 	if r >= 1.0:
 		return 1.0 + max_bonus
 	if r >= SYN_MID_R:
@@ -386,11 +465,13 @@ func process_day() -> void:
 	if active_loan > 0:
 		active_loan += active_loan * LOAN_RATE_DAILY
 		emit_signal("bank_changed", bank_deposit)
-	if owned_business_id != "":
-		var sec_cost = SECURITY_LEVELS[security_level].cost_per_day
+	# Охрана и негативные события — по каждому бизнесу империи
+	for biz in businesses:
+		var slv: int = int(biz.get("security_level", 0))
+		var sec_cost = SECURITY_LEVELS[slv].cost_per_day
 		if sec_cost > 0:
 			gm.spend_money(sec_cost)
-		if randf() < SECURITY_LEVELS[security_level].event_chance:
+		if randf() < SECURITY_LEVELS[slv].event_chance:
 			_trigger_negative_event()
 	gm.save_game()
 
@@ -431,35 +512,50 @@ func _trigger_negative_event() -> void:
 	emit_signal("security_event", last_event)
 
 # ── Сохранение ────────────────────────────────────────────────────────────────
+func reset_empire() -> void:
+	businesses.clear()
+	active_index = 0
+
 func save(cfg: ConfigFile) -> void:
-	cfg.set_value("business", "owned_id",      owned_business_id)
-	cfg.set_value("business", "biz_level",     business_level)
-	cfg.set_value("business", "employees",     employees)
+	cfg.set_value("business", "businesses",   businesses)
+	cfg.set_value("business", "active_index", active_index)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
 	cfg.set_value("business", "total_earned",  total_earned)
 	cfg.set_value("business", "business_days", business_days)
-	cfg.set_value("business", "security_level", security_level)
 	cfg.set_value("business", "month_income",  month_income)
 	cfg.set_value("business", "total_tax_paid", total_tax_paid)
 
 func load(cfg: ConfigFile) -> void:
-	owned_business_id = cfg.get_value("business", "owned_id",      "")
-	business_level    = cfg.get_value("business", "biz_level",     0)
-	employees         = cfg.get_value("business", "employees",     [])
+	businesses   = cfg.get_value("business", "businesses", [])
+	active_index = cfg.get_value("business", "active_index", 0)
+	# Миграция старого формата (один бизнес) → портфель
+	if businesses.is_empty():
+		var old_id := String(cfg.get_value("business", "owned_id", ""))
+		if old_id != "":
+			businesses = [{
+				"type_id": old_id,
+				"level": int(cfg.get_value("business", "biz_level", 0)),
+				"employees": cfg.get_value("business", "employees", []),
+				"security_level": int(cfg.get_value("business", "security_level", 0)),
+			}]
 	bank_deposit      = cfg.get_value("business", "bank_deposit",  0.0)
 	active_loan       = cfg.get_value("business", "active_loan",   0.0)
 	total_earned      = cfg.get_value("business", "total_earned",  0.0)
 	business_days     = cfg.get_value("business", "business_days", 0)
-	security_level    = cfg.get_value("business", "security_level", 0)
 	month_income      = cfg.get_value("business", "month_income",  0.0)
 	total_tax_paid    = cfg.get_value("business", "total_tax_paid", 0.0)
-	# Самолечение: id бизнеса из старого сохранения, которого больше нет в списке
-	# типов, сбрасываем — иначе UI/доход обращаются к пустому словарю и падают.
-	if owned_business_id != "" and _get_type(owned_business_id).is_empty():
-		owned_business_id = ""
-		employees = []
-		business_level = 0
+	# Чистим бизнесы с неизвестным типом и нормализуем поля
+	var valid: Array = []
+	for b in businesses:
+		if typeof(b) != TYPE_DICTIONARY: continue
+		if _get_type(String(b.get("type_id", ""))).is_empty(): continue
+		if not b.has("level"): b["level"] = 0
+		if not b.has("employees"): b["employees"] = []
+		if not b.has("security_level"): b["security_level"] = 0
+		valid.append(b)
+	businesses = valid
+	active_index = clampi(active_index, 0, maxi(0, businesses.size() - 1))
 
 func _get_type(type_id: String) -> Dictionary:
 	for bt in BUSINESS_TYPES:

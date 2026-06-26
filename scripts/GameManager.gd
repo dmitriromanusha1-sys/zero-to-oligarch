@@ -777,12 +777,9 @@ func get_net_worth() -> float:
 
 	var bm: Node = get_node_or_null("/root/BusinessManager")
 	if bm:
-		# Бизнес — 70% от стоимости открытия
-		if bm.owned_business_id != "":
-			for bt in bm.BUSINESS_TYPES:
-				if bt.id == bm.owned_business_id:
-					nw += bt.cost * 0.7
-					break
+		# Бизнесы империи — 70% от суммарной стоимости
+		if bm.has_method("get_empire_value"):
+			nw += bm.get_empire_value() * 0.7
 		# Банковский депозит — 100%
 		nw += bm.bank_deposit
 
@@ -829,11 +826,8 @@ func get_net_worth_breakdown() -> Dictionary:
 		d.property = h.price * 0.8
 	var bm: Node = get_node_or_null("/root/BusinessManager")
 	if bm:
-		if bm.owned_business_id != "":
-			for bt in bm.BUSINESS_TYPES:
-				if bt.id == bm.owned_business_id:
-					d.business = bt.cost * 0.7
-					break
+		if bm.has_method("get_empire_value"):
+			d.business = bm.get_empire_value() * 0.7
 		d.deposit = bm.bank_deposit
 	var sm: Node = get_node_or_null("/root/StockMarket")
 	if sm:
@@ -1142,9 +1136,9 @@ func _reset_state() -> void:
 	season_start_offset = int(DIFF_START_MONTH.get(diff, 5)) * DAYS_PER_MONTH
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm:
-		bm.owned_business_id = ""; bm.employees.clear(); bm.bank_deposit = 0.0
-		bm.business_level = 0; bm.active_loan = 0.0; bm.total_earned = 0.0
-		bm.business_days = 0; bm.security_level = 0; bm.last_event = {}
+		bm.reset_empire(); bm.bank_deposit = 0.0
+		bm.active_loan = 0.0; bm.total_earned = 0.0
+		bm.business_days = 0; bm.last_event = {}
 		bm.month_income = 0.0; bm.total_tax_paid = 0.0
 	var lm = get_node_or_null("/root/LoanManager")
 	if lm:
