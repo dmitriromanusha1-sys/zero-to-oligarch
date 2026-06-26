@@ -58,6 +58,15 @@ const EMPLOYEE_TYPES: Array = [
 	{"id":"director",   "name":"Директор",     "cost":350000, "salary_per_day":5500, "income_bonus":18000, "icon":"🤵", "desc":"Стратегическое управление. Максимальный вклад."},
 ]
 
+# Топ-менеджмент уровня ИМПЕРИИ: повышает «ёмкость управления». Если бизнесов
+# больше, чем ёмкость, эффективность всей империи падает.
+const EXECUTIVE_TYPES: Array = [
+	{"id":"office_mgr", "name":"Офис-менеджер",        "capacity":2,  "salary":3000,  "cost":80000,    "icon":"📋", "desc":"Берёт рутину одного-двух бизнесов."},
+	{"id":"coo",        "name":"COO (операционный)",   "capacity":5,  "salary":18000, "cost":700000,   "icon":"🧑‍💼", "desc":"Операционное управление группой компаний."},
+	{"id":"ceo",        "name":"CEO (генеральный)",    "capacity":12, "salary":70000, "cost":4000000,  "icon":"👑", "desc":"Стратег во главе всей империи."},
+]
+const BASE_MGMT_CAPACITY: int = 2
+
 # Рецепт синергии: набор сотрудников (по типам), который определяет
 # 100%-ную комплектацию команды. "bonus" — максимальный бонус к прибыли
 # (получаемый на корпорации; для бизнесов поменьше масштабируется вниз).
@@ -128,6 +137,9 @@ var total_earned     : float  = 0.0
 var business_days    : int    = 0
 var month_income     : float  = 0.0   # доход бизнеса за месяц — база для налога
 var total_tax_paid   : float  = 0.0
+
+# Топ-менеджмент империи (список {type_id})
+var executives: Array = []
 
 # ── Доля рынка по секторам ────────────────────────────────────────────────────
 # sector → твоя доля рынка 0..1. Конкуренты точат долю, доля влияет на доход.
@@ -264,6 +276,8 @@ func get_daily_income() -> float:
 		var cb := get_node_or_null("/root/CentralBankManager")
 		if cb and cb.has_method("business_mult"):
 			total *= cb.business_mult()
+	# Эффективность управления: перегруженная империя теряет доход
+	total *= efficiency_mult()
 	return total
 
 # Суммарная стоимость всех бизнесов империи.
@@ -354,6 +368,55 @@ func invest_market_share(sector: String) -> bool:
 	if sector == "": return false
 	if not gm.spend_money(market_invest_cost(sector)): return false
 	market_share[sector] = clampf(get_share(sector) + MARKET_INVEST, 0.05, 0.95)
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+# ── Управление империей ───────────────────────────────────────────────────────
+func _get_executive_type(type_id: String) -> Dictionary:
+	for et in EXECUTIVE_TYPES:
+		if et.id == type_id: return et
+	return {}
+
+# Нагрузка на управление = число бизнесов в империи.
+func management_load() -> int:
+	return businesses.size()
+
+# Ёмкость управления = база (сам) + вклад топ-менеджмента.
+func management_capacity() -> int:
+	var cap: int = BASE_MGMT_CAPACITY
+	for e in executives:
+		var et := _get_executive_type(String(e.get("type_id", "")))
+		if not et.is_empty(): cap += int(et.capacity)
+	return cap
+
+# Множитель эффективности: если бизнесов больше ёмкости — штраф к доходу империи.
+func efficiency_mult() -> float:
+	var over: int = management_load() - management_capacity()
+	if over <= 0:
+		return 1.0
+	return clampf(1.0 - 0.12 * over, 0.40, 1.0)
+
+# Суммарная зарплата топ-менеджмента в день.
+func get_executive_salary() -> float:
+	var total: float = 0.0
+	for e in executives:
+		var et := _get_executive_type(String(e.get("type_id", "")))
+		if not et.is_empty(): total += et.salary
+	return total
+
+func executive_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for e in executives:
+		var tid := String(e.get("type_id", ""))
+		counts[tid] = counts.get(tid, 0) + 1
+	return counts
+
+func hire_executive(type_id: String) -> bool:
+	var et := _get_executive_type(type_id)
+	if et.is_empty(): return false
+	if not gm.spend_money(et.cost): return false
+	executives.append({"type_id": type_id})
 	emit_signal("business_changed")
 	gm.save_game()
 	return true
@@ -584,6 +647,10 @@ func process_day() -> void:
 			gm.spend_money(sec_cost)
 		if randf() < SECURITY_LEVELS[slv].event_chance:
 			_trigger_negative_event()
+	# Зарплата топ-менеджмента
+	var exec_sal: float = get_executive_salary()
+	if exec_sal > 0.0:
+		gm.spend_money(exec_sal)
 	gm.save_game()
 
 # ── Охрана ────────────────────────────────────────────────────────────────────
@@ -627,11 +694,13 @@ func reset_empire() -> void:
 	businesses.clear()
 	active_index = 0
 	market_share.clear()
+	executives.clear()
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "businesses",   businesses)
 	cfg.set_value("business", "active_index", active_index)
 	cfg.set_value("business", "market_share", market_share)
+	cfg.set_value("business", "executives",   executives)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
 	cfg.set_value("business", "total_earned",  total_earned)
@@ -643,6 +712,7 @@ func load(cfg: ConfigFile) -> void:
 	businesses   = cfg.get_value("business", "businesses", [])
 	active_index = cfg.get_value("business", "active_index", 0)
 	market_share = cfg.get_value("business", "market_share", {})
+	executives   = cfg.get_value("business", "executives", [])
 	# Миграция старого формата (один бизнес) → портфель
 	if businesses.is_empty():
 		var old_id := String(cfg.get_value("business", "owned_id", ""))

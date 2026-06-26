@@ -890,6 +890,8 @@ func get_finance() -> Dictionary:
 		income += bm.get_daily_income()
 		if bm.has_method("get_tiered_rate"):
 			income += bm.bank_deposit * bm.get_tiered_rate() / 30.0
+		if bm.has_method("get_executive_salary"):
+			expense += bm.get_executive_salary()   # зарплата топ-менеджмента
 	var h: Dictionary = HOUSINGS[current_housing_index]
 	var monthly: float = h.get("monthly", 0) as float
 	if monthly > 0.0:

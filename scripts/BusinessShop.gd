@@ -130,6 +130,10 @@ func _build_business_tab() -> void:
 	_lbl(vb, "🏢 Бизнесов в империи: %d / %d   📈 Доход: +%s/день" % [
 		cnt, cap, gm.format_money(bm.get_daily_income())], Color(0.70, 0.85, 1.00), 14)
 
+	# Управление империей (нагрузка/ёмкость/эффективность + найм топ-менеджмента)
+	if cnt > 0:
+		vb.add_child(_make_management())
+
 	# Переключатель активного бизнеса (если их несколько)
 	if cnt > 1:
 		vb.add_child(_make_switcher())
@@ -153,6 +157,46 @@ func _build_business_tab() -> void:
 		var bt        : Dictionary = bm.BUSINESS_TYPES[i]
 		var is_locked = gm.current_title_index < bt.min_title
 		vb.add_child(_make_biz_card(bt, is_locked, at_cap, cur_idx))
+
+# Панель управления империей: нагрузка/ёмкость/эффективность + найм управленцев.
+func _make_management() -> Control:
+	var box = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	var load_n: int = bm.management_load()
+	var cap_n: int = bm.management_capacity()
+	var eff: float = bm.efficiency_mult()
+	var eff_pct: int = int(round(eff * 100.0))
+	var col := Color(0.95, 0.5, 0.4) if eff < 1.0 else Color(0.60, 0.85, 0.60)
+	var warn := "   ⚠ перегрузка — наймите управленцев!" if eff < 1.0 else ""
+	_lbl(box, "🧑‍💼 Управление: нагрузка %d / ёмкость %d · эффективность %d%%%s" % [
+		load_n, cap_n, eff_pct, warn], col, 12)
+	var exec_sal: float = bm.get_executive_salary()
+	if exec_sal > 0.0:
+		_lbl(box, "ЗП топ-менеджмента: -%s/день" % gm.format_money(exec_sal), Color(0.72, 0.62, 0.52), 11)
+	var counts: Dictionary = bm.executive_counts()
+	var row = HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 6)
+	for et in bm.EXECUTIVE_TYPES:
+		var have: int = counts.get(et.id, 0)
+		var btn = Button.new()
+		btn.text = "%s %s ×%d  +%d ёмк (%s)" % [et.icon, et.name, have, et.capacity, gm.format_money(et.cost)]
+		btn.add_theme_font_size_override("font_size", 11)
+		btn.tooltip_text = "%s  ЗП %s/день" % [et.desc, gm.format_money(et.salary)]
+		var afford: bool = gm.money >= et.cost
+		if afford:
+			_style_btn(btn, Color(0.10, 0.16, 0.24), Color(0.30, 0.50, 0.70, 0.8))
+			btn.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+			var eid: String = et.id
+			btn.pressed.connect(func():
+				if not bm.hire_executive(eid): _flash_toast("Недостаточно денег!"))
+		else:
+			_style_btn(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+			btn.disabled = true
+			btn.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+		row.add_child(btn)
+	box.add_child(row)
+	return box
 
 # Переключатель бизнесов империи — чипы по каждому владению.
 func _make_switcher() -> Control:
