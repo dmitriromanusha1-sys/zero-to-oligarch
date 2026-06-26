@@ -9,6 +9,14 @@ const LVL_COST_MULT  : float = 0.40
 const LVL_INCOME_MULT: float = 0.30
 const LOAN_RATE_DAILY: float = 0.01
 
+# ── Филиалы / франшизы ────────────────────────────────────────────────────────
+# Каждый следующий филиал ОДНОГО типа дешевле (экономия на масштабе), а бренд
+# (число точек этого типа) повышает доход каждой точки.
+const FRANCHISE_DISCOUNT_STEP : float = 0.15   # −15% к цене за каждый уже открытый филиал
+const FRANCHISE_MIN_RATIO     : float = 0.40   # но не дешевле 40% базовой цены
+const BRAND_BONUS_STEP        : float = 0.08   # +8% к доходу точки за каждый филиал сверх первого
+const BRAND_BONUS_MAX         : float = 0.50   # максимум +50% от бренда
+
 const SECURITY_LEVELS: Array = [
 	{"name": "Нет охраны",       "cost_per_day": 0,      "install_cost": 0,        "event_chance": 0.25, "icon": "⚠️",  "desc": "Бизнес не защищён."},
 	{"name": "Охранник",         "cost_per_day": 500,    "install_cost": 15000,    "event_chance": 0.16, "icon": "👮",  "desc": "Один охранник на входе."},
@@ -159,7 +167,7 @@ func open_business(type_id: String) -> bool:
 	if businesses.size() >= max_businesses(): return false
 	var bt := _get_type(type_id)
 	if bt.is_empty(): return false
-	if not gm.spend_money(bt.cost): return false
+	if not gm.spend_money(franchise_cost(type_id)): return false
 	businesses.append({"type_id": type_id, "level": 0, "employees": [], "security_level": 0})
 	active_index = businesses.size() - 1
 	emit_signal("business_changed")
@@ -224,6 +232,8 @@ func _income_of(biz: Dictionary) -> float:
 		if et.is_empty(): continue
 		income += et.income_bonus - et.salary_per_day
 	income *= _synergy_mult_of(biz)
+	# Бренд: чем больше филиалов этого типа, тем выше доход каждого
+	income *= brand_mult(String(biz.get("type_id", "")))
 	return income
 
 # Доход активного бизнеса (для карточки в магазине).
@@ -250,10 +260,32 @@ func get_empire_value() -> float:
 			total += bt.cost * (1.0 + int(biz.get("level", 0)) * 0.25)
 	return total
 
+# Сколько точек (филиалов) данного типа в империи.
+func branch_count(type_id: String) -> int:
+	var n: int = 0
+	for biz in businesses:
+		if String(biz.get("type_id", "")) == type_id:
+			n += 1
+	return n
+
+# Цена открытия следующего филиала этого типа (со скидкой за масштаб).
+func franchise_cost(type_id: String) -> int:
+	var bt := _get_type(type_id)
+	if bt.is_empty(): return 0
+	var ratio: float = maxf(FRANCHISE_MIN_RATIO, 1.0 - FRANCHISE_DISCOUNT_STEP * branch_count(type_id))
+	return int(bt.cost * ratio)
+
+# Бренд-множитель к доходу точки этого типа (чем больше точек, тем выше).
+func brand_mult(type_id: String) -> float:
+	var extra: int = maxi(0, branch_count(type_id) - 1)
+	return 1.0 + minf(BRAND_BONUS_MAX, BRAND_BONUS_STEP * extra)
+
 func can_open(type_id: String) -> bool:
 	var bt := _get_type(type_id)
 	if bt.is_empty(): return false
-	return gm.money >= bt.cost and gm.current_title_index >= bt.min_title
+	return businesses.size() < max_businesses() \
+		and gm.money >= franchise_cost(type_id) \
+		and gm.current_title_index >= bt.min_title
 
 # ── Сотрудники ────────────────────────────────────────────────────────────────
 func hire_employee(type_id: String) -> bool:

@@ -369,13 +369,22 @@ func _make_biz_card(bt: Dictionary, is_locked: bool, is_past: bool, cur_idx: int
 	rv.add_theme_constant_override("separation", 6)
 	row.add_child(rv)
 
+	var branches: int = bm.branch_count(bt.id)
 	var cost_lbl = Label.new()
-	cost_lbl.text = gm.format_money(bt.cost)
+	cost_lbl.text = gm.format_money(bm.franchise_cost(bt.id))
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cost_lbl.add_theme_font_size_override("font_size", 13)
 	cost_lbl.add_theme_color_override("font_color",
 		Color(0.25, 0.25, 0.30) if (is_past or is_locked) else Color(1.00, 0.88, 0.25))
 	rv.add_child(cost_lbl)
+	# Филиалы и бренд-бонус, если уже есть точки этого типа
+	if branches > 0:
+		var br_lbl = Label.new()
+		br_lbl.text = "🏪 %d точк.  бренд +%d%%" % [branches, int(round((bm.brand_mult(bt.id) - 1.0) * 100.0))]
+		br_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		br_lbl.add_theme_font_size_override("font_size", 10)
+		br_lbl.add_theme_color_override("font_color", Color(0.55, 0.75, 1.0))
+		rv.add_child(br_lbl)
 
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(140, 34)
@@ -391,10 +400,10 @@ func _make_biz_card(bt: Dictionary, is_locked: bool, is_past: bool, cur_idx: int
 		btn.disabled = true
 		btn.add_theme_color_override("font_color", Color(0.35, 0.35, 0.42))
 	else:
-		var can_afford = gm.money >= bt.cost
+		var can_afford = gm.money >= bm.franchise_cost(bt.id)
 		# is_past здесь означает «лимит бизнесов достигнут» (передаётся из вкладки)
 		var at_cap = is_past
-		btn.text = "🚀 Открыть"
+		btn.text = ("🏪 Филиал" if branches > 0 else "🚀 Открыть")
 		if can_afford and not at_cap:
 			var bid = bt.id
 			_style_btn(btn, Color(0.08, 0.20, 0.10), Color(0.25, 0.62, 0.25, 0.85))
