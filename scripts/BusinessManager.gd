@@ -173,10 +173,22 @@ var researched: Dictionary = {}
 var market_share: Dictionary = {}
 # sector → Array of {name:String, share:float} — фирмы-конкуренты для поглощений.
 var competitors: Dictionary = {}
+# sector → антимонопольный «жар» (0..1.5); при ≥1 срабатывает расследование.
+var antitrust_heat: Dictionary = {}
+# sector → {mult:float, months:int} — активный отраслевой кризис.
+var sector_crisis: Dictionary = {}
 
 const COMP_MULT_MIN    : float = 0.65   # доход при крошечной доле рынка
 const COMP_MULT_MAX    : float = 1.35   # доход при доминировании
 const MARKET_INVEST    : float = 0.12   # +доля за один маркетинговый вброс
+
+# ── Антимонополия и кризисы ───────────────────────────────────────────────────
+const ANTITRUST_THRESHOLD : float = 0.55  # выше этой доли копится «жар»
+const ANTITRUST_HEAT_GAIN : float = 0.30  # прирост жара/мес при максимальной доле
+const ANTITRUST_HEAT_DECAY: float = 0.20  # спад жара/мес при невысокой доле
+const ANTITRUST_FINE_PCT  : float = 0.06  # штраф = 6% капитализации
+const ANTITRUST_DIVEST    : float = 0.25  # принудительная потеря доли
+const CRISIS_CHANCE       : float = 0.06  # шанс отраслевого кризиса/мес
 
 # ── IPO / публичная компания ──────────────────────────────────────────────────
 const IPO_MIN_VALUATION : float = 50_000_000.0   # минимальная капитализация для IPO
@@ -296,7 +308,10 @@ func _income_of(biz: Dictionary) -> float:
 	# Бренд: чем больше филиалов этого типа, тем выше доход каждого
 	income *= brand_mult(String(biz.get("type_id", "")))
 	# Конкуренция: доля рынка в секторе бизнеса
-	income *= sector_competition_mult(sector_of(String(biz.get("type_id", ""))))
+	var sec: String = sector_of(String(biz.get("type_id", "")))
+	income *= sector_competition_mult(sec)
+	# Отраслевой кризис временно режет доход сектора
+	income *= crisis_mult(sec)
 	return income
 
 # Доход активного бизнеса (для карточки в магазине).
@@ -534,6 +549,60 @@ func acquire_competitor(sector: String, index: int) -> bool:
 	gm.save_game()
 	return true
 
+# ── Антимонополия ─────────────────────────────────────────────────────────────
+func antitrust_risk(sector: String) -> float:
+	return float(antitrust_heat.get(sector, 0.0))
+
+func lobby_cost(sector: String) -> int:
+	return int(maxf(200000.0, company_valuation() * 0.01))
+
+# Лоббирование: снижает антимонопольный жар в секторе.
+func lobby(sector: String) -> bool:
+	if not gm.spend_money(lobby_cost(sector)): return false
+	antitrust_heat[sector] = maxf(0.0, antitrust_risk(sector) - 0.5)
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+# Появление нового конкурента (после раздела монополии).
+func _spawn_competitor(sector: String) -> void:
+	var pool: Array = COMPETITOR_NAMES.get(sector, [])
+	var existing: Array = []
+	for r in get_competitors(sector):
+		existing.append(r.get("name", ""))
+	var avail: Array = []
+	for n in pool:
+		if not (n in existing):
+			avail.append(n)
+	if avail.is_empty(): return
+	if not competitors.has(sector):
+		competitors[sector] = []
+	competitors[sector].append({"name": avail[randi() % avail.size()], "share": randf_range(0.15, 0.25)})
+
+# Антимонопольное расследование: штраф + принудительный раздел доли + конкурент.
+func _trigger_antitrust(sector: String) -> void:
+	var fine: float = company_valuation() * ANTITRUST_FINE_PCT
+	if fine > 0.0:
+		gm.spend_money(minf(fine, gm.money))
+	market_share[sector] = clampf(get_share(sector) - ANTITRUST_DIVEST, 0.05, 0.98)
+	_spawn_competitor(sector)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		var sname: String = SECTOR_NAMES.get(sector, sector)
+		es.event_triggered.emit({
+			"text": "⚖ Антимонопольное дело в секторе «%s»! Штраф %s и принудительный раздел доли рынка." % [sname, gm.format_money(fine)],
+			"money": -fine, "health": 0
+		})
+
+# ── Отраслевые кризисы ────────────────────────────────────────────────────────
+func crisis_mult(sector: String) -> float:
+	if sector_crisis.has(sector):
+		return float(sector_crisis[sector].get("mult", 1.0))
+	return 1.0
+
+func has_crisis(sector: String) -> bool:
+	return sector_crisis.has(sector)
+
 # Ежемесячно: доля органически растёт от присутствия к свободному рынку
 # (1 − доля конкурентов), оставшиеся соперники слегка её точат. Поглощения
 # навсегда поднимают потолок и ослабляют эрозию вплоть до монополии.
@@ -550,11 +619,38 @@ func _update_markets() -> void:
 		cur = minf(cur + growth, avail)
 		cur -= 0.015 * rivals_n
 		market_share[s] = clampf(cur, 0.03, avail)
+		# Антимонопольный жар: копится при высокой доле
+		var heat: float = antitrust_risk(s)
+		var share_now: float = market_share[s]
+		if share_now > ANTITRUST_THRESHOLD:
+			heat += ANTITRUST_HEAT_GAIN * (share_now - ANTITRUST_THRESHOLD) / (1.0 - ANTITRUST_THRESHOLD)
+		else:
+			heat = maxf(0.0, heat - ANTITRUST_HEAT_DECAY)
+		if heat >= 1.0:
+			_trigger_antitrust(s)
+			heat = 0.4   # после раздела жар спадает, но не до нуля
+		antitrust_heat[s] = clampf(heat, 0.0, 1.5)
+		# Отраслевой кризис: тик активного / шанс нового
+		if sector_crisis.has(s):
+			sector_crisis[s].months -= 1
+			if sector_crisis[s].months <= 0:
+				sector_crisis.erase(s)
+				var es0 := get_node_or_null("/root/EventSystem")
+				if es0:
+					es0.event_triggered.emit({"text": "📈 Кризис в секторе «%s» миновал." % SECTOR_NAMES.get(s, s), "money": 0, "health": 0})
+		elif randf() < CRISIS_CHANCE:
+			var cm: float = randf_range(0.60, 0.80)
+			sector_crisis[s] = {"mult": cm, "months": randi_range(2, 4)}
+			var es1 := get_node_or_null("/root/EventSystem")
+			if es1:
+				es1.event_triggered.emit({"text": "📉 Кризис в секторе «%s»: доход −%d%% на несколько месяцев." % [SECTOR_NAMES.get(s, s), int(round((1.0 - cm) * 100.0))], "money": 0, "health": 0})
 	# забываем секторы, где бизнеса больше нет
 	for s in market_share.keys():
 		if not (s in sectors):
 			market_share.erase(s)
 			competitors.erase(s)
+			antitrust_heat.erase(s)
+			sector_crisis.erase(s)
 
 # Стоимость маркетингового захвата доли (~20 дней дохода сектора, минимум 50k).
 func market_invest_cost(sector: String) -> int:
@@ -895,6 +991,8 @@ func reset_empire() -> void:
 	active_index = 0
 	market_share.clear()
 	competitors.clear()
+	antitrust_heat.clear()
+	sector_crisis.clear()
 	executives.clear()
 	is_public = false
 	owner_fraction = 1.0
@@ -905,6 +1003,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "active_index", active_index)
 	cfg.set_value("business", "market_share", market_share)
 	cfg.set_value("business", "competitors",  competitors)
+	cfg.set_value("business", "antitrust_heat", antitrust_heat)
+	cfg.set_value("business", "sector_crisis", sector_crisis)
 	cfg.set_value("business", "executives",   executives)
 	cfg.set_value("business", "is_public",    is_public)
 	cfg.set_value("business", "owner_fraction", owner_fraction)
@@ -921,6 +1021,8 @@ func load(cfg: ConfigFile) -> void:
 	active_index = cfg.get_value("business", "active_index", 0)
 	market_share = cfg.get_value("business", "market_share", {})
 	competitors  = cfg.get_value("business", "competitors", {})
+	antitrust_heat = cfg.get_value("business", "antitrust_heat", {})
+	sector_crisis  = cfg.get_value("business", "sector_crisis", {})
 	executives   = cfg.get_value("business", "executives", [])
 	is_public      = cfg.get_value("business", "is_public", false)
 	owner_fraction = cfg.get_value("business", "owner_fraction", 1.0)

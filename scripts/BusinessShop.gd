@@ -347,6 +347,36 @@ func _make_owned_card(bt: Dictionary) -> PanelContainer:
 			if not bm.invest_market_share(sec): _flash_toast("Недостаточно денег!"))
 		mrow.add_child(mbtn)
 
+		# Антимонопольный риск + лоббирование
+		var heat: float = bm.antitrust_risk(sector)
+		if heat > 0.05:
+			var arow = HBoxContainer.new()
+			arow.add_theme_constant_override("separation", 8)
+			col.add_child(arow)
+			var hl = _lbl(arow, "⚖ Антимонопольный риск: %d%%" % int(round(heat * 100.0)),
+				Color(0.95, 0.55, 0.40) if heat > 0.6 else Color(0.88, 0.78, 0.50), 11)
+			hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var lcost: int = bm.lobby_cost(sector)
+			var lbtn = Button.new()
+			lbtn.text = "🤝 Лоббировать (%s)" % gm.format_money(lcost)
+			lbtn.add_theme_font_size_override("font_size", 11)
+			if gm.money >= lcost:
+				_style_btn(lbtn, Color(0.16, 0.12, 0.20), Color(0.50, 0.40, 0.60, 0.8))
+				lbtn.add_theme_color_override("font_color", Color(0.90, 0.80, 1.0))
+				var sec3: String = sector
+				lbtn.pressed.connect(func():
+					if not bm.lobby(sec3): _flash_toast("Недостаточно денег!"))
+			else:
+				_style_btn(lbtn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+				lbtn.disabled = true
+				lbtn.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+			arow.add_child(lbtn)
+
+		# Отраслевой кризис
+		if bm.has_crisis(sector):
+			_lbl(col, "📉 Кризис в секторе: доход −%d%%" % int(round((1.0 - bm.crisis_mult(sector)) * 100.0)),
+				Color(0.95, 0.50, 0.45), 11)
+
 		# Конкуренты в секторе — поглощения (M&A)
 		var rivals: Array = bm.get_competitors(sector)
 		for ri in range(rivals.size()):
