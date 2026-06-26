@@ -1014,14 +1014,16 @@ func _save_loop() -> void:
 	while true:
 		_save_sem.wait()
 		_save_mutex.lock()
-		var batch: Dictionary = _save_pending.duplicate()
+		# Пишем на диск ПОД мьютексом: тогда синхронный _flush_pending_for при
+		# загрузке дожидается завершения записи (а не читает файл на полпути).
+		# Сейвы мелкие и редкие — задержка незаметна.
+		for path in _save_pending.keys():
+			var cfg: ConfigFile = _save_pending[path]
+			if cfg:
+				cfg.save(path)
 		_save_pending.clear()
 		var quit: bool = _save_quit
 		_save_mutex.unlock()
-		for path in batch:
-			var cfg: ConfigFile = batch[path]
-			if cfg:
-				cfg.save(path)
 		if quit:
 			return
 
@@ -1047,8 +1049,22 @@ func _migrate_legacy_save() -> void:
 				dst.store_string(data)
 				dst.close()
 
+# Дописывает на диск отложенную (фоновую) запись конкретного слота, если она
+# ещё в очереди — чтобы загрузка не прочитала устаревший файл.
+func _flush_pending_for(path: String) -> void:
+	if not _save_mutex:
+		return
+	_save_mutex.lock()
+	var cfg: ConfigFile = _save_pending.get(path)
+	if cfg != null:
+		_save_pending.erase(path)
+	_save_mutex.unlock()
+	if cfg != null:
+		cfg.save(path)
+
 func load_game() -> void:
 	_loading = true
+	_flush_pending_for(slot_path(current_slot))
 	var cfg = ConfigFile.new()
 	if cfg.load(slot_path(current_slot)) != OK:
 		# Файла слота нет — чистый старт, без остатков предыдущего слота

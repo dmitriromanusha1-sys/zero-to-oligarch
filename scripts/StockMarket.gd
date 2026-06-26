@@ -45,6 +45,11 @@ func _ready() -> void:
 	get_node("/root/GameManager").day_changed.connect(_on_day)
 
 func _on_day(_d: int) -> void:
+	# Во время загрузки сейва day_changed шлётся только для обновления HUD —
+	# рынок прокручивать НЕ нужно, иначе загруженные цены сразу затрутся.
+	var gm := get_node_or_null("/root/GameManager")
+	if gm and gm.get("_loading"):
+		return
 	_day_counter += 1
 	_tick_event()
 	_update_prices()
