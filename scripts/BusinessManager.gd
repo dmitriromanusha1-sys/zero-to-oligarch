@@ -50,6 +50,14 @@ const SECTOR_NAMES: Dictionary = {
 	"food": "🍔 Питание", "retail": "🛍 Ретейл", "industry": "🏭 Промышленность", "finance": "🏦 Финансы",
 }
 
+# Пул названий фирм-конкурентов по секторам (для поглощений).
+const COMPETITOR_NAMES: Dictionary = {
+	"food":     ["Вкусно и точка", "Шаурма №1", "ЕдаЭкспресс", "Пельмешка", "ГастроХит"],
+	"retail":   ["Магнитик", "Пятёрочка+", "ТоргСеть", "Всёмаркет", "Лавка у дома"],
+	"industry": ["ПромЗавод", "СтальИндустрия", "ТехноФаб", "МашСтрой", "УралМет"],
+	"finance":  ["БанкИнвест", "КапиталГрупп", "ФинХолдинг", "АктивКапитал", "ИнвестДом"],
+}
+
 const EMPLOYEE_TYPES: Array = [
 	{"id":"worker",     "name":"Разнорабочий", "cost":5000,   "salary_per_day":200,  "income_bonus":500,   "icon":"👷", "desc":"Базовый персонал. Минимальный вклад."},
 	{"id":"manager",    "name":"Менеджер",     "cost":40000,  "salary_per_day":800,  "income_bonus":2000,  "icon":"👔", "desc":"Организует работу, улучшает логистику."},
@@ -144,11 +152,12 @@ var executives: Array = []
 # ── Доля рынка по секторам ────────────────────────────────────────────────────
 # sector → твоя доля рынка 0..1. Конкуренты точат долю, доля влияет на доход.
 var market_share: Dictionary = {}
+# sector → Array of {name:String, share:float} — фирмы-конкуренты для поглощений.
+var competitors: Dictionary = {}
 
 const COMP_MULT_MIN    : float = 0.65   # доход при крошечной доле рынка
 const COMP_MULT_MAX    : float = 1.35   # доход при доминировании
 const MARKET_INVEST    : float = 0.12   # +доля за один маркетинговый вброс
-const COMPETITOR_EROSION: float = 0.05  # конкуренты отъедают долю каждый месяц
 
 # Базовая ставка налога на прибыль бизнеса (× множитель сложности)
 const TAX_RATE: float = 0.13
@@ -331,30 +340,81 @@ func active_sectors() -> Array:
 		if s != "": seen[s] = true
 	return seen.keys()
 
-# Естественный потолок доли от присутствия (число точек и их уровни).
-func _sector_target_share(sector: String) -> float:
+# Присутствие игрока в секторе (число точек с учётом уровней).
+func _presence_pts(sector: String) -> float:
 	var pts: float = 0.0
 	for biz in businesses:
 		if sector_of(String(biz.get("type_id", ""))) == sector:
 			pts += 1.0 + 0.5 * int(biz.get("level", 0))
-	if pts <= 0.0:
-		return 0.0
-	return clampf(0.15 + 0.12 * pts, 0.15, 0.85)
+	return pts
 
-# Ежемесячно: доля тянется к цели от присутствия, конкуренты её точат.
+# ── Конкуренты / поглощения (M&A) ─────────────────────────────────────────────
+# Создаёт фирмы-конкурентов при первом выходе в сектор (делят рынок между собой).
+func _ensure_competitors(sector: String) -> void:
+	if competitors.has(sector):
+		return
+	var pool: Array = COMPETITOR_NAMES.get(sector, [])
+	var names: Array = pool.duplicate()
+	names.shuffle()
+	var rivals: Array = []
+	for i in range(mini(3, names.size())):
+		rivals.append({"name": names[i], "share": randf_range(0.18, 0.30)})
+	competitors[sector] = rivals
+
+func get_competitors(sector: String) -> Array:
+	return competitors.get(sector, [])
+
+func _rival_total(sector: String) -> float:
+	var t: float = 0.0
+	for r in get_competitors(sector):
+		t += float(r.get("share", 0.0))
+	return t
+
+# Стоимость поглощения конкурента (по его доле и оценке дохода рынка сектора).
+func acquisition_cost(sector: String, index: int) -> int:
+	var rivals: Array = get_competitors(sector)
+	if index < 0 or index >= rivals.size(): return 0
+	var rshare: float = float(rivals[index].get("share", 0.0))
+	var my_inc: float = 0.0
+	for biz in businesses:
+		if sector_of(String(biz.get("type_id", ""))) == sector:
+			my_inc += _income_of(biz)
+	var full_market: float = my_inc / maxf(get_share(sector), 0.08)
+	return int(maxf(100000.0, rshare * full_market * 200.0))
+
+func acquire_competitor(sector: String, index: int) -> bool:
+	var rivals: Array = get_competitors(sector)
+	if index < 0 or index >= rivals.size(): return false
+	var cost: int = acquisition_cost(sector, index)
+	if not gm.spend_money(cost): return false
+	var rshare: float = float(rivals[index].get("share", 0.0))
+	market_share[sector] = clampf(get_share(sector) + rshare, 0.05, 0.98)
+	rivals.remove_at(index)
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+# Ежемесячно: доля органически растёт от присутствия к свободному рынку
+# (1 − доля конкурентов), оставшиеся соперники слегка её точат. Поглощения
+# навсегда поднимают потолок и ослабляют эрозию вплоть до монополии.
 func _update_markets() -> void:
 	var sectors := active_sectors()
 	for s in sectors:
+		_ensure_competitors(s)
+		var rivals_n: int = get_competitors(s).size()
+		var avail: float = clampf(1.0 - _rival_total(s), 0.05, 0.98)
 		var cur: float = get_share(s)
-		var target: float = _sector_target_share(s)
 		if cur <= 0.0:
-			cur = target * 0.6   # выходишь на рынок небольшим игроком
-		cur = lerpf(cur, target, 0.35) - COMPETITOR_EROSION
-		market_share[s] = clampf(cur, 0.05, 0.92)
+			cur = minf(0.12, avail)
+		var growth: float = 0.025 + 0.012 * _presence_pts(s)
+		cur = minf(cur + growth, avail)
+		cur -= 0.015 * rivals_n
+		market_share[s] = clampf(cur, 0.03, avail)
 	# забываем секторы, где бизнеса больше нет
 	for s in market_share.keys():
 		if not (s in sectors):
 			market_share.erase(s)
+			competitors.erase(s)
 
 # Стоимость маркетингового захвата доли (~20 дней дохода сектора, минимум 50k).
 func market_invest_cost(sector: String) -> int:
@@ -694,12 +754,14 @@ func reset_empire() -> void:
 	businesses.clear()
 	active_index = 0
 	market_share.clear()
+	competitors.clear()
 	executives.clear()
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "businesses",   businesses)
 	cfg.set_value("business", "active_index", active_index)
 	cfg.set_value("business", "market_share", market_share)
+	cfg.set_value("business", "competitors",  competitors)
 	cfg.set_value("business", "executives",   executives)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
@@ -712,6 +774,7 @@ func load(cfg: ConfigFile) -> void:
 	businesses   = cfg.get_value("business", "businesses", [])
 	active_index = cfg.get_value("business", "active_index", 0)
 	market_share = cfg.get_value("business", "market_share", {})
+	competitors  = cfg.get_value("business", "competitors", {})
 	executives   = cfg.get_value("business", "executives", [])
 	# Миграция старого формата (один бизнес) → портфель
 	if businesses.is_empty():

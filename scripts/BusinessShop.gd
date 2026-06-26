@@ -290,6 +290,36 @@ func _make_owned_card(bt: Dictionary) -> PanelContainer:
 			if not bm.invest_market_share(sec): _flash_toast("Недостаточно денег!"))
 		mrow.add_child(mbtn)
 
+		# Конкуренты в секторе — поглощения (M&A)
+		var rivals: Array = bm.get_competitors(sector)
+		for ri in range(rivals.size()):
+			var r = rivals[ri]
+			var crow = HBoxContainer.new()
+			crow.add_theme_constant_override("separation", 8)
+			col.add_child(crow)
+			var rl = _lbl(crow, "🏴 %s · доля рынка %d%%" % [
+				r.get("name", "?"), int(round(float(r.get("share", 0.0)) * 100.0))],
+				Color(0.85, 0.62, 0.62), 11)
+			rl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var acost: int = bm.acquisition_cost(sector, ri)
+			var abtn = Button.new()
+			abtn.text = "🤝 Поглотить (%s)" % gm.format_money(acost)
+			abtn.add_theme_font_size_override("font_size", 11)
+			if gm.money >= acost:
+				_style_btn(abtn, Color(0.18, 0.10, 0.20), Color(0.60, 0.30, 0.60, 0.8))
+				abtn.add_theme_color_override("font_color", Color(0.95, 0.75, 1.0))
+				var sec2: String = sector
+				var idx2: int = ri
+				abtn.pressed.connect(func():
+					if not bm.acquire_competitor(sec2, idx2): _flash_toast("Недостаточно денег!"))
+			else:
+				_style_btn(abtn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+				abtn.disabled = true
+				abtn.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+			crow.add_child(abtn)
+		if rivals.is_empty():
+			_lbl(col, "👑 Монополия в секторе — конкурентов не осталось!", Color(1.0, 0.85, 0.40), 11)
+
 	var lvl_row = HBoxContainer.new()
 	lvl_row.add_theme_constant_override("separation", 8)
 	col.add_child(lvl_row)
