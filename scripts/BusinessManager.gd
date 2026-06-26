@@ -75,6 +75,18 @@ const EXECUTIVE_TYPES: Array = [
 ]
 const BASE_MGMT_CAPACITY: int = 2
 
+# ── R&D / корпоративные технологии ────────────────────────────────────────────
+# Постоянные бонусы всей империи. requires — id предшествующих исследований.
+const TECHS: Array = [
+	{"id":"automation","name":"Автоматизация",       "icon":"🤖","cost":2_000_000,  "requires":[],                  "income":0.10, "desc":"+10% к доходу всех бизнесов."},
+	{"id":"logistics", "name":"Логистика",           "icon":"🚚","cost":8_000_000,  "requires":["automation"],      "income":0.15, "desc":"+15% к доходу всех бизнесов."},
+	{"id":"crm",       "name":"CRM и маркетинг",      "icon":"📊","cost":15_000_000, "requires":["automation"],      "brand":0.20,  "desc":"+20% к силе бренда сетей."},
+	{"id":"governance","name":"Корп. управление",     "icon":"🏛","cost":30_000_000, "requires":[],                  "capacity":3,  "desc":"+3 к ёмкости управления."},
+	{"id":"taxopt",    "name":"Налоговая оптимизация","icon":"🧾","cost":50_000_000, "requires":["governance"],      "tax":0.30,    "desc":"−30% налога на прибыль."},
+	{"id":"rnd_lab",   "name":"R&D-лаборатория",      "icon":"🔬","cost":120_000_000,"requires":["logistics","crm"], "income":0.25, "desc":"+25% к доходу всех бизнесов."},
+	{"id":"expansion", "name":"Корп. экспансия",      "icon":"🌐","cost":200_000_000,"requires":["governance"],      "maxbiz":2,    "desc":"+2 к лимиту бизнесов."},
+]
+
 # Рецепт синергии: набор сотрудников (по типам), который определяет
 # 100%-ную комплектацию команды. "bonus" — максимальный бонус к прибыли
 # (получаемый на корпорации; для бизнесов поменьше масштабируется вниз).
@@ -119,7 +131,7 @@ func active_business() -> Dictionary:
 # с управлением). Бомж — 1, дальше +1 каждые 3 титула.
 func max_businesses() -> int:
 	var t: int = gm.current_title_index if gm else 0
-	return 1 + int(t / 3)
+	return 1 + int(t / 3) + research_max_biz()
 
 # Старые поля как вид на активный бизнес — чтобы существующий код/UI работал.
 var owned_business_id: String:
@@ -152,6 +164,9 @@ var executives: Array = []
 # IPO: публична ли компания и какой долей владеет игрок (1.0 = частная).
 var is_public: bool = false
 var owner_fraction: float = 1.0
+
+# Изученные технологии (id → true)
+var researched: Dictionary = {}
 
 # ── Доля рынка по секторам ────────────────────────────────────────────────────
 # sector → твоя доля рынка 0..1. Конкуренты точат долю, доля влияет на доход.
@@ -299,6 +314,8 @@ func get_gross_income() -> float:
 			total *= cb.business_mult()
 	# Эффективность управления: перегруженная империя теряет доход
 	total *= efficiency_mult()
+	# Технологии: постоянный бонус к доходу
+	total *= research_income_mult()
 	return total
 
 # Доход, который получает игрок: валовый × доля владения (после IPO < 100%).
@@ -373,6 +390,54 @@ func get_business_networth() -> float:
 		return owner_fraction * company_valuation()
 	return get_empire_value() * 0.7
 
+# ── R&D / технологии ──────────────────────────────────────────────────────────
+func _get_tech(id: String) -> Dictionary:
+	for t in TECHS:
+		if t.id == id: return t
+	return {}
+
+func is_researched(id: String) -> bool:
+	return researched.get(id, false)
+
+func can_research(id: String) -> bool:
+	if is_researched(id): return false
+	var t := _get_tech(id)
+	if t.is_empty(): return false
+	for req in t.get("requires", []):
+		if not is_researched(req): return false
+	return true
+
+func research(id: String) -> bool:
+	if not can_research(id): return false
+	var t := _get_tech(id)
+	if not gm.spend_money(t.cost): return false
+	researched[id] = true
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+func _tech_sum(key: String) -> float:
+	var s: float = 0.0
+	for t in TECHS:
+		if is_researched(t.id):
+			s += float(t.get(key, 0.0))
+	return s
+
+func research_income_mult() -> float:
+	return 1.0 + _tech_sum("income")
+
+func research_brand_bonus() -> float:
+	return _tech_sum("brand")
+
+func research_capacity() -> int:
+	return int(_tech_sum("capacity"))
+
+func research_tax_reduction() -> float:
+	return minf(0.6, _tech_sum("tax"))
+
+func research_max_biz() -> int:
+	return int(_tech_sum("maxbiz"))
+
 # Сколько точек (филиалов) данного типа в империи.
 func branch_count(type_id: String) -> int:
 	var n: int = 0
@@ -391,7 +456,7 @@ func franchise_cost(type_id: String) -> int:
 # Бренд-множитель к доходу точки этого типа (чем больше точек, тем выше).
 func brand_mult(type_id: String) -> float:
 	var extra: int = maxi(0, branch_count(type_id) - 1)
-	return 1.0 + minf(BRAND_BONUS_MAX, BRAND_BONUS_STEP * extra)
+	return 1.0 + minf(BRAND_BONUS_MAX, BRAND_BONUS_STEP * extra) + research_brand_bonus()
 
 # ── Доля рынка / конкуренты ───────────────────────────────────────────────────
 func sector_of(type_id: String) -> String:
@@ -519,7 +584,7 @@ func management_load() -> int:
 
 # Ёмкость управления = база (сам) + вклад топ-менеджмента.
 func management_capacity() -> int:
-	var cap: int = BASE_MGMT_CAPACITY
+	var cap: int = BASE_MGMT_CAPACITY + research_capacity()
 	for e in executives:
 		var et := _get_executive_type(String(e.get("type_id", "")))
 		if not et.is_empty(): cap += int(et.capacity)
@@ -754,7 +819,7 @@ func process_day() -> void:
 			var tax_mult: float = 1.0
 			if sm and sm.has_method("get_diff"):
 				tax_mult = sm.get_diff().get("tax", 1.0)
-			var tax: float = month_income * TAX_RATE * tax_mult
+			var tax: float = month_income * TAX_RATE * tax_mult * (1.0 - research_tax_reduction())
 			if tax > 0.0:
 				gm.spend_money(tax)
 				total_tax_paid += tax
@@ -833,6 +898,7 @@ func reset_empire() -> void:
 	executives.clear()
 	is_public = false
 	owner_fraction = 1.0
+	researched.clear()
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "businesses",   businesses)
@@ -842,6 +908,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "executives",   executives)
 	cfg.set_value("business", "is_public",    is_public)
 	cfg.set_value("business", "owner_fraction", owner_fraction)
+	cfg.set_value("business", "researched",   researched)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
 	cfg.set_value("business", "total_earned",  total_earned)
@@ -857,6 +924,7 @@ func load(cfg: ConfigFile) -> void:
 	executives   = cfg.get_value("business", "executives", [])
 	is_public      = cfg.get_value("business", "is_public", false)
 	owner_fraction = cfg.get_value("business", "owner_fraction", 1.0)
+	researched     = cfg.get_value("business", "researched", {})
 	# Миграция старого формата (один бизнес) → портфель
 	if businesses.is_empty():
 		var old_id := String(cfg.get_value("business", "owned_id", ""))

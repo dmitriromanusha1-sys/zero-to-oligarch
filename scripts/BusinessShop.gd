@@ -81,7 +81,7 @@ func _build_ui() -> void:
 	_tabs.size     = Vector2(980, 602)
 	_panel.add_child(_tabs)
 
-	var tab_names = ["Бизнес", "Сотрудники", "Банк", "Кредит", "Охрана"]
+	var tab_names = ["Бизнес", "Сотрудники", "🔬 Технологии", "Банк", "Кредит", "Охрана"]
 	for i in tab_names.size():
 		var tab_name = tab_names[i]
 		var scroll = ScrollContainer.new()
@@ -110,6 +110,7 @@ func open() -> void:
 func _refresh() -> void:
 	_build_business_tab()
 	_build_team_tab()
+	_build_research_tab()
 	_build_bank_tab()
 	_build_loan_tab()
 	_build_security_tab()
@@ -780,6 +781,72 @@ func _make_hire_card(et: Dictionary) -> PanelContainer:
 # ══════════════════════════════════════════════════════════════════════════════
 # Банк
 # ══════════════════════════════════════════════════════════════════════════════
+func _build_research_tab() -> void:
+	var vb = _vbox("🔬 Технологии")
+	for c in vb.get_children(): c.queue_free()
+	var inc: int = int(round((bm.research_income_mult() - 1.0) * 100.0))
+	var brand: int = int(round(bm.research_brand_bonus() * 100.0))
+	var cap: int = bm.research_capacity()
+	var taxr: int = int(round(bm.research_tax_reduction() * 100.0))
+	var mbiz: int = bm.research_max_biz()
+	_lbl(vb, "🔬 Корпоративные технологии — постоянные бонусы империи", Color(0.70, 0.85, 1.0), 15)
+	_lbl(vb, "Активно: доход +%d%% · бренд +%d%% · управление +%d · налог −%d%% · лимит +%d" % [
+		inc, brand, cap, taxr, mbiz], Color(0.60, 0.85, 0.70), 12)
+	vb.add_child(_sep())
+	for t in bm.TECHS:
+		vb.add_child(_make_tech_card(t))
+
+func _make_tech_card(t: Dictionary) -> PanelContainer:
+	var card = PanelContainer.new()
+	var done: bool = bm.is_researched(t.id)
+	var avail: bool = bm.can_research(t.id)
+	var cs = StyleBoxFlat.new()
+	if done:    cs.bg_color = Color(0.05, 0.12, 0.06, 0.92); cs.border_color = Color(0.30, 0.70, 0.30, 0.85)
+	elif avail: cs.bg_color = Color(0.07, 0.09, 0.14, 0.92); cs.border_color = Color(0.30, 0.45, 0.65, 0.75)
+	else:       cs.bg_color = Color(0.06, 0.06, 0.09, 0.85); cs.border_color = Color(0.20, 0.20, 0.26, 0.5)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8)
+	cs.content_margin_left = 12; cs.content_margin_right = 12
+	cs.content_margin_top = 8; cs.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", cs)
+	var row = HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon = Label.new(); icon.text = t.icon
+	icon.add_theme_font_size_override("font_size", 26)
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col = VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, t.name, Color(0.85, 1.0, 0.85) if done else Color(0.85, 0.88, 0.95), 14)
+	_lbl(col, t.desc, Color(0.62, 0.72, 0.62), 11)
+	if done:
+		var d = Label.new(); d.text = "✓ Изучено"
+		d.add_theme_font_size_override("font_size", 12)
+		d.add_theme_color_override("font_color", Color(0.50, 1.0, 0.50))
+		d.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(d)
+	elif avail:
+		var btn = Button.new(); btn.text = "🔬 %s" % gm.format_money(t.cost)
+		btn.add_theme_font_size_override("font_size", 12)
+		if gm.money >= float(t.cost):
+			_style_btn(btn, Color(0.10, 0.16, 0.24), Color(0.30, 0.50, 0.70, 0.8))
+			btn.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+			var tid: String = t.id
+			btn.pressed.connect(func():
+				if not bm.research(tid): _flash_toast("Недостаточно денег!"))
+		else:
+			_style_btn(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+			btn.disabled = true
+			btn.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+		row.add_child(btn)
+	else:
+		var reqnames: Array = []
+		for r in t.requires:
+			reqnames.append(bm._get_tech(r).get("name", r))
+		var l = Label.new(); l.text = "🔒 Нужно: %s" % ", ".join(reqnames)
+		l.add_theme_font_size_override("font_size", 11)
+		l.add_theme_color_override("font_color", Color(0.62, 0.52, 0.42))
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(l)
+	return card
+
 func _build_bank_tab() -> void:
 	var vb = _vbox("Банк")
 	for c in vb.get_children(): c.queue_free()
