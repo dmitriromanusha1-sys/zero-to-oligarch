@@ -219,9 +219,13 @@ func _build(day: int) -> void:
 		# Стоимость жизни: цена базовой корзины с учётом инфляции
 		var gm_econ: Node = get_node_or_null("/root/GameManager")
 		if gm_econ and gm_econ.has_method("shop_price"):
+			var zm_econ: Node = get_node_or_null("/root/ZoneManager")
+			var zone_str: String = ""
+			if zm_econ and zm_econ.has_method("cost_of_living_mult"):
+				zone_str = "  ·  район ×%.2f" % zm_econ.cost_of_living_mult()
 			var col_lbl := Label.new()
-			col_lbl.text = "🛒 Стоимость жизни: хлеб %s, вода %s (база 50/30)" % [
-				gm_econ.format_money(gm_econ.shop_price(50)), gm_econ.format_money(gm_econ.shop_price(30))]
+			col_lbl.text = "🛒 Стоимость жизни: хлеб %s, вода %s (база 50/30)%s" % [
+				gm_econ.format_money(gm_econ.shop_price(50)), gm_econ.format_money(gm_econ.shop_price(30)), zone_str]
 			col_lbl.add_theme_font_size_override("font_size", 12)
 			col_lbl.add_theme_color_override("font_color", Color(0.45, 0.25, 0.10))
 			col_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD

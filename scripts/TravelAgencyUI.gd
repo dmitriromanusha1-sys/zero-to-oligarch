@@ -277,6 +277,14 @@ func _make_zone_card(i: int) -> PanelContainer:
 	name_lbl.add_theme_color_override("font_color", nc)
 	info_col.add_child(name_lbl)
 
+	# Стоимость жизни в районе — чтобы сравнить перед переездом
+	if _zm.has_method("cost_of_living_mult"):
+		var col_lbl = Label.new()
+		col_lbl.text = "💰 жизнь ×%.2f" % _zm.cost_of_living_mult(i)
+		col_lbl.add_theme_font_size_override("font_size", 9)
+		col_lbl.add_theme_color_override("font_color", Color(0.62, 0.50, 0.32))
+		info_col.add_child(col_lbl)
+
 	var sub_lbl = Label.new()
 	sub_lbl.add_theme_font_size_override("font_size", 10)
 	if is_current:

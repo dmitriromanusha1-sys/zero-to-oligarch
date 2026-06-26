@@ -47,6 +47,15 @@ const ZONE_META: Array = [
 	{"name": "Высший свет",              "icon": "⭐", "bg": Color(0.04, 0.05, 0.08)},
 ]
 
+# Стоимость жизни по районам: в Трущобах дёшево, в Высшем свете дорого.
+# Множитель потребительских цен (еда, лекарства, услуги, образование) по зоне.
+# Богатые районы платят больше (зарплатная лестница), но и жить там дороже.
+const COST_OF_LIVING: Array = [0.80, 0.90, 1.00, 1.15, 1.35, 1.60, 1.90, 2.10, 2.50]
+
+func cost_of_living_mult(zone: int = -1) -> float:
+	var z: int = current_zone if zone < 0 else zone
+	return COST_OF_LIVING[clampi(z, 0, COST_OF_LIVING.size() - 1)]
+
 # Центр зоны в мировых координатах
 func get_zone_center(z: int) -> Vector2:
 	var g: Vector2i = ZONE_GRID[z]

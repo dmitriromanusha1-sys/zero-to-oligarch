@@ -872,7 +872,10 @@ func get_finance() -> Dictionary:
 func shop_price(base: float) -> int:
 	var cb := get_node_or_null("/root/CentralBankManager")
 	var idx: float = cb.price_index if cb else 1.0
-	return int(round(base * idx))
+	# Стоимость жизни зависит от района: дороже в богатых зонах
+	var zm := get_node_or_null("/root/ZoneManager")
+	var col: float = zm.cost_of_living_mult() if zm and zm.has_method("cost_of_living_mult") else 1.0
+	return int(round(base * idx * col))
 
 # Множитель дохода от работы (индекс зарплат ЦБ): в рецессию отстаёт от цен,
 # в бум обгоняет их.
