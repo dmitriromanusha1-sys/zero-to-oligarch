@@ -151,7 +151,6 @@ func travel_to(target_zone: int) -> void:
 		if not is_zone_complete():
 			push_warning("travel_to: условия не выполнены")
 			return
-	print(">>> travel_to: переходим в зону ", target_zone)
 	# Легальная разблокировка зоны через турфирму (условия уже проверены выше)
 	if target_zone > max_zone_reached:
 		max_zone_reached = target_zone

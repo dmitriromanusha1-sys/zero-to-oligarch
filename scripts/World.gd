@@ -1533,7 +1533,6 @@ func _ready() -> void:
 		player_node.global_position = zm.get_zone_center(zm.current_zone) + Vector2(0, 150)
 
 	_last_zone = zm.current_zone
-	print("World._ready: карта 7500×7500 готова, стартовая зона ", zm.current_zone)
 
 # ─── Центр зоны в мировых координатах ───────────────────────────────────────
 func _zone_center(z: int) -> Vector2:

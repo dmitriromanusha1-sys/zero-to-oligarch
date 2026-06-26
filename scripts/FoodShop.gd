@@ -192,6 +192,17 @@ func _refresh() -> void:
 		buff_lbl.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
 		_list.add_child(buff_lbl)
 
+	# Контекст цен: активный ценовой шок (дефицит/распродажа), чтобы цены были понятны
+	var _cb = get_node_or_null("/root/CentralBankManager")
+	if _cb and _cb.has_method("has_shock") and _cb.has_shock():
+		var up: bool = _cb.price_shock > 1.0
+		var shock_lbl := Label.new()
+		shock_lbl.text = "🛒 %s: цены %s на %d%% (ещё %d дн.)" % [_cb.shock_name,
+			("выше" if up else "ниже"), int(round(absf(_cb.price_shock - 1.0) * 100.0)), _cb.shock_days_left]
+		shock_lbl.add_theme_font_size_override("font_size", 11)
+		shock_lbl.add_theme_color_override("font_color", Color(1.0, 0.55, 0.4) if up else Color(0.55, 1.0, 0.6))
+		_list.add_child(shock_lbl)
+
 	_list.add_child(HSeparator.new())
 
 	var shown := 0

@@ -161,10 +161,10 @@ func _header(t: String) -> void:
 	l.add_theme_color_override("font_color", Color(0.55, 0.72, 0.95))
 	_vb.add_child(l)
 
-func _row(name: String, value: float, color: Color = Color(0.85, 0.88, 0.95)) -> void:
+func _row(label_text: String, value: float, color: Color = Color(0.85, 0.88, 0.95)) -> void:
 	var row := HBoxContainer.new()
 	var n := Label.new()
-	n.text = name
+	n.text = label_text
 	n.add_theme_font_size_override("font_size", 14)
 	n.add_theme_color_override("font_color", Color(0.72, 0.76, 0.85))
 	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
