@@ -124,23 +124,59 @@ func _build_business_tab() -> void:
 	var vb = _vbox("Бизнес")
 	for c in vb.get_children(): c.queue_free()
 
+	# Заголовок империи: сколько бизнесов из лимита
+	var cap: int = bm.max_businesses()
+	var cnt: int = bm.business_count()
+	_lbl(vb, "🏢 Бизнесов в империи: %d / %d   📈 Доход: +%s/день" % [
+		cnt, cap, gm.format_money(bm.get_daily_income())], Color(0.70, 0.85, 1.00), 14)
+
+	# Переключатель активного бизнеса (если их несколько)
+	if cnt > 1:
+		vb.add_child(_make_switcher())
+
+	# Карточка активного бизнеса
 	var owned_id = bm.owned_business_id
 	var cur_idx  = -1
 	for i in bm.BUSINESS_TYPES.size():
 		if bm.BUSINESS_TYPES[i].id == owned_id:
 			cur_idx = i
-
 	if cur_idx >= 0:
 		vb.add_child(_make_owned_card(bm.BUSINESS_TYPES[cur_idx]))
-		vb.add_child(_sep())
 
+	vb.add_child(_sep())
+
+	# Каталог: открыть НОВЫЙ бизнес (компании накапливаются, а не заменяются)
+	var at_cap: bool = cnt >= cap
+	_lbl(vb, "Лимит бизнесов достигнут — повышай титул" if at_cap else "Открыть новый бизнес:",
+		Color(0.85, 0.55, 0.45) if at_cap else Color(0.75, 0.78, 0.85), 13)
 	for i in bm.BUSINESS_TYPES.size():
 		var bt        : Dictionary = bm.BUSINESS_TYPES[i]
-		var is_owned  = bt.id == owned_id
 		var is_locked = gm.current_title_index < bt.min_title
-		var is_past   = cur_idx >= 0 and i < cur_idx
-		if not is_owned:
-			vb.add_child(_make_biz_card(bt, is_locked, is_past, cur_idx))
+		vb.add_child(_make_biz_card(bt, is_locked, at_cap, cur_idx))
+
+# Переключатель бизнесов империи — чипы по каждому владению.
+func _make_switcher() -> Control:
+	var box = HFlowContainer.new()
+	box.add_theme_constant_override("h_separation", 6)
+	box.add_theme_constant_override("v_separation", 6)
+	for i in bm.businesses.size():
+		var b = bm.businesses[i]
+		var bt = bm._get_type(String(b.get("type_id", "")))
+		if bt.is_empty(): continue
+		var btn = Button.new()
+		btn.text = "%s %s" % [bt.get("icon", "?"), bt.get("name", "?")]
+		btn.add_theme_font_size_override("font_size", 12)
+		var is_active: bool = (i == bm.active_index)
+		if is_active:
+			_style_btn(btn, Color(0.10, 0.22, 0.12), Color(0.30, 0.72, 0.30, 0.9))
+			btn.add_theme_color_override("font_color", Color(0.70, 1.0, 0.70))
+		else:
+			_style_btn(btn, Color(0.08, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.6))
+			btn.add_theme_color_override("font_color", Color(0.78, 0.80, 0.88))
+		var idx: int = i
+		btn.pressed.connect(func(): bm.set_active(idx))
+		box.add_child(btn)
+	return box
 
 func _make_owned_card(bt: Dictionary) -> PanelContainer:
 	var card = PanelContainer.new()
@@ -180,7 +216,7 @@ func _make_owned_card(bt: Dictionary) -> PanelContainer:
 	_lbl(ncol, bt.name + "   " + stars, Color(0.60, 1.00, 0.60), 18)
 	_lbl(ncol,
 		"📈 +%s/день   👥 %d/%d сотр.   🏆 Всего: %s   📅 %d дней" % [
-			gm.format_money(bm.get_daily_income()),
+			gm.format_money(bm.get_active_income()),
 			bm.employees.size(), bt.max_employees,
 			gm.format_money(bm.total_earned),
 			bm.business_days
@@ -356,15 +392,16 @@ func _make_biz_card(bt: Dictionary, is_locked: bool, is_past: bool, cur_idx: int
 		btn.add_theme_color_override("font_color", Color(0.35, 0.35, 0.42))
 	else:
 		var can_afford = gm.money >= bt.cost
-		var is_upgrade = bm.owned_business_id != ""
-		btn.text = "⬆ Апгрейд" if is_upgrade else "🚀 Открыть"
-		if can_afford:
+		# is_past здесь означает «лимит бизнесов достигнут» (передаётся из вкладки)
+		var at_cap = is_past
+		btn.text = "🚀 Открыть"
+		if can_afford and not at_cap:
 			var bid = bt.id
 			_style_btn(btn, Color(0.08, 0.20, 0.10), Color(0.25, 0.62, 0.25, 0.85))
 			btn.add_theme_color_override("font_color", Color(0.70, 1.00, 0.70))
 			btn.pressed.connect(func():
-				var ok = bm.open_business(bid) if not is_upgrade else bm.upgrade_business(bid)
-				if not ok: _flash_toast("Недостаточно денег!")
+				var ok = bm.open_business(bid)
+				if not ok: _flash_toast("Недостаточно денег или лимит бизнесов!")
 			)
 		else:
 			_style_btn(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))

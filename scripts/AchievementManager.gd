@@ -142,9 +142,15 @@ func _check_reputation(val: int) -> void:
 func _check_business(_ignored = null) -> void:
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm == null: return
-	if bm.owned_business_id != "": unlock("a15")
-	if bm.employees.size() >= 10:  unlock("a16")
-	if bm.owned_business_id == "corporation": unlock("a17")
+	if bm.business_count() > 0: unlock("a15")
+	# Сотрудники: максимум по любому бизнесу империи
+	var max_emp: int = 0
+	for b in bm.businesses:
+		max_emp = maxi(max_emp, (b.get("employees", []) as Array).size())
+	if max_emp >= 10: unlock("a16")
+	# Корпорация — если хоть один бизнес в империи стал корпорацией
+	for b in bm.businesses:
+		if String(b.get("type_id", "")) == "corporation": unlock("a17"); break
 
 func _check_education(level: int) -> void:
 	if level >= 1: unlock("a25")
