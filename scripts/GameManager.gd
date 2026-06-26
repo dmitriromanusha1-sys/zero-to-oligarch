@@ -308,8 +308,9 @@ var tutorial_done: bool = false
 var _save_thread: Thread = null
 var _save_sem: Semaphore = null
 var _save_mutex: Mutex = null
-var _save_pending_cfg: ConfigFile = null
-var _save_pending_path: String = ""
+# Ящик отложенных записей: путь_слота → ConfigFile. Ключ по пути, чтобы быстрые
+# сохранения В РАЗНЫЕ слоты не затирали друг друга (иначе теряется сейв слота).
+var _save_pending: Dictionary = {}
 var _save_quit: bool = false
 
 func slot_path(slot: int) -> String:
@@ -986,11 +987,11 @@ func save_game() -> void:
 	if tm: tm.save(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.save(cfg)
-	# Запись на диск — в фоновом потоке (ящик «последний снимок»), чтобы кадр не фризил
+	# Запись на диск — в фоновом потоке, чтобы кадр не фризил. Ящик по пути слота:
+	# последний снимок КАЖДОГО слота сохраняется, слоты не затирают друг друга.
 	if _save_mutex:
 		_save_mutex.lock()
-		_save_pending_cfg = cfg
-		_save_pending_path = slot_path(current_slot)
+		_save_pending[slot_path(current_slot)] = cfg
 		_save_mutex.unlock()
 		_save_sem.post()
 	else:
@@ -1005,13 +1006,14 @@ func _save_loop() -> void:
 	while true:
 		_save_sem.wait()
 		_save_mutex.lock()
-		var cfg: ConfigFile = _save_pending_cfg
-		var path: String = _save_pending_path
-		_save_pending_cfg = null
+		var batch: Dictionary = _save_pending.duplicate()
+		_save_pending.clear()
 		var quit: bool = _save_quit
 		_save_mutex.unlock()
-		if cfg:
-			cfg.save(path)
+		for path in batch:
+			var cfg: ConfigFile = batch[path]
+			if cfg:
+				cfg.save(path)
 		if quit:
 			return
 
