@@ -75,6 +75,18 @@ const EXECUTIVE_TYPES: Array = [
 ]
 const BASE_MGMT_CAPACITY: int = 2
 
+# ── Международная экспансия ───────────────────────────────────────────────────
+# Зарубежные рынки. income_mult — множитель к экспортному доходу, risk — шанс
+# негативного события/мес, entry_cost — цена выхода на рынок.
+const FOREIGN_MARKETS: Array = [
+	{"id":"cis",     "name":"СНГ",        "flag":"🌍","entry_cost":20_000_000,    "income_mult":0.8, "risk":0.04, "desc":"Близкие рынки, низкий риск."},
+	{"id":"asia",    "name":"Азия",       "flag":"🏯","entry_cost":100_000_000,   "income_mult":1.3, "risk":0.08, "desc":"Быстрый рост, высокая конкуренция."},
+	{"id":"europe",  "name":"Европа",     "flag":"🏰","entry_cost":300_000_000,   "income_mult":1.6, "risk":0.06, "desc":"Премиальный рынок, строгие законы."},
+	{"id":"america", "name":"Америка",    "flag":"🗽","entry_cost":800_000_000,   "income_mult":2.0, "risk":0.10, "desc":"Огромный рынок и большие риски."},
+	{"id":"global",  "name":"Глобальный", "flag":"🌐","entry_cost":3_000_000_000, "income_mult":2.5, "risk":0.12, "desc":"Транснациональная корпорация."},
+]
+const FOREIGN_INCOME_FACTOR: float = 0.15   # доля внутреннего дохода на уровень присутствия
+
 # ── R&D / корпоративные технологии ────────────────────────────────────────────
 # Постоянные бонусы всей империи. requires — id предшествующих исследований.
 const TECHS: Array = [
@@ -167,6 +179,9 @@ var owner_fraction: float = 1.0
 
 # Изученные технологии (id → true)
 var researched: Dictionary = {}
+
+# Зарубежные рынки: market_id → {level:int}
+var foreign: Dictionary = {}
 
 # ── Доля рынка по секторам ────────────────────────────────────────────────────
 # sector → твоя доля рынка 0..1. Конкуренты точат долю, доля влияет на доход.
@@ -318,8 +333,8 @@ func _income_of(biz: Dictionary) -> float:
 func get_active_income() -> float:
 	return _income_of(active_business())
 
-# Валовый доход всей империи в день (вся прибыль компании, до доли владельца).
-func get_gross_income() -> float:
+# Внутренний (домашний) доход империи: бизнесы × цикл × эффективность × R&D.
+func _domestic_income() -> float:
 	var total: float = 0.0
 	for biz in businesses:
 		total += _income_of(biz)
@@ -327,11 +342,89 @@ func get_gross_income() -> float:
 		var cb := get_node_or_null("/root/CentralBankManager")
 		if cb and cb.has_method("business_mult"):
 			total *= cb.business_mult()
-	# Эффективность управления: перегруженная империя теряет доход
 	total *= efficiency_mult()
-	# Технологии: постоянный бонус к доходу
 	total *= research_income_mult()
 	return total
+
+# Доход одного зарубежного рынка (масштабируется внутренним доходом).
+func market_income(id: String) -> float:
+	var m := _get_market(id)
+	if m.is_empty() or not is_in_market(id): return 0.0
+	return _domestic_income() * FOREIGN_INCOME_FACTOR * float(m.income_mult) * market_level(id)
+
+# Суммарный доход от зарубежной экспансии.
+func foreign_income() -> float:
+	var total: float = 0.0
+	for id in foreign:
+		total += market_income(String(id))
+	return total
+
+# Валовый доход всей империи в день (внутренний + зарубежный).
+func get_gross_income() -> float:
+	return _domestic_income() + foreign_income()
+
+# ── Международная экспансия ───────────────────────────────────────────────────
+func _get_market(id: String) -> Dictionary:
+	for m in FOREIGN_MARKETS:
+		if m.id == id: return m
+	return {}
+
+func is_in_market(id: String) -> bool:
+	return foreign.has(id)
+
+func market_level(id: String) -> int:
+	return int((foreign.get(id, {}) as Dictionary).get("level", 0))
+
+func can_enter(id: String) -> bool:
+	var m := _get_market(id)
+	return not m.is_empty() and not is_in_market(id) and businesses.size() > 0 and gm.money >= float(m.entry_cost)
+
+func enter_market(id: String) -> bool:
+	var m := _get_market(id)
+	if m.is_empty() or is_in_market(id): return false
+	if not gm.spend_money(m.entry_cost): return false
+	foreign[id] = {"level": 1}
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+func market_upgrade_cost(id: String) -> int:
+	var m := _get_market(id)
+	if m.is_empty(): return 0
+	return int(float(m.entry_cost) * 0.5 * (market_level(id) + 1))
+
+func upgrade_market(id: String) -> bool:
+	if not is_in_market(id): return false
+	if not gm.spend_money(market_upgrade_cost(id)): return false
+	foreign[id]["level"] = market_level(id) + 1
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+# Ежемесячные зарубежные риски: девальвация (потеря денег) или уход с рынка.
+func _foreign_risk_tick() -> void:
+	for id in foreign.keys():
+		var m := _get_market(String(id))
+		if m.is_empty(): continue
+		if randf() >= float(m.risk):
+			continue
+		var es := get_node_or_null("/root/EventSystem")
+		if randf() < 0.6:
+			# Девальвация / штраф: теряем часть денег, привязанную к доходу рынка
+			var loss: float = market_income(String(id)) * 60.0
+			loss = minf(loss, gm.money)
+			gm.spend_money(loss)
+			if es:
+				es.event_triggered.emit({"text": "💱 %s: валютный кризис на рынке «%s» — потеряно %s." % [m.flag, m.name, gm.format_money(loss)], "money": -loss, "health": 0})
+		else:
+			# Снижение присутствия (национализация/уход)
+			var lv: int = market_level(String(id))
+			if lv <= 1:
+				foreign.erase(id)
+			else:
+				foreign[id]["level"] = lv - 1
+			if es:
+				es.event_triggered.emit({"text": "🏛 %s: на рынке «%s» национализировали часть активов — присутствие снижено." % [m.flag, m.name], "money": 0, "health": 0})
 
 # Доход, который получает игрок: валовый × доля владения (после IPO < 100%).
 func get_daily_income() -> float:
@@ -344,6 +437,11 @@ func get_empire_value() -> float:
 		var bt := _get_type(String(biz.get("type_id", "")))
 		if not bt.is_empty():
 			total += bt.cost * (1.0 + int(biz.get("level", 0)) * 0.25)
+	# Зарубежные активы — по балансовой стоимости присутствия
+	for id in foreign:
+		var m := _get_market(String(id))
+		if not m.is_empty():
+			total += float(m.entry_cost) * 0.6 * market_level(String(id))
 	return total
 
 # ── IPO / публичная компания ──────────────────────────────────────────────────
@@ -927,6 +1025,7 @@ func process_day() -> void:
 					})
 		month_income = 0.0
 		_update_markets()   # конкуренты и доля рынка
+		_foreign_risk_tick()   # зарубежные риски
 	if gm.day % 30 == 0 and bank_deposit > 0:
 		var interest := bank_deposit * get_tiered_rate()
 		bank_deposit += interest
@@ -997,6 +1096,7 @@ func reset_empire() -> void:
 	is_public = false
 	owner_fraction = 1.0
 	researched.clear()
+	foreign.clear()
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "businesses",   businesses)
@@ -1009,6 +1109,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "is_public",    is_public)
 	cfg.set_value("business", "owner_fraction", owner_fraction)
 	cfg.set_value("business", "researched",   researched)
+	cfg.set_value("business", "foreign",      foreign)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
 	cfg.set_value("business", "total_earned",  total_earned)
@@ -1027,6 +1128,7 @@ func load(cfg: ConfigFile) -> void:
 	is_public      = cfg.get_value("business", "is_public", false)
 	owner_fraction = cfg.get_value("business", "owner_fraction", 1.0)
 	researched     = cfg.get_value("business", "researched", {})
+	foreign        = cfg.get_value("business", "foreign", {})
 	# Миграция старого формата (один бизнес) → портфель
 	if businesses.is_empty():
 		var old_id := String(cfg.get_value("business", "owned_id", ""))

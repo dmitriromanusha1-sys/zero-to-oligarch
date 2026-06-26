@@ -81,7 +81,7 @@ func _build_ui() -> void:
 	_tabs.size     = Vector2(980, 602)
 	_panel.add_child(_tabs)
 
-	var tab_names = ["Бизнес", "Сотрудники", "🔬 Технологии", "Банк", "Кредит", "Охрана"]
+	var tab_names = ["Бизнес", "Сотрудники", "🔬 Технологии", "🌍 Экспансия", "Банк", "Кредит", "Охрана"]
 	for i in tab_names.size():
 		var tab_name = tab_names[i]
 		var scroll = ScrollContainer.new()
@@ -111,6 +111,7 @@ func _refresh() -> void:
 	_build_business_tab()
 	_build_team_tab()
 	_build_research_tab()
+	_build_expansion_tab()
 	_build_bank_tab()
 	_build_loan_tab()
 	_build_security_tab()
@@ -875,6 +876,67 @@ func _make_tech_card(t: Dictionary) -> PanelContainer:
 		l.add_theme_color_override("font_color", Color(0.62, 0.52, 0.42))
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		row.add_child(l)
+	return card
+
+func _build_expansion_tab() -> void:
+	var vb = _vbox("🌍 Экспансия")
+	for c in vb.get_children(): c.queue_free()
+	_lbl(vb, "🌍 Международная экспансия — зарубежные рынки", Color(0.70, 0.85, 1.0), 15)
+	_lbl(vb, "Доход от экспансии: +%s/день" % gm.format_money(bm.foreign_income()), Color(0.60, 0.85, 0.70), 12)
+	vb.add_child(_sep())
+	for m in bm.FOREIGN_MARKETS:
+		vb.add_child(_make_market_card(m))
+
+func _make_market_card(m: Dictionary) -> PanelContainer:
+	var card = PanelContainer.new()
+	var inside: bool = bm.is_in_market(m.id)
+	var cs = StyleBoxFlat.new()
+	if inside: cs.bg_color = Color(0.05, 0.11, 0.14, 0.92); cs.border_color = Color(0.30, 0.60, 0.70, 0.85)
+	else:      cs.bg_color = Color(0.07, 0.08, 0.12, 0.90); cs.border_color = Color(0.25, 0.30, 0.40, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8)
+	cs.content_margin_left = 12; cs.content_margin_right = 12
+	cs.content_margin_top = 8; cs.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", cs)
+	var row = HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon = Label.new(); icon.text = m.flag
+	icon.add_theme_font_size_override("font_size", 26)
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col = VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	if inside:
+		var lvl: int = bm.market_level(m.id)
+		_lbl(col, "%s · уровень %d" % [m.name, lvl], Color(0.80, 0.92, 1.0), 14)
+		_lbl(col, "Доход +%s/день · риск %d%%/мес" % [gm.format_money(bm.market_income(m.id)), int(round(float(m.risk) * 100.0))],
+			Color(0.60, 0.75, 0.70), 11)
+		var uc: int = bm.market_upgrade_cost(m.id)
+		var ub = Button.new(); ub.text = "⬆ Усилить (%s)" % gm.format_money(uc)
+		ub.add_theme_font_size_override("font_size", 12)
+		if gm.money >= uc:
+			_style_btn(ub, Color(0.10, 0.18, 0.16), Color(0.30, 0.60, 0.50, 0.8))
+			ub.add_theme_color_override("font_color", Color(0.70, 1.0, 0.90))
+			var mid: String = m.id
+			ub.pressed.connect(func():
+				if not bm.upgrade_market(mid): _flash_toast("Недостаточно денег!"))
+		else:
+			_style_btn(ub, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+			ub.disabled = true; ub.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+		row.add_child(ub)
+	else:
+		_lbl(col, m.name, Color(0.85, 0.88, 0.95), 14)
+		_lbl(col, "%s · доходность ×%.1f · риск %d%%/мес" % [m.desc, float(m.income_mult), int(round(float(m.risk) * 100.0))],
+			Color(0.60, 0.65, 0.72), 11)
+		var eb = Button.new(); eb.text = "🚀 Выйти на рынок (%s)" % gm.format_money(int(m.entry_cost))
+		eb.add_theme_font_size_override("font_size", 12)
+		if bm.can_enter(m.id):
+			_style_btn(eb, Color(0.12, 0.16, 0.26), Color(0.40, 0.45, 0.75, 0.85))
+			eb.add_theme_color_override("font_color", Color(0.80, 0.85, 1.0))
+			var mid2: String = m.id
+			eb.pressed.connect(func():
+				if not bm.enter_market(mid2): _flash_toast("Недостаточно денег или нет бизнеса!"))
+		else:
+			_style_btn(eb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+			eb.disabled = true; eb.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+		row.add_child(eb)
 	return card
 
 func _build_bank_tab() -> void:
