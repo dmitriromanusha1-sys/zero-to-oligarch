@@ -216,6 +216,27 @@ func _build(day: int) -> void:
 			dep_info.add_theme_font_size_override("font_size", 12)
 			dep_info.add_theme_color_override("font_color", Color(0.15, 0.45, 0.15))
 			vbox.add_child(dep_info)
+		# Стоимость жизни: цена базовой корзины с учётом инфляции
+		var gm_econ: Node = get_node_or_null("/root/GameManager")
+		if gm_econ and gm_econ.has_method("shop_price"):
+			var col_lbl := Label.new()
+			col_lbl.text = "🛒 Стоимость жизни: хлеб %s, вода %s (база 50/30)" % [
+				gm_econ.format_money(gm_econ.shop_price(50)), gm_econ.format_money(gm_econ.shop_price(30))]
+			col_lbl.add_theme_font_size_override("font_size", 12)
+			col_lbl.add_theme_color_override("font_color", Color(0.45, 0.25, 0.10))
+			col_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+			vbox.add_child(col_lbl)
+			# Суммарно уплачено налогов (НДФЛ + налог на прибыль)
+			var wage_tax: float = gm_econ.get("total_wage_tax") if gm_econ.get("total_wage_tax") != null else 0.0
+			var biz_tax: float = 0.0
+			if bm_cb and bm_cb.get("total_tax_paid") != null:
+				biz_tax = bm_cb.total_tax_paid
+			if wage_tax + biz_tax > 0.0:
+				var tax_lbl := Label.new()
+				tax_lbl.text = "🧾 Уплачено налогов всего: %s" % gm_econ.format_money(wage_tax + biz_tax)
+				tax_lbl.add_theme_font_size_override("font_size", 12)
+				tax_lbl.add_theme_color_override("font_color", Color(0.5, 0.2, 0.15))
+				vbox.add_child(tax_lbl)
 
 	# Личная финансовая сводка
 	var gm: Node = get_node_or_null("/root/GameManager")

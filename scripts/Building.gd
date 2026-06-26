@@ -343,7 +343,7 @@ func _begin_shift(hours: int, gm: Node, am) -> void:
 		_launch_minigame(base_pay, gm, am)
 	else:
 		if am: am.play_coin()
-		gm.add_money(base_pay)
+		gm.add_work_income(base_pay)
 		_flash_result("✅ +" + gm.format_money(base_pay), Color(0.4, 1.0, 0.4))
 		_flash_visual(Color(0.6, 1.0, 0.5))
 		FloatingText.spawn(get_tree(), global_position, "+" + gm.format_money(base_pay), Color(0.4, 1.0, 0.4))
@@ -352,7 +352,7 @@ func _begin_shift(hours: int, gm: Node, am) -> void:
 func _launch_minigame(base_pay: float, gm: Node, am) -> void:
 	var mg = get_tree().get_first_node_in_group("minigame")
 	if mg == null:
-		gm.add_money(base_pay)
+		gm.add_work_income(base_pay)
 		_flash_result("✅ +" + gm.format_money(base_pay), Color(0.4, 1.0, 0.4))
 		_start_cooldown()
 		return
@@ -368,7 +368,7 @@ func _launch_minigame(base_pay: float, gm: Node, am) -> void:
 func _on_minigame_done(mult: float, base_pay: float, gm: Node, am) -> void:
 	_minigame_running = false
 	var earned: float = base_pay * mult
-	gm.add_money(earned)
+	gm.add_work_income(earned)
 	var col := Color(0.4, 1.0, 0.4) if mult >= 1.0 else Color(1.0, 0.5, 0.3)
 	_flash_result("+" + gm.format_money(earned), col)
 	FloatingText.spawn(get_tree(), global_position, "+" + gm.format_money(earned), col)

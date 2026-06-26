@@ -277,6 +277,11 @@ var day: int = 1
 var current_hour: int = 8
 var current_minute: int = 0
 var money_history: Array = []   # [{day, money}] — каждые 5 дней
+var month_wage_income: float = 0.0   # доход от работы за месяц — база для НДФЛ
+var total_wage_tax: float = 0.0
+# Подоходный налог: ставка и необлагаемый минимум в месяц (индексируется ценами)
+const WAGE_TAX_RATE: float = 0.13
+const WAGE_TAX_ALLOWANCE: float = 5000.0
 var meal_buff_days: int = 0       # оставшихся дней бонуса после обеда
 var meal_drain_bonus: float = 0.0 # снижение расхода еды/воды (0.0–0.80, чем дальше зона/дороже обед — тем больше % и дольше срок)
 
@@ -371,6 +376,12 @@ func add_money(amount: float) -> void:
 	emit_signal("money_changed", money)
 	_check_title()
 	emit_signal("net_worth_changed", get_net_worth())
+
+# Доход от работы (смены): зачисляется как обычные деньги, но копится для
+# месячного подоходного налога (НДФЛ) с необлагаемым минимумом.
+func add_work_income(amount: float) -> void:
+	month_wage_income += amount
+	add_money(amount)
 
 func spend_money(amount: float) -> bool:
 	if money < amount:
@@ -607,6 +618,24 @@ func next_day() -> void:
 			if not spend_money(rent):
 				current_housing_index = 0
 				emit_signal("housing_changed", HOUSINGS[0].name)
+		# Подоходный налог (НДФЛ) с дохода от работы сверх необлагаемого минимума.
+		# Минимум индексируется ценами, поэтому ранний этап практически не страдает.
+		var idx: float = cb.price_index if cb else 1.0
+		var allowance: float = WAGE_TAX_ALLOWANCE * idx
+		var tax_mult: float = _diff().get("tax", 1.0) as float
+		var taxable: float = maxf(0.0, month_wage_income - allowance)
+		if taxable > 0.0:
+			var wage_tax: float = taxable * WAGE_TAX_RATE * tax_mult
+			spend_money(wage_tax)
+			total_wage_tax += wage_tax
+			var _smn := get_node_or_null("/root/SettingsManager")
+			var es_t := get_node_or_null("/root/EventSystem")
+			if es_t and (not _smn or _smn.notify_taxes):
+				es_t.event_triggered.emit({
+					"text": "🧾 Подоходный налог: −%s (с дохода от работы выше %s)" % [format_money(wage_tax), format_money(allowance)],
+					"money": -wage_tax, "health": 0
+				})
+		month_wage_income = 0.0
 
 	# Здоровье от жилья теперь начисляется ПОЧАСОВО во время сна (см. sleep_hours),
 	# а не раз в день — поэтому здесь больше ничего не делаем.
@@ -886,6 +915,8 @@ func save_game() -> void:
 	cfg.set_value("player", "max_stat_days", max_stat_days)
 	cfg.set_value("player", "season_start_offset", season_start_offset)
 	cfg.set_value("player", "tutorial_done", tutorial_done)
+	cfg.set_value("player", "month_wage_income", month_wage_income)
+	cfg.set_value("player", "total_wage_tax", total_wage_tax)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.save(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -996,6 +1027,8 @@ func load_game() -> void:
 	season_start_offset = cfg.get_value("player", "season_start_offset", season_start_offset)
 	# Старые сейвы без ключа — игрок уже играет, обучение не показываем
 	tutorial_done = cfg.get_value("player", "tutorial_done", true)
+	month_wage_income = cfg.get_value("player", "month_wage_income", 0.0)
+	total_wage_tax = cfg.get_value("player", "total_wage_tax", 0.0)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.load(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -1031,6 +1064,7 @@ func _reset_state() -> void:
 	meal_buff_days = 0; meal_drain_bonus = 0.0
 	max_stat = 100.0; max_stat_days = 0; _collapsing = false
 	tutorial_done = false   # новая игра — показать обучение
+	month_wage_income = 0.0; total_wage_tax = 0.0
 	# Стартовый сезон по сложности: легко-весна, средне-лето, тяжело-осень, хардкор-зима
 	var sm_diff = get_node_or_null("/root/SettingsManager")
 	var diff: String = sm_diff.difficulty if sm_diff else "normal"
