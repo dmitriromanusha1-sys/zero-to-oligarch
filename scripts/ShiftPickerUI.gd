@@ -5,12 +5,10 @@ extends CanvasLayer
 
 const SHIFT_HOURS := [4, 6, 8, 10, 12]
 
-# Расход ресурсов в час. ВАЖНО: должны совпадать с Building.gd (ENERGY_PER_H,
-# HUNGER_PER_H, THIRST_PER_H, HEALTH_PER_H_HEAVY) — это то, что реально списывается
-# в _begin_shift. Иначе превью обманывает игрока.
+# Расход энергии/здоровья в час. ВАЖНО: должны совпадать с Building.gd
+# (ENERGY_PER_H, HEALTH_PER_H_HEAVY) — это то, что реально списывается в
+# _begin_shift. Еда/вода списываются через GameManager (× WORK_DRAIN_MULT).
 const ENERGY_PER_H := {"light": 3.125, "heavy": 5.0}
-const HUNGER_PER_H := {"light": 0.5,  "heavy": 0.9}
-const THIRST_PER_H := {"light": 0.6,  "heavy": 1.1}
 const HEALTH_PER_H_HEAVY := 1.0
 
 var _gm: Node
@@ -131,8 +129,8 @@ func _refresh(job_name: String, hourly_rate: float, is_heavy: bool) -> void:
 		pay_lbl.add_theme_color_override("font_color", UITheme.GREEN if enough else UITheme.TEXT_DIM)
 		info.add_child(pay_lbl)
 		var cost_lbl := Label.new()
-		var hunger_cost: float = _gm.get_hourly_hunger_drain() * hours
-		var thirst_cost: float = _gm.get_hourly_thirst_drain() * hours
+		var hunger_cost: float = _gm.get_hourly_hunger_drain() * hours * _gm.WORK_DRAIN_MULT
+		var thirst_cost: float = _gm.get_hourly_thirst_drain() * hours * _gm.WORK_DRAIN_MULT
 		cost_lbl.text = "⚡ -%d    🍖 -%d    💧 -%d" % [
 			int(round(e_cost)), int(round(hunger_cost)), int(round(thirst_cost))]
 		if is_heavy:

@@ -113,7 +113,7 @@ func _refresh() -> void:
 
 	for hours in SLEEP_HOURS:
 		var e_gain: float = minf(e_per * hours, 100.0 - _gm.energy)
-		# Во сне расход еды/воды вдвое меньше обычного (10/12 в час → 5/6)
+		# Во сне расход еды/воды вдвое меньше обычного (3/4 в час → 1.5/2)
 		var hunger_cost: float = _gm.get_hourly_hunger_drain() * hours * _gm.SLEEP_DRAIN_MULT
 		var thirst_cost: float = _gm.get_hourly_thirst_drain() * hours * _gm.SLEEP_DRAIN_MULT
 		var hp_delta: float = hp_per * hours

@@ -91,9 +91,9 @@ const ZONE_BUILDINGS: Array = [
 		# ── Центральный хаб ─────────────────────────────────────────────────────────
 		{"name":"🚌 Автовокзал",         "action":"Уехать в другой район",           "reward":0,   "cd":999,  "pos":Vector2(   0, 320), "color":Color(0.16,0.26,0.46), "travel":true,                "tex":"res://assets/textures/Avtovoczal.png"},
 		# ── Начальная работа (дворы) ────────────────────────────────────────────────
-		{"name":"🗑 Мусорные баки",      "action":"Собирать бутылки (+100 ₽)",       "reward":100, "cd":2.0,  "pos":Vector2(-850, 720), "color":Color(0.28,0.26,0.20), "minigame":true, "heavy":true, "tex":"res://assets/textures/trash_bins.png"},
-		{"name":"🧹 Подъезды",           "action":"Работать дворником (+80 ₽)",      "reward":80,  "cd":1.5,  "pos":Vector2(-200, 680), "color":Color(0.40,0.35,0.28), "minigame":true, "heavy":true, "tex":"res://assets/textures/podyezd.png"},
-		{"name":"🍺 Ларёк «Уют»",        "action":"Подработать в ларьке (+60 ₽)",    "reward":60,  "cd":1.5,  "pos":Vector2( 350, 680), "color":Color(0.48,0.32,0.12), "minigame":true, "food_shop":"🍺 Ларёк «Уют»", "food_items":["bread","water","kvas","tea","pills"], "tex":"res://assets/textures/laryok.png"},
+		{"name":"🗑 Мусорные баки",      "action":"Собирать бутылки (+160 ₽)",       "reward":160, "cd":2.0,  "pos":Vector2(-850, 720), "color":Color(0.28,0.26,0.20), "minigame":true, "heavy":true, "tex":"res://assets/textures/trash_bins.png"},
+		{"name":"🧹 Подъезды",           "action":"Работать дворником (+130 ₽)",     "reward":130, "cd":1.5,  "pos":Vector2(-200, 680), "color":Color(0.40,0.35,0.28), "minigame":true, "heavy":true, "tex":"res://assets/textures/podyezd.png"},
+		{"name":"🍺 Ларёк «Уют»",        "action":"Подработать в ларьке (+110 ₽)",   "reward":110, "cd":1.5,  "pos":Vector2( 350, 680), "color":Color(0.48,0.32,0.12), "minigame":true, "food_shop":"🍺 Ларёк «Уют»", "food_items":["bread","water","kvas","tea","pills"], "tex":"res://assets/textures/laryok.png"},
 		# ── Стройка (северо-восток) ─────────────────────────────────────────────────
 		{"name":"🏗 Стройка",            "action":"Разнорабочий (+400 ₽)",           "reward":400, "cd":4.0,  "pos":Vector2( 900,-480), "color":Color(0.40,0.32,0.18), "minigame":true, "heavy":true, "edu_req":2, "tex":"res://assets/textures/Stroika.png"},
 	],

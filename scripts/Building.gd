@@ -283,11 +283,11 @@ func _do_action() -> void:
 
 # ── Работа сменами ────────────────────────────────────────────────────────────
 # Доход = ставка/час × часы × коэффициент мини-игры. Ставка берётся из money_reward
-# (8-часовая смена ≈ старый баланс). Расход ресурсов в час:
+# (8-часовая смена ≈ старый баланс). Расход энергии в час на смене:
 const ENERGY_PER_H := {"light": 3.125, "heavy": 5.0}
-const HUNGER_PER_H := {"light": 0.5,  "heavy": 0.9}
-const THIRST_PER_H := {"light": 0.6,  "heavy": 1.1}
 const HEALTH_PER_H_HEAVY := 1.0
+# Расход еды/воды за часы смены считает GameManager (HUNGER/THIRST_PER_HOUR ×
+# WORK_DRAIN_MULT) — на работе ешь/пьёшь реже, чем шатаясь по городу.
 
 func _hourly_rate() -> float:
 	return money_reward / 8.0
@@ -332,8 +332,9 @@ func _begin_shift(hours: int, gm: Node, am) -> void:
 	if is_heavy_labor:
 		gm.health = clamp(gm.health - HEALTH_PER_H_HEAVY * hours, 0.0, 100.0)
 		gm.emit_signal("health_changed", gm.health)
-	# Смена занимает игровое время. Расход еды/воды (10/12 в час) — в advance_time.
-	gm.advance_time(hours)
+	# Смена занимает игровое время; расход еды/воды за эти часы — пониженный
+	# (WORK_DRAIN_MULT), считается в advance_time.
+	gm.advance_time(hours, gm.WORK_DRAIN_MULT)
 	var base_pay: float = _hourly_rate() * hours
 	if use_minigame:
 		_launch_minigame(base_pay, gm, am)
