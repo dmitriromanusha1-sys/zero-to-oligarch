@@ -417,11 +417,14 @@ const DEHYDRATE_HP_PER_HOUR := 1.5
 
 var _warned_low: bool = false
 
+# Сезон влияет на расход: летом сильнее жажда, зимой сильнее голод (см. SEASONS).
 func get_hourly_hunger_drain() -> float:
-	return HUNGER_PER_HOUR * (1.0 - meal_drain_bonus)
+	var season_m: float = get_season().get("hunger", 1.0) as float
+	return HUNGER_PER_HOUR * (1.0 - meal_drain_bonus) * season_m
 
 func get_hourly_thirst_drain() -> float:
-	return THIRST_PER_HOUR * (1.0 - meal_drain_bonus)
+	var season_m: float = get_season().get("thirst", 1.0) as float
+	return THIRST_PER_HOUR * (1.0 - meal_drain_bonus) * season_m
 
 # Применяет расход еды/воды и почасовой урон здоровью за каждый прошедший час.
 # drain_mult: 1.0 обычно, 0.5 во сне.
