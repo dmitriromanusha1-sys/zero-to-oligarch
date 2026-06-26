@@ -218,7 +218,7 @@ func _refresh_work_tab() -> void:
 
 	# Ставка/смена (та же механика, что и у обычной работы)
 	var salary_lbl := Label.new()
-	salary_lbl.text = "💼 Ставка: " + _gm.format_money(_work_reward / 8.0) + " / час   🕒 смена 4–12 ч"
+	salary_lbl.text = "💼 Ставка: " + _gm.format_money((_work_reward / 8.0) * _gm.wage_factor()) + " / час   🕒 смена 4–12 ч"
 	salary_lbl.add_theme_font_size_override("font_size", 15)
 	salary_lbl.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))
 	salary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -325,8 +325,9 @@ func _add_item_row(item_id: String, item: Dictionary) -> void:
 	eff_lbl.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6))
 	info.add_child(eff_lbl)
 
+	var price: int = _gm.shop_price(item.price)
 	var price_lbl := Label.new()
-	price_lbl.text = _gm.format_money(item.price)
+	price_lbl.text = _gm.format_money(price)
 	price_lbl.add_theme_font_size_override("font_size", 13)
 	price_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	price_lbl.custom_minimum_size = Vector2(80, 0)
@@ -336,7 +337,7 @@ func _add_item_row(item_id: String, item: Dictionary) -> void:
 	btn.text = "Заказать" if item.type == "meal" else "Купить"
 	btn.custom_minimum_size = Vector2(88, 28)
 	btn.add_theme_font_size_override("font_size", 11)
-	var can_afford: bool = _gm.money >= item.price
+	var can_afford: bool = _gm.money >= price
 	if can_afford:
 		btn.add_theme_color_override("font_color", Color(0.60, 1.0, 0.70))
 		var bs := StyleBoxFlat.new()
@@ -358,7 +359,7 @@ func _add_item_row(item_id: String, item: Dictionary) -> void:
 
 func _buy(item_id: String) -> void:
 	var item: Dictionary = _im.ITEMS[item_id]
-	if not _gm.spend_money(item.price):
+	if not _gm.spend_money(_gm.shop_price(item.price)):
 		return
 	var am: Node = get_node_or_null("/root/AudioManager")
 	if item.type == "meal":

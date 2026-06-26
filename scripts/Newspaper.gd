@@ -197,6 +197,17 @@ func _build(day: int) -> void:
 		infl_lbl.add_theme_color_override("font_color", infl_color)
 		infl_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 		vbox.add_child(infl_lbl)
+		# Фаза экономического цикла и индекс зарплат
+		if cb.has_method("phase_label"):
+			var phase_lbl := Label.new()
+			var ph_color := Color(0.1, 0.4, 0.2)
+			if cb.is_recession(): ph_color = Color(0.6, 0.15, 0.1)
+			elif cb.is_boom(): ph_color = Color(0.1, 0.45, 0.25)
+			phase_lbl.text = "%s  |  Индекс зарплат: %.3f" % [cb.phase_label(), cb.wage_index]
+			phase_lbl.add_theme_font_size_override("font_size", 12)
+			phase_lbl.add_theme_color_override("font_color", ph_color)
+			phase_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+			vbox.add_child(phase_lbl)
 		var bm_cb: Node = get_node_or_null("/root/BusinessManager")
 		if bm_cb and bm_cb.bank_deposit > 0:
 			var dep_rate: float = bm_cb.get_tiered_rate()

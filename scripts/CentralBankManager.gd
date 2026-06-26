@@ -21,6 +21,18 @@ const LOAN_SPREAD: float = 0.04
 var key_rate: float = 0.16      # стартовая ключевая ставка: 16%/год (как в РФ 2024)
 var inflation: float = 0.08     # стартовая инфляция: 8%/год
 var price_index: float = 1.0    # накопленный индекс цен (1.0 = базовый уровень)
+var wage_index: float = 1.0     # накопленный индекс зарплат (доход от работы)
+
+# Экономический цикл: normal | boom | recession
+var phase: String = "normal"
+var phase_months_left: int = 0
+
+# Насколько быстро растут зарплаты относительно инфляции в каждой фазе.
+# В норме зарплаты чуть отстают от цен (мягкое давление), в рецессию почти
+# замораживаются (цены растут — доход стоит), в бум обгоняют инфляцию.
+const PHASE_WAGE_GROWTH := {"normal": 1.00, "boom": 1.35, "recession": 0.25}
+# Дополнительная тяга инфляции в фазе (бум/спад разгоняют цены).
+const PHASE_INFL_DRIFT  := {"normal": 0.0, "boom": 0.008, "recession": 0.012}
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -55,6 +67,29 @@ func format_inflation() -> String:
 func format_key_rate() -> String:
 	return "%.1f%% /год" % [key_rate * 100.0]
 
+# ── Геттеры экономики для игрока ──────────────────────────────────────────────
+
+# Множитель потребительских цен (еда, лекарства, услуги, образование, транспорт)
+func price_mult() -> float:
+	return price_index
+
+# Множитель дохода от работы (зарплаты)
+func wage_mult() -> float:
+	return wage_index
+
+func is_recession() -> bool:
+	return phase == "recession"
+
+func is_boom() -> bool:
+	return phase == "boom"
+
+# Короткая метка фазы для UI
+func phase_label() -> String:
+	match phase:
+		"boom":      return "📈 Экономический бум"
+		"recession": return "📉 Рецессия"
+		_:           return "⚖ Стабильность"
+
 # ── Ежемесячная обработка ────────────────────────────────────────────────────
 
 func process_month() -> void:
@@ -63,10 +98,18 @@ func process_month() -> void:
 	# 1. Обновляем накопленный индекс цен (годовую инфляцию делим на 12)
 	price_index *= (1.0 + inflation / 12.0)
 
+	# 1b. Индекс зарплат растёт медленнее/быстрее цен в зависимости от фазы
+	var wage_growth: float = (inflation / 12.0) * (PHASE_WAGE_GROWTH.get(phase, 0.90) as float)
+	wage_index *= (1.0 + wage_growth)
+
+	# 1c. Смена фаз экономического цикла
+	_update_phase(es)
+
 	# 2. Случайное изменение инфляции с возвратом к целевым 7%/год
-	#    Шок: ±1.2% годовых за месяц, плюс тяга к 7%
+	#    Шок: ±1.2% годовых за месяц, плюс тяга к 7%, плюс разгон в фазе цикла
 	var infl_shock: float = _rng.randf_range(-0.012, 0.015)
 	infl_shock += (0.07 - inflation) * 0.12
+	infl_shock += PHASE_INFL_DRIFT.get(phase, 0.0) as float
 	var old_infl: float = inflation
 	inflation = clampf(inflation + infl_shock, INFL_MIN, INFL_MAX)
 	inflation = roundf(inflation * 200.0) / 200.0    # шаг 0.5%
@@ -108,12 +151,46 @@ func process_month() -> void:
 				"money": 0, "health": 0
 			})
 
+# Переходы экономического цикла: из нормы можно сорваться в бум или рецессию
+# (2–4 мес), после чего экономика возвращается к стабильности.
+func _update_phase(es: Node) -> void:
+	if phase != "normal":
+		phase_months_left -= 1
+		if phase_months_left <= 0:
+			phase = "normal"
+			if es:
+				es.event_triggered.emit({
+					"text": "⚖ Экономика стабилизировалась — цены и зарплаты выровнялись.",
+					"money": 0, "health": 0
+				})
+		return
+	var roll: float = _rng.randf()
+	if roll < 0.07:
+		phase = "recession"
+		phase_months_left = _rng.randi_range(2, 4)
+		if es:
+			es.event_triggered.emit({
+				"text": "📉 Экономический спад! Цены растут, а зарплаты почти не двигаются. Тяжёлые времена настали.",
+				"money": 0, "health": 0
+			})
+	elif roll < 0.13:
+		phase = "boom"
+		phase_months_left = _rng.randi_range(2, 4)
+		if es:
+			es.event_triggered.emit({
+				"text": "📈 Экономический бум! Зарплаты и бизнес идут в гору — лови момент.",
+				"money": 0, "health": 0
+			})
+
 # ── Сохранение ───────────────────────────────────────────────────────────────
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("cb", "key_rate",    key_rate)
 	cfg.set_value("cb", "inflation",   inflation)
 	cfg.set_value("cb", "price_index", price_index)
+	cfg.set_value("cb", "wage_index",  wage_index)
+	cfg.set_value("cb", "phase",       phase)
+	cfg.set_value("cb", "phase_left",  phase_months_left)
 
 func load_data(cfg: ConfigFile) -> void:
 	var saved_rate: float = cfg.get_value("cb", "key_rate", -1.0)
@@ -139,8 +216,14 @@ func load_data(cfg: ConfigFile) -> void:
 		inflation = 0.08
 
 	price_index = cfg.get_value("cb", "price_index", 1.0)
+	wage_index  = cfg.get_value("cb", "wage_index", 1.0)
+	phase       = cfg.get_value("cb", "phase", "normal")
+	phase_months_left = cfg.get_value("cb", "phase_left", 0)
 
 func reset() -> void:
 	key_rate    = 0.16
 	inflation   = 0.08
 	price_index = 1.0
+	wage_index  = 1.0
+	phase       = "normal"
+	phase_months_left = 0

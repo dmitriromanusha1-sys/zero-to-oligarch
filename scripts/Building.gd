@@ -290,7 +290,10 @@ const HEALTH_PER_H_HEAVY := 1.0
 # WORK_DRAIN_MULT) — на работе ешь/пьёшь реже, чем шатаясь по городу.
 
 func _hourly_rate() -> float:
-	return money_reward / 8.0
+	# Доход от работы индексируется зарплатами ЦБ (растут с инфляцией, отстают в рецессию)
+	var gm := get_node_or_null("/root/GameManager")
+	var wf: float = gm.wage_factor() if gm and gm.has_method("wage_factor") else 1.0
+	return (money_reward / 8.0) * wf
 
 # Любая оплачиваемая смена (включая подработку в магазинах еды), но не казино/лечение
 func _is_paid_work() -> bool:
@@ -376,13 +379,14 @@ func _on_minigame_done(mult: float, base_pay: float, gm: Node, am) -> void:
 
 # Лечение (поликлиника) — без смены
 func _do_heal(gm: Node, am) -> void:
-	if heal_cost > 0.0 and not gm.spend_money(heal_cost):
-		_flash_sub("💸 Нужно %s" % gm.format_money(heal_cost), Color(1.0, 0.45, 0.4))
+	var cost: int = gm.shop_price(heal_cost) if gm.has_method("shop_price") else int(heal_cost)
+	if cost > 0 and not gm.spend_money(cost):
+		_flash_sub("💸 Нужно %s" % gm.format_money(cost), Color(1.0, 0.45, 0.4))
 		return
 	gm.health = minf(gm.health + heal_amount, gm.stat_max())
 	gm.emit_signal("health_changed", gm.health)
 	var heal_msg := "❤ +%.0f здоровья" % heal_amount
-	if heal_cost > 0.0: heal_msg += "  −" + gm.format_money(heal_cost)
+	if cost > 0: heal_msg += "  −" + gm.format_money(cost)
 	_flash_result(heal_msg, Color(0.4, 1.0, 0.5))
 	_flash_visual(Color(0.4, 1.0, 0.6))
 	if am: am.play_buy()

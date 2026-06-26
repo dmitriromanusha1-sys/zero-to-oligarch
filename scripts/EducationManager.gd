@@ -49,7 +49,8 @@ func buy_next() -> bool:
 	if level >= LEVELS.size() - 1:
 		return false
 	var gm: Node = get_node("/root/GameManager")
-	var price: float = LEVELS[level + 1].price
+	# Цена обучения индексируется инфляцией (как и прочие услуги)
+	var price: int = gm.shop_price(LEVELS[level + 1].price) if gm.has_method("shop_price") else int(LEVELS[level + 1].price)
 	if not gm.spend_money(price):
 		return false
 	level += 1

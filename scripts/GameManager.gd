@@ -836,6 +836,21 @@ func get_finance() -> Dictionary:
 		expense += (lm.get_monthly_total() as float) / 30.0
 	return {"income": income, "expense": expense, "networth": get_net_worth()}
 
+# ── Экономика: влияние инфляции на цены и доход ───────────────────────────────
+# Текущая цена товара/услуги с учётом накопленного индекса цен ЦБ.
+# Все потребительские траты (еда, лекарства, услуги, образование, транспорт)
+# проходят через неё, поэтому инфляция реально ощущается игроком.
+func shop_price(base: float) -> int:
+	var cb := get_node_or_null("/root/CentralBankManager")
+	var idx: float = cb.price_index if cb else 1.0
+	return int(round(base * idx))
+
+# Множитель дохода от работы (индекс зарплат ЦБ): в рецессию отстаёт от цен,
+# в бум обгоняет их.
+func wage_factor() -> float:
+	var cb := get_node_or_null("/root/CentralBankManager")
+	return cb.wage_index if cb else 1.0
+
 func format_money(amount: float) -> String:
 	var sign_str := "-" if amount < 0.0 else ""
 	var a := absf(amount)
