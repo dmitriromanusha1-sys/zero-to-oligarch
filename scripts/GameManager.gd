@@ -674,6 +674,29 @@ func next_day() -> void:
 
 	# Энергия за смену дня НЕ восстанавливается — только сном (см. sleep_hours)
 
+	# Социальное пособие: раз в неделю государство помогает совсем нищим
+	# (бездомным без бизнеса и почти без денег) — небольшая сумма на еду,
+	# чтобы игрок не застрял намертво. Сумма привязана к ценам района.
+	if day % 7 == 0:
+		var bm_w = get_node_or_null("/root/BusinessManager")
+		var has_biz: bool = bm_w != null and bm_w.owned_business_id != ""
+		var tier_w: int = HOUSINGS[current_housing_index].get("tier", 0) as int
+		if tier_w == 0 and not has_biz and money < shop_price(2000):
+			var aid: int = shop_price(500)
+			add_money(aid)
+			var es_w = get_node_or_null("/root/EventSystem")
+			var _smw = get_node_or_null("/root/SettingsManager")
+			if es_w and (not _smw or _smw.notify_taxes):
+				es_w.event_triggered.emit({
+					"text": "🤝 Социальное пособие: государство выделило %s на еду." % format_money(aid),
+					"money": aid, "health": 0
+				})
+
+	# Ежедневный тик ЦБ: краткосрочные ценовые шоки (дефицит/распродажа)
+	var cb_day = get_node_or_null("/root/CentralBankManager")
+	if cb_day and cb_day.has_method("process_day"):
+		cb_day.process_day()
+
 	# Пассивный доход от бизнеса
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm:
@@ -684,9 +707,9 @@ func next_day() -> void:
 	if lm:
 		lm.process_day(day)
 
-	# Налоги раз в 30 дней
-	if day % 30 == 0:
-		_collect_tax()
+	# Налогообложение теперь по ДОХОДУ (НДФЛ с зарплаты + налог на прибыль
+	# бизнеса), а не по наличным. Старый налог на остаток денег убран, чтобы
+	# не было тройного обложения и абсурдных ставок.
 
 	# Проверка полиции раз в 7 дней
 	if day % 7 == 0:
@@ -715,28 +738,6 @@ func next_day() -> void:
 func _diff() -> Dictionary:
 	var sm := get_node_or_null("/root/SettingsManager")
 	return sm.get_diff() if sm else {"penalty": 1.0, "tax": 1.0, "drain": 1.0, "health": 1.0}
-
-func _collect_tax() -> void:
-	if money <= 0:
-		return
-	const TAX_RATES := [0.0, 0.0, 0.04, 0.05, 0.07, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22, 0.24, 0.26, 0.28, 0.30]
-	var rate: float = TAX_RATES[current_title_index]
-	if rate <= 0.0:
-		return
-	var tax: float = minf(money * rate * (_diff().tax as float), money)
-	money -= tax
-	emit_signal("money_changed", money)
-	_check_title()
-	var rm = get_node_or_null("/root/ReputationManager")
-	if rm: rm.add(2)
-	var _sm2 := get_node_or_null("/root/SettingsManager")
-	var es = get_node_or_null("/root/EventSystem")
-	if es and (not _sm2 or _sm2.notify_taxes):
-		es.event_triggered.emit({
-			"text": "📋 Налоговая взяла %.0f%% — уплачено %s" % [rate * 100, format_money(tax)],
-			"money": -tax,
-			"health": 0
-		})
 
 # Полиция: при низкой репутации забирает часть денег
 func _police_check() -> void:
@@ -872,10 +873,12 @@ func get_finance() -> Dictionary:
 func shop_price(base: float) -> int:
 	var cb := get_node_or_null("/root/CentralBankManager")
 	var idx: float = cb.price_index if cb else 1.0
+	# Краткосрочный ценовой шок (дефицит/распродажа)
+	var shock: float = cb.price_shock if cb and "price_shock" in cb else 1.0
 	# Стоимость жизни зависит от района: дороже в богатых зонах
 	var zm := get_node_or_null("/root/ZoneManager")
 	var col: float = zm.cost_of_living_mult() if zm and zm.has_method("cost_of_living_mult") else 1.0
-	return int(round(base * idx * col))
+	return int(round(base * idx * col * shock))
 
 # Множитель дохода от работы (индекс зарплат ЦБ): в рецессию отстаёт от цен,
 # в бум обгоняет их.

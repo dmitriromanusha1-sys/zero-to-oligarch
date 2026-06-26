@@ -27,6 +27,11 @@ var wage_index: float = 1.0     # накопленный индекс зарпл
 var phase: String = "normal"
 var phase_months_left: int = 0
 
+# Краткосрочный ценовой шок (дефицит/распродажа): временный множитель цен
+var price_shock: float = 1.0
+var shock_days_left: int = 0
+var shock_name: String = ""
+
 # Насколько быстро растут зарплаты относительно инфляции в каждой фазе.
 # В норме зарплаты чуть отстают от цен (мягкое давление), в рецессию почти
 # замораживаются (цены растут — доход стоит), в бум обгоняют инфляцию.
@@ -103,6 +108,52 @@ func stock_bias() -> float:
 		"boom":      return 0.010
 		"recession": return -0.012
 		_:           return 0.0
+
+# Текущий множитель ценового шока (1.0 — нет шока)
+func consumer_shock() -> float:
+	return price_shock
+
+func has_shock() -> bool:
+	return shock_days_left > 0
+
+# Ежедневный тик: запуск/спад краткосрочных ценовых шоков (дефицит/распродажа)
+func process_day() -> void:
+	var es: Node = get_node_or_null("/root/EventSystem")
+	if shock_days_left > 0:
+		shock_days_left -= 1
+		if shock_days_left <= 0:
+			price_shock = 1.0
+			shock_name = ""
+			if es:
+				es.event_triggered.emit({
+					"text": "🛒 Цены вернулись к норме — ажиотаж спал.",
+					"money": 0, "health": 0
+				})
+		return
+	# Шанс возникновения шока (в рецессию дефициты чаще)
+	var chance: float = 0.05 if phase == "recession" else 0.035
+	if _rng.randf() >= chance:
+		return
+	if _rng.randf() < 0.6:
+		# Дефицит — цены подскакивают
+		price_shock = _rng.randf_range(1.15, 1.30)
+		shock_days_left = _rng.randi_range(4, 8)
+		shock_name = "Дефицит товаров"
+		if es:
+			es.event_triggered.emit({
+				"text": "🛒 Дефицит! Цены в магазинах подскочили на %d%% на несколько дней." % int(round((price_shock - 1.0) * 100.0)),
+				"money": 0, "health": 0
+			})
+	else:
+		# Распродажа/субсидия — цены падают
+		price_shock = _rng.randf_range(0.80, 0.90)
+		shock_days_left = _rng.randi_range(4, 7)
+		shock_name = "Распродажа"
+		if es:
+			es.event_triggered.emit({
+				"text": "🛒 Распродажа и субсидии! Цены упали на %d%% на несколько дней." % int(round((1.0 - price_shock) * 100.0)),
+				"money": 0, "health": 0
+			})
 
 # ── Ежемесячная обработка ────────────────────────────────────────────────────
 
@@ -205,6 +256,9 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("cb", "wage_index",  wage_index)
 	cfg.set_value("cb", "phase",       phase)
 	cfg.set_value("cb", "phase_left",  phase_months_left)
+	cfg.set_value("cb", "price_shock", price_shock)
+	cfg.set_value("cb", "shock_left",  shock_days_left)
+	cfg.set_value("cb", "shock_name",  shock_name)
 
 func load_data(cfg: ConfigFile) -> void:
 	var saved_rate: float = cfg.get_value("cb", "key_rate", -1.0)
@@ -233,6 +287,9 @@ func load_data(cfg: ConfigFile) -> void:
 	wage_index  = cfg.get_value("cb", "wage_index", 1.0)
 	phase       = cfg.get_value("cb", "phase", "normal")
 	phase_months_left = cfg.get_value("cb", "phase_left", 0)
+	price_shock = cfg.get_value("cb", "price_shock", 1.0)
+	shock_days_left = cfg.get_value("cb", "shock_left", 0)
+	shock_name  = cfg.get_value("cb", "shock_name", "")
 
 func reset() -> void:
 	key_rate    = 0.16
@@ -241,3 +298,6 @@ func reset() -> void:
 	wage_index  = 1.0
 	phase       = "normal"
 	phase_months_left = 0
+	price_shock = 1.0
+	shock_days_left = 0
+	shock_name  = ""

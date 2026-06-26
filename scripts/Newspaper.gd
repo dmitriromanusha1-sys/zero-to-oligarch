@@ -208,6 +208,17 @@ func _build(day: int) -> void:
 			phase_lbl.add_theme_color_override("font_color", ph_color)
 			phase_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 			vbox.add_child(phase_lbl)
+		# Активный краткосрочный ценовой шок
+		if cb.has_method("has_shock") and cb.has_shock():
+			var shock_lbl := Label.new()
+			var up: bool = cb.price_shock > 1.0
+			var pct: int = int(round(absf(cb.price_shock - 1.0) * 100.0))
+			shock_lbl.text = "🛒 %s: цены %s на %d%% (ещё %d дн.)" % [
+				cb.shock_name, ("выросли" if up else "упали"), pct, cb.shock_days_left]
+			shock_lbl.add_theme_font_size_override("font_size", 12)
+			shock_lbl.add_theme_color_override("font_color", Color(0.6, 0.15, 0.1) if up else Color(0.1, 0.45, 0.2))
+			shock_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+			vbox.add_child(shock_lbl)
 		var bm_cb: Node = get_node_or_null("/root/BusinessManager")
 		if bm_cb and bm_cb.bank_deposit > 0:
 			var dep_rate: float = bm_cb.get_tiered_rate()
