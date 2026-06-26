@@ -821,6 +821,46 @@ func get_net_worth() -> float:
 
 	return maxf(nw, 0.0)
 
+# Разбивка капитала по составляющим — для экрана «Финансы».
+func get_net_worth_breakdown() -> Dictionary:
+	var d := {"cash": money, "property": 0.0, "business": 0.0, "deposit": 0.0,
+		"stocks": 0.0, "inventory": 0.0, "transport": 0.0, "debt": 0.0}
+	var h: Dictionary = HOUSINGS[current_housing_index]
+	if h.price > 0:
+		d.property = h.price * 0.8
+	var bm: Node = get_node_or_null("/root/BusinessManager")
+	if bm:
+		if bm.owned_business_id != "":
+			for bt in bm.BUSINESS_TYPES:
+				if bt.id == bm.owned_business_id:
+					d.business = bt.cost * 0.7
+					break
+		d.deposit = bm.bank_deposit
+	var sm: Node = get_node_or_null("/root/StockMarket")
+	if sm:
+		for sid in sm.owned:
+			if sm.owned[sid] > 0:
+				d.stocks += sm.owned[sid] * sm.prices.get(sid, 0.0)
+	var im: Node = get_node_or_null("/root/InventoryManager")
+	if im:
+		for item_id in im.inventory:
+			if im.inventory[item_id] > 0 and item_id in im.ITEMS:
+				d.inventory += im.inventory[item_id] * im.ITEMS[item_id].price * 0.5
+	var tm: Node = get_node_or_null("/root/TransportManager")
+	if tm:
+		for vid in tm.owned_vehicles:
+			if vid == "walk":
+				continue
+			for vt in tm.VEHICLES:
+				if vt.id == vid:
+					d.transport += vt.price * 0.6
+					break
+	var lm: Node = get_node_or_null("/root/LoanManager")
+	if lm:
+		d.debt = lm.get_total_debt()
+	d["total"] = get_net_worth()
+	return d
+
 func _check_title() -> void:
 	var nw: float = get_net_worth()
 	var new_index = 0

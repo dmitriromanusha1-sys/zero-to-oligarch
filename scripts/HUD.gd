@@ -52,6 +52,7 @@ var _settings_ui: CanvasLayer = null
 var _settings_btn: Button = null
 var _journal: CanvasLayer = null
 var _journal_btn: Button = null
+var _economy_btn: Button = null
 var _system_btn: Button = null
 var _system_popup: PanelContainer = null
 
@@ -421,6 +422,9 @@ func _any_modal_open() -> bool:
 	var su = get_tree().get_first_node_in_group("sleep_ui")
 	if su and is_instance_valid(su) and su.visible:
 		return true
+	var eu = get_tree().get_first_node_in_group("economy_ui")
+	if eu and is_instance_valid(eu) and eu.visible:
+		return true
 	return false
 
 func _on_zone_entered(zone_idx: int) -> void:
@@ -552,6 +556,16 @@ func _setup_journal_and_system(am: Node) -> void:
 		if am: am.play_click()
 		if _journal: _journal.open())
 
+	# «Финансы»: единый экран экономики
+	_economy_btn = Button.new()
+	_economy_btn.tooltip_text = "Финансы: капитал, доходы/расходы, налоги, экономика страны"
+	dock.add_child(_economy_btn)
+	_style_dock_btn(_economy_btn, "📊")
+	_economy_btn.pressed.connect(func():
+		if am: am.play_click()
+		var eu = get_tree().get_first_node_in_group("economy_ui")
+		if eu and eu.has_method("open"): eu.open())
+
 	# «Система»: Настройки / Главное меню
 	_system_btn = Button.new()
 	_system_btn.tooltip_text = "Настройки и выход в главное меню"
@@ -559,8 +573,8 @@ func _setup_journal_and_system(am: Node) -> void:
 	_style_dock_btn(_system_btn, "⚙")
 	_system_btn.pressed.connect(func(): _toggle_system_popup(am))
 
-	# Порядок видимых иконок: Следующий день, Жильё, Инвестиции, Инвентарь, Журнал, Система
-	var order := [sleep_btn, housing_btn, _invest_btn, inv_btn, _journal_btn, _system_btn]
+	# Порядок видимых иконок: Следующий день, Жильё, Инвестиции, Инвентарь, Журнал, Финансы, Система
+	var order := [sleep_btn, housing_btn, _invest_btn, inv_btn, _journal_btn, _economy_btn, _system_btn]
 	for i in order.size():
 		if order[i] and is_instance_valid(order[i]):
 			dock.move_child(order[i], i)
