@@ -777,8 +777,10 @@ func get_net_worth() -> float:
 
 	var bm: Node = get_node_or_null("/root/BusinessManager")
 	if bm:
-		# Бизнесы империи — 70% от суммарной стоимости
-		if bm.has_method("get_empire_value"):
+		# Бизнесы империи (публичная компания — доля × капитализация)
+		if bm.has_method("get_business_networth"):
+			nw += bm.get_business_networth()
+		elif bm.has_method("get_empire_value"):
 			nw += bm.get_empire_value() * 0.7
 		# Банковский депозит — 100%
 		nw += bm.bank_deposit
@@ -826,7 +828,9 @@ func get_net_worth_breakdown() -> Dictionary:
 		d.property = h.price * 0.8
 	var bm: Node = get_node_or_null("/root/BusinessManager")
 	if bm:
-		if bm.has_method("get_empire_value"):
+		if bm.has_method("get_business_networth"):
+			d.business = bm.get_business_networth()
+		elif bm.has_method("get_empire_value"):
 			d.business = bm.get_empire_value() * 0.7
 		d.deposit = bm.bank_deposit
 	var sm: Node = get_node_or_null("/root/StockMarket")

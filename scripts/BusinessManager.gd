@@ -149,6 +149,10 @@ var total_tax_paid   : float  = 0.0
 # Топ-менеджмент империи (список {type_id})
 var executives: Array = []
 
+# IPO: публична ли компания и какой долей владеет игрок (1.0 = частная).
+var is_public: bool = false
+var owner_fraction: float = 1.0
+
 # ── Доля рынка по секторам ────────────────────────────────────────────────────
 # sector → твоя доля рынка 0..1. Конкуренты точат долю, доля влияет на доход.
 var market_share: Dictionary = {}
@@ -158,6 +162,14 @@ var competitors: Dictionary = {}
 const COMP_MULT_MIN    : float = 0.65   # доход при крошечной доле рынка
 const COMP_MULT_MAX    : float = 1.35   # доход при доминировании
 const MARKET_INVEST    : float = 0.12   # +доля за один маркетинговый вброс
+
+# ── IPO / публичная компания ──────────────────────────────────────────────────
+const IPO_MIN_VALUATION : float = 50_000_000.0   # минимальная капитализация для IPO
+const IPO_SELL_FRACTION : float = 0.30           # доля, продаваемая на IPO
+const SECONDARY_FRACTION: float = 0.10           # шаг допэмиссии / выкупа
+const OWNER_MIN_FRACTION: float = 0.50           # ниже контрольной доли не опускаемся
+const PE_MULT           : float = 4.0            # мультипликатор годовой прибыли в оценке
+const TOTAL_SHARES      : int   = 1_000_000      # всего акций (для курса)
 
 # Базовая ставка налога на прибыль бизнеса (× множитель сложности)
 const TAX_RATE: float = 0.13
@@ -276,8 +288,8 @@ func _income_of(biz: Dictionary) -> float:
 func get_active_income() -> float:
 	return _income_of(active_business())
 
-# Суммарный доход всей империи в день (с учётом экономического цикла).
-func get_daily_income() -> float:
+# Валовый доход всей империи в день (вся прибыль компании, до доли владельца).
+func get_gross_income() -> float:
 	var total: float = 0.0
 	for biz in businesses:
 		total += _income_of(biz)
@@ -289,6 +301,10 @@ func get_daily_income() -> float:
 	total *= efficiency_mult()
 	return total
 
+# Доход, который получает игрок: валовый × доля владения (после IPO < 100%).
+func get_daily_income() -> float:
+	return get_gross_income() * owner_fraction
+
 # Суммарная стоимость всех бизнесов империи.
 func get_empire_value() -> float:
 	var total: float = 0.0
@@ -297,6 +313,65 @@ func get_empire_value() -> float:
 		if not bt.is_empty():
 			total += bt.cost * (1.0 + int(biz.get("level", 0)) * 0.25)
 	return total
+
+# ── IPO / публичная компания ──────────────────────────────────────────────────
+# Капитализация = активы империи + капитализация годовой прибыли (P/E).
+func company_valuation() -> float:
+	return maxf(0.0, get_empire_value() + get_gross_income() * 365.0 * PE_MULT)
+
+func share_price() -> float:
+	return company_valuation() / float(TOTAL_SHARES)
+
+func can_ipo() -> bool:
+	return not is_public and businesses.size() > 0 and company_valuation() >= IPO_MIN_VALUATION
+
+# Выходим на биржу: продаём долю публике, получаем разовый капитал.
+func do_ipo() -> float:
+	if not can_ipo(): return 0.0
+	var proceeds: float = company_valuation() * IPO_SELL_FRACTION
+	owner_fraction = 1.0 - IPO_SELL_FRACTION
+	is_public = true
+	gm.add_money(proceeds)
+	emit_signal("business_changed")
+	gm.save_game()
+	return proceeds
+
+func can_secondary() -> bool:
+	return is_public and (owner_fraction - SECONDARY_FRACTION) >= OWNER_MIN_FRACTION - 0.0001
+
+# Допэмиссия: продаём ещё долю за капитал (но не ниже контрольной).
+func secondary_offering() -> float:
+	if not can_secondary(): return 0.0
+	var proceeds: float = company_valuation() * SECONDARY_FRACTION
+	owner_fraction -= SECONDARY_FRACTION
+	gm.add_money(proceeds)
+	emit_signal("business_changed")
+	gm.save_game()
+	return proceeds
+
+func buyback_cost() -> int:
+	return int(company_valuation() * SECONDARY_FRACTION * 1.10)   # +10% премия за выкуп
+
+func can_buyback() -> bool:
+	return is_public and owner_fraction < 1.0 and gm.money >= buyback_cost()
+
+# Выкуп акций: возвращаем долю; выкупив всё — снова частная компания.
+func buyback() -> bool:
+	if not is_public or owner_fraction >= 1.0: return false
+	if not gm.spend_money(buyback_cost()): return false
+	owner_fraction = minf(1.0, owner_fraction + SECONDARY_FRACTION)
+	if owner_fraction >= 0.999:
+		owner_fraction = 1.0
+		is_public = false
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
+
+# Вклад бизнеса в капитал игрока: публичная — доля × капитализация; частная — 70% активов.
+func get_business_networth() -> float:
+	if is_public:
+		return owner_fraction * company_valuation()
+	return get_empire_value() * 0.7
 
 # Сколько точек (филиалов) данного типа в империи.
 func branch_count(type_id: String) -> int:
@@ -756,6 +831,8 @@ func reset_empire() -> void:
 	market_share.clear()
 	competitors.clear()
 	executives.clear()
+	is_public = false
+	owner_fraction = 1.0
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "businesses",   businesses)
@@ -763,6 +840,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "market_share", market_share)
 	cfg.set_value("business", "competitors",  competitors)
 	cfg.set_value("business", "executives",   executives)
+	cfg.set_value("business", "is_public",    is_public)
+	cfg.set_value("business", "owner_fraction", owner_fraction)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
 	cfg.set_value("business", "total_earned",  total_earned)
@@ -776,6 +855,8 @@ func load(cfg: ConfigFile) -> void:
 	market_share = cfg.get_value("business", "market_share", {})
 	competitors  = cfg.get_value("business", "competitors", {})
 	executives   = cfg.get_value("business", "executives", [])
+	is_public      = cfg.get_value("business", "is_public", false)
+	owner_fraction = cfg.get_value("business", "owner_fraction", 1.0)
 	# Миграция старого формата (один бизнес) → портфель
 	if businesses.is_empty():
 		var old_id := String(cfg.get_value("business", "owned_id", ""))

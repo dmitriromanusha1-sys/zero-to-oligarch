@@ -133,6 +133,7 @@ func _build_business_tab() -> void:
 	# Управление империей (нагрузка/ёмкость/эффективность + найм топ-менеджмента)
 	if cnt > 0:
 		vb.add_child(_make_management())
+		vb.add_child(_make_ipo())
 
 	# Переключатель активного бизнеса (если их несколько)
 	if cnt > 1:
@@ -157,6 +158,61 @@ func _build_business_tab() -> void:
 		var bt        : Dictionary = bm.BUSINESS_TYPES[i]
 		var is_locked = gm.current_title_index < bt.min_title
 		vb.add_child(_make_biz_card(bt, is_locked, at_cap, cur_idx))
+
+# Панель IPO / публичной компании.
+func _make_ipo() -> Control:
+	var box = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	var val: float = bm.company_valuation()
+	if bm.is_public:
+		var own_pct: int = int(round(bm.owner_fraction * 100.0))
+		_lbl(box, "🏛 Публичная компания · ваша доля %d%% · капитализация %s" % [own_pct, gm.format_money(val)],
+			Color(0.70, 0.85, 1.0), 12)
+		_lbl(box, "Курс акции: %s · вы получаете %d%% прибыли" % [gm.format_money(bm.share_price()), own_pct],
+			Color(0.60, 0.72, 0.85), 11)
+		var row = HFlowContainer.new()
+		row.add_theme_constant_override("h_separation", 6)
+		row.add_theme_constant_override("v_separation", 6)
+		if bm.can_secondary():
+			var sb = Button.new()
+			sb.text = "📈 Допэмиссия (+%s)" % gm.format_money(val * bm.SECONDARY_FRACTION)
+			sb.add_theme_font_size_override("font_size", 11)
+			_style_btn(sb, Color(0.10, 0.18, 0.12), Color(0.30, 0.60, 0.30, 0.8))
+			sb.add_theme_color_override("font_color", Color(0.70, 1.0, 0.70))
+			sb.pressed.connect(func(): bm.secondary_offering())
+			row.add_child(sb)
+		var bb = Button.new()
+		bb.text = "💼 Выкуп доли (%s)" % gm.format_money(bm.buyback_cost())
+		bb.add_theme_font_size_override("font_size", 11)
+		if bm.can_buyback():
+			_style_btn(bb, Color(0.10, 0.14, 0.24), Color(0.30, 0.50, 0.70, 0.8))
+			bb.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+			bb.pressed.connect(func():
+				if not bm.buyback(): _flash_toast("Недостаточно денег!"))
+		else:
+			_style_btn(bb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55))
+			bb.disabled = true
+			bb.add_theme_color_override("font_color", Color(0.40, 0.40, 0.45))
+		row.add_child(bb)
+		box.add_child(row)
+	elif bm.can_ipo():
+		_lbl(box, "🏛 Можно провести IPO! Капитализация: %s" % gm.format_money(val), Color(1.0, 0.90, 0.40), 12)
+		var ib = Button.new()
+		ib.text = "🏛 Провести IPO (привлечь ~%s)" % gm.format_money(val * bm.IPO_SELL_FRACTION)
+		ib.add_theme_font_size_override("font_size", 12)
+		_style_btn(ib, Color(0.14, 0.16, 0.26), Color(0.40, 0.45, 0.80, 0.85))
+		ib.add_theme_color_override("font_color", Color(0.80, 0.85, 1.0))
+		ib.pressed.connect(_on_ipo)
+		box.add_child(ib)
+	else:
+		_lbl(box, "🏛 Капитализация: %s  (для IPO нужно ≥ %s)" % [gm.format_money(val), gm.format_money(bm.IPO_MIN_VALUATION)],
+			Color(0.60, 0.65, 0.75), 11)
+	return box
+
+func _on_ipo() -> void:
+	var p: float = bm.do_ipo()
+	if p > 0.0:
+		_flash_toast("🏛 IPO состоялось! Привлечено " + gm.format_money(p))
 
 # Панель управления империей: нагрузка/ёмкость/эффективность + найм управленцев.
 func _make_management() -> Control:
