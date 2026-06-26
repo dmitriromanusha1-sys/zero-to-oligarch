@@ -222,6 +222,30 @@ func _make_owned_card(bt: Dictionary) -> PanelContainer:
 			bm.business_days
 		], Color(0.55, 0.90, 0.55), 12)
 
+	# Доля рынка в секторе бизнеса + захват доли
+	var sector: String = bm.sector_of(bt.id)
+	if sector != "":
+		var mrow = HBoxContainer.new()
+		mrow.add_theme_constant_override("separation", 8)
+		col.add_child(mrow)
+		var share_pct: int = int(round(bm.get_share(sector) * 100.0))
+		var comp: float = bm.sector_competition_mult(sector)
+		var comp_pct: int = int(round((comp - 1.0) * 100.0))
+		var sname: String = bm.SECTOR_NAMES.get(sector, sector)
+		var ml = _lbl(mrow, "%s · доля рынка %d%%  (доход %+d%%)" % [sname, share_pct, comp_pct],
+			Color(0.62, 0.78, 1.0), 12)
+		ml.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var mcost: int = bm.market_invest_cost(sector)
+		var mbtn = Button.new()
+		mbtn.text = "📣 Захватить долю (%s)" % gm.format_money(mcost)
+		mbtn.add_theme_font_size_override("font_size", 11)
+		_style_btn(mbtn, Color(0.10, 0.14, 0.26), Color(0.30, 0.45, 0.75, 0.8))
+		mbtn.add_theme_color_override("font_color", Color(0.70, 0.85, 1.0))
+		var sec: String = sector
+		mbtn.pressed.connect(func():
+			if not bm.invest_market_share(sec): _flash_toast("Недостаточно денег!"))
+		mrow.add_child(mbtn)
+
 	var lvl_row = HBoxContainer.new()
 	lvl_row.add_theme_constant_override("separation", 8)
 	col.add_child(lvl_row)

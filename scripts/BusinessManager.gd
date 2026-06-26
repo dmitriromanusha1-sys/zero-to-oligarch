@@ -35,16 +35,20 @@ const NEGATIVE_EVENTS: Array = [
 ]
 
 const BUSINESS_TYPES: Array = [
-	{"id":"latok",      "name":"Уличный лоток",  "cost":8000,        "income_per_day":150,      "max_employees":1,   "min_title":0, "icon":"🥤",  "desc":"Лимонад и семечки. Первые шаги в бизнесе."},
-	{"id":"ip",         "name":"ИП / Ларёк",     "cost":50000,       "income_per_day":600,      "max_employees":3,   "min_title":1, "icon":"🏪",  "desc":"Зарегистрировал ИП. Небольшой ларёк у метро."},
-	{"id":"cafe",       "name":"Кафе",           "cost":280000,      "income_per_day":3000,     "max_employees":6,   "min_title":2, "icon":"☕",  "desc":"Уютное кафе в спальном районе. Постоянные клиенты."},
-	{"id":"shop",       "name":"Магазин",        "cost":1200000,     "income_per_day":10000,    "max_employees":10,  "min_title":2, "icon":"🏬",  "desc":"Полноценный магазин. Ассортимент, витрины, поставщики."},
-	{"id":"restaurant", "name":"Ресторан",       "cost":5000000,     "income_per_day":40000,    "max_employees":15,  "min_title":3, "icon":"🍽",  "desc":"Банкеты, корпоративы, постоянные гости. Хорошая прибыль."},
-	{"id":"factory",    "name":"Мини-завод",     "cost":20000000,    "income_per_day":150000,   "max_employees":30,  "min_title":3, "icon":"🏭",  "desc":"Производство → дистрибуция напрямую. Серьёзный бизнес."},
-	{"id":"chain",      "name":"Торговая сеть",  "cost":80000000,    "income_per_day":600000,   "max_employees":60,  "min_title":4, "icon":"🏢",  "desc":"Несколько точек по городу. Бренд растёт."},
-	{"id":"holding",    "name":"Холдинг",        "cost":300000000,   "income_per_day":2500000,  "max_employees":150, "min_title":5, "icon":"🏦",  "desc":"Группа компаний с активами в разных секторах."},
-	{"id":"corporation","name":"Корпорация",     "cost":1200000000,  "income_per_day":12000000, "max_employees":500, "min_title":6, "icon":"🌐",  "desc":"Международная корпорация. Вершина делового мира."},
+	{"id":"latok",      "name":"Уличный лоток",  "cost":8000,        "income_per_day":150,      "max_employees":1,   "min_title":0, "icon":"🥤",  "sector":"food",     "desc":"Лимонад и семечки. Первые шаги в бизнесе."},
+	{"id":"ip",         "name":"ИП / Ларёк",     "cost":50000,       "income_per_day":600,      "max_employees":3,   "min_title":1, "icon":"🏪",  "sector":"retail",   "desc":"Зарегистрировал ИП. Небольшой ларёк у метро."},
+	{"id":"cafe",       "name":"Кафе",           "cost":280000,      "income_per_day":3000,     "max_employees":6,   "min_title":2, "icon":"☕",  "sector":"food",     "desc":"Уютное кафе в спальном районе. Постоянные клиенты."},
+	{"id":"shop",       "name":"Магазин",        "cost":1200000,     "income_per_day":10000,    "max_employees":10,  "min_title":2, "icon":"🏬",  "sector":"retail",   "desc":"Полноценный магазин. Ассортимент, витрины, поставщики."},
+	{"id":"restaurant", "name":"Ресторан",       "cost":5000000,     "income_per_day":40000,    "max_employees":15,  "min_title":3, "icon":"🍽",  "sector":"food",     "desc":"Банкеты, корпоративы, постоянные гости. Хорошая прибыль."},
+	{"id":"factory",    "name":"Мини-завод",     "cost":20000000,    "income_per_day":150000,   "max_employees":30,  "min_title":3, "icon":"🏭",  "sector":"industry", "desc":"Производство → дистрибуция напрямую. Серьёзный бизнес."},
+	{"id":"chain",      "name":"Торговая сеть",  "cost":80000000,    "income_per_day":600000,   "max_employees":60,  "min_title":4, "icon":"🏢",  "sector":"retail",   "desc":"Несколько точек по городу. Бренд растёт."},
+	{"id":"holding",    "name":"Холдинг",        "cost":300000000,   "income_per_day":2500000,  "max_employees":150, "min_title":5, "icon":"🏦",  "sector":"finance",  "desc":"Группа компаний с активами в разных секторах."},
+	{"id":"corporation","name":"Корпорация",     "cost":1200000000,  "income_per_day":12000000, "max_employees":500, "min_title":6, "icon":"🌐",  "sector":"finance",  "desc":"Международная корпорация. Вершина делового мира."},
 ]
+
+const SECTOR_NAMES: Dictionary = {
+	"food": "🍔 Питание", "retail": "🛍 Ретейл", "industry": "🏭 Промышленность", "finance": "🏦 Финансы",
+}
 
 const EMPLOYEE_TYPES: Array = [
 	{"id":"worker",     "name":"Разнорабочий", "cost":5000,   "salary_per_day":200,  "income_bonus":500,   "icon":"👷", "desc":"Базовый персонал. Минимальный вклад."},
@@ -124,6 +128,15 @@ var total_earned     : float  = 0.0
 var business_days    : int    = 0
 var month_income     : float  = 0.0   # доход бизнеса за месяц — база для налога
 var total_tax_paid   : float  = 0.0
+
+# ── Доля рынка по секторам ────────────────────────────────────────────────────
+# sector → твоя доля рынка 0..1. Конкуренты точат долю, доля влияет на доход.
+var market_share: Dictionary = {}
+
+const COMP_MULT_MIN    : float = 0.65   # доход при крошечной доле рынка
+const COMP_MULT_MAX    : float = 1.35   # доход при доминировании
+const MARKET_INVEST    : float = 0.12   # +доля за один маркетинговый вброс
+const COMPETITOR_EROSION: float = 0.05  # конкуренты отъедают долю каждый месяц
 
 # Базовая ставка налога на прибыль бизнеса (× множитель сложности)
 const TAX_RATE: float = 0.13
@@ -234,6 +247,8 @@ func _income_of(biz: Dictionary) -> float:
 	income *= _synergy_mult_of(biz)
 	# Бренд: чем больше филиалов этого типа, тем выше доход каждого
 	income *= brand_mult(String(biz.get("type_id", "")))
+	# Конкуренция: доля рынка в секторе бизнеса
+	income *= sector_competition_mult(sector_of(String(biz.get("type_id", ""))))
 	return income
 
 # Доход активного бизнеса (для карточки в магазине).
@@ -279,6 +294,69 @@ func franchise_cost(type_id: String) -> int:
 func brand_mult(type_id: String) -> float:
 	var extra: int = maxi(0, branch_count(type_id) - 1)
 	return 1.0 + minf(BRAND_BONUS_MAX, BRAND_BONUS_STEP * extra)
+
+# ── Доля рынка / конкуренты ───────────────────────────────────────────────────
+func sector_of(type_id: String) -> String:
+	return String(_get_type(type_id).get("sector", ""))
+
+func get_share(sector: String) -> float:
+	return float(market_share.get(sector, 0.0))
+
+# Множитель дохода от доли рынка: аутсайдер теряет, лидер выигрывает.
+# Пока сектор только что занят (доля ещё не посчитана) — нейтрально (1.0).
+func sector_competition_mult(sector: String) -> float:
+	if sector == "" or not market_share.has(sector):
+		return 1.0
+	return lerpf(COMP_MULT_MIN, COMP_MULT_MAX, get_share(sector))
+
+# Перечень секторов, где есть бизнес.
+func active_sectors() -> Array:
+	var seen: Dictionary = {}
+	for biz in businesses:
+		var s := sector_of(String(biz.get("type_id", "")))
+		if s != "": seen[s] = true
+	return seen.keys()
+
+# Естественный потолок доли от присутствия (число точек и их уровни).
+func _sector_target_share(sector: String) -> float:
+	var pts: float = 0.0
+	for biz in businesses:
+		if sector_of(String(biz.get("type_id", ""))) == sector:
+			pts += 1.0 + 0.5 * int(biz.get("level", 0))
+	if pts <= 0.0:
+		return 0.0
+	return clampf(0.15 + 0.12 * pts, 0.15, 0.85)
+
+# Ежемесячно: доля тянется к цели от присутствия, конкуренты её точат.
+func _update_markets() -> void:
+	var sectors := active_sectors()
+	for s in sectors:
+		var cur: float = get_share(s)
+		var target: float = _sector_target_share(s)
+		if cur <= 0.0:
+			cur = target * 0.6   # выходишь на рынок небольшим игроком
+		cur = lerpf(cur, target, 0.35) - COMPETITOR_EROSION
+		market_share[s] = clampf(cur, 0.05, 0.92)
+	# забываем секторы, где бизнеса больше нет
+	for s in market_share.keys():
+		if not (s in sectors):
+			market_share.erase(s)
+
+# Стоимость маркетингового захвата доли (~20 дней дохода сектора, минимум 50k).
+func market_invest_cost(sector: String) -> int:
+	var inc: float = 0.0
+	for biz in businesses:
+		if sector_of(String(biz.get("type_id", ""))) == sector:
+			inc += _income_of(biz)
+	return int(maxf(50000.0, inc * 20.0))
+
+func invest_market_share(sector: String) -> bool:
+	if sector == "": return false
+	if not gm.spend_money(market_invest_cost(sector)): return false
+	market_share[sector] = clampf(get_share(sector) + MARKET_INVEST, 0.05, 0.95)
+	emit_signal("business_changed")
+	gm.save_game()
+	return true
 
 func can_open(type_id: String) -> bool:
 	var bt := _get_type(type_id)
@@ -489,6 +567,7 @@ func process_day() -> void:
 						"money": -tax, "health": 0
 					})
 		month_income = 0.0
+		_update_markets()   # конкуренты и доля рынка
 	if gm.day % 30 == 0 and bank_deposit > 0:
 		var interest := bank_deposit * get_tiered_rate()
 		bank_deposit += interest
@@ -547,10 +626,12 @@ func _trigger_negative_event() -> void:
 func reset_empire() -> void:
 	businesses.clear()
 	active_index = 0
+	market_share.clear()
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("business", "businesses",   businesses)
 	cfg.set_value("business", "active_index", active_index)
+	cfg.set_value("business", "market_share", market_share)
 	cfg.set_value("business", "bank_deposit",  bank_deposit)
 	cfg.set_value("business", "active_loan",   active_loan)
 	cfg.set_value("business", "total_earned",  total_earned)
@@ -561,6 +642,7 @@ func save(cfg: ConfigFile) -> void:
 func load(cfg: ConfigFile) -> void:
 	businesses   = cfg.get_value("business", "businesses", [])
 	active_index = cfg.get_value("business", "active_index", 0)
+	market_share = cfg.get_value("business", "market_share", {})
 	# Миграция старого формата (один бизнес) → портфель
 	if businesses.is_empty():
 		var old_id := String(cfg.get_value("business", "owned_id", ""))
