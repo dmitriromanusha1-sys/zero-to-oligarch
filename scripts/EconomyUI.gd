@@ -107,6 +107,19 @@ func _rebuild() -> void:
 	_sep()
 	_row("Всего налогов", wage_tax + biz_tax, Color(0.9, 0.55, 0.45))
 
+	# Власть и влияние
+	var inf = get_node_or_null("/root/InfluenceManager")
+	if inf and (inf.influence > 0.0 or inf.power_rank() != "Начинающий"):
+		_header("🏛 Власть")
+		_note("Ранг: " + inf.power_rank())
+		_note("Влияние: %d" % int(inf.influence))
+		var pm: float = inf.political_income_mult() if inf.has_method("political_income_mult") else 1.0
+		if pm > 1.0:
+			_note("Политбонус к доходу бизнеса: +%d%%" % int(round((pm - 1.0) * 100.0)))
+		if inf.get("is_president"):
+			_note("Вы — " + ("Пожизненный президент" if inf.term_limits_abolished else "Президент") +
+				" · одобрение народа %d%%" % int(round(inf.approval)))
+
 	# Экономика страны
 	if cb:
 		_header("🏦 Экономика страны")

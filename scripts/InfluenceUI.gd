@@ -72,7 +72,8 @@ func _rebuild() -> void:
 		return
 	_title("🏛 Политический клуб")
 	_lbl(_vb, "Влияние: %d   ·   Ранг: %s" % [int(im.influence), im.power_rank()],
-		Color(0.95, 0.85, 0.45) if im.grey_cardinal else Color(0.82, 0.72, 1.0), 16)
+		Color(0.95, 0.85, 0.45) if (im.grey_cardinal or im.is_president) else Color(0.82, 0.72, 1.0), 16)
+	_dashboard()
 
 	if not im.politics_unlocked():
 		_note("Большая политика открывается с титула «%s». Сначала станьте заметной фигурой." % gm.TITLES[im.CONN_MIN_TITLE].name)
@@ -771,6 +772,32 @@ func _president_card() -> PanelContainer:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
 	return card
+
+# Компактная сводка по всем системам власти — чтобы не скроллить за цифрами.
+func _dashboard() -> void:
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.06, 0.05, 0.09, 0.92)
+	cs.border_color = Color(0.40, 0.34, 0.55, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(8)
+	card.add_theme_stylebox_override("panel", cs)
+	var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 2); card.add_child(col)
+	if im.politics_unlocked():
+		_lbl(col, "Нац. рейтинг: %d%%   ·   Одобрение народа: %d%%" % [
+			int(round(im.national_support() * 100.0)), int(round(im.approval))], Color(0.78, 0.80, 0.92), 12)
+	var heat_pct: int = int(round(im.scrutiny() / im.HEAT_MAX * 100.0))
+	var hcol: Color = Color(0.95, 0.55, 0.5) if heat_pct >= 60 else (Color(0.9, 0.78, 0.45) if heat_pct >= 30 else Color(0.6, 0.82, 0.66))
+	_lbl(col, "Подозрение: %d%%   ·   риск расследования: %d%%/мес" % [
+		heat_pct, int(round(im.investigation_chance() * 100.0))], hcol, 12)
+	var line: String = "Районы %d/%d · СМИ-охват %d · связи %d/%d" % [
+		im.controlled_count(), im.district_count(), im.media_reach(),
+		im.total_connection_levels(), im.max_connection_total()]
+	if im.party_founded:
+		line += " · партия %dк" % int(im.party_members / 1000.0)
+	if im.intel_active():
+		line += " · досье %d" % im.dossiers
+	_lbl(col, line, Color(0.70, 0.72, 0.82), 11)
+	_vb.add_child(card)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 func _title(t: String) -> void:
