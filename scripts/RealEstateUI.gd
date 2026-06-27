@@ -71,6 +71,10 @@ func _rebuild() -> void:
 	_title("🏘 Недвижимость")
 	_note("Портфель: %d объект(ов) · аренда +%s/день · стоимость %s" % [
 		rem.property_count(), gm.format_money(rem.rental_income()), gm.format_money(rem.portfolio_value())])
+	var tr: int = rem.market_trend()
+	var arrow: String = "📈 рост" if tr > 0 else ("📉 спад" if tr < 0 else "➡ стабильно")
+	var tcol: Color = Color(0.55, 0.9, 0.6) if tr > 0 else (Color(0.95, 0.55, 0.5) if tr < 0 else Color(0.7, 0.72, 0.78))
+	_lbl(_vb, "Индекс рынка: %.2f  (%s)" % [rem.market_index, arrow], tcol, 12)
 	_sep()
 
 	# Свои объекты
@@ -109,9 +113,10 @@ func _owned_card(i: int) -> PanelContainer:
 	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(icon)
 	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	var tid: String = String(p.get("type_id", ""))
 	_lbl(col, t.get("name", "?"), Color(0.80, 1.0, 0.80), 14)
-	_lbl(col, "Аренда +%s/день" % gm.format_money(t.get("rent", 0)), Color(0.62, 0.85, 0.66), 11)
-	var sval: float = float(t.get("price", 0)) * rem.SELL_RATIO
+	_lbl(col, "Аренда +%s/день · оценка %s" % [gm.format_money(rem.current_rent(tid)), gm.format_money(rem.current_value(tid))], Color(0.62, 0.85, 0.66), 11)
+	var sval: float = rem.current_value(tid) * rem.SELL_RATIO
 	var sb := Button.new(); sb.text = "Продать (%s)" % gm.format_money(sval)
 	sb.add_theme_font_size_override("font_size", 12)
 	_style(sb, Color(0.18, 0.12, 0.10), Color(0.6, 0.4, 0.3))
@@ -137,15 +142,16 @@ func _buy_card(t: Dictionary) -> PanelContainer:
 	var owned: int = rem.count_of(t.id)
 	var name_str: String = t.get("name", "?")
 	if owned > 0: name_str += "  ×%d" % owned
+	var cprice: int = rem.current_price(t.id)
 	_lbl(col, name_str, Color(0.85, 0.88, 0.95), 14)
-	_lbl(col, "%s · аренда +%s/день" % [t.get("desc", ""), gm.format_money(t.get("rent", 0))], Color(0.62, 0.68, 0.62), 11)
+	_lbl(col, "%s · аренда +%s/день" % [t.get("desc", ""), gm.format_money(rem.current_rent(t.id))], Color(0.62, 0.68, 0.62), 11)
 	var btn := Button.new()
 	if locked:
 		btn.text = "🔒 Титул %d" % int(t.min_title)
 		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	else:
-		btn.text = "🏠 Купить (%s)" % gm.format_money(t.price)
-		if gm.money >= float(t.price):
+		btn.text = "🏠 Купить (%s)" % gm.format_money(cprice)
+		if gm.money >= float(cprice):
 			_style(btn, Color(0.10, 0.18, 0.12), Color(0.30, 0.60, 0.35))
 			var tid: String = t.id
 			btn.pressed.connect(func(): if not rem.buy_property(tid): pass)
