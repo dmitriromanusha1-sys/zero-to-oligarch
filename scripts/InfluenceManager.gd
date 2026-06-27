@@ -69,6 +69,21 @@ const SMEAR_COOLDOWN: int = 21
 const SMEAR_POWER_PER_REACH: float = 0.02   # перетянутая доля рынка = охват × это
 const SMEAR_HEAT_PER_REACH: float = 0.05    # снижение антимонопольного жара
 
+# ── Контроль районов и выборы (Фаза 4) ────────────────────────────────────────
+# Выдвигаешься в районе: платишь деньги+влияние, шанс победы зависит от
+# репутации, охвата СМИ и связей. Контроль района даёт пассив и бонус к доходу.
+var districts: Dictionary = {}      # index -> true (под контролем игрока)
+var election_cd: Dictionary = {}    # index -> дней до повторного выдвижения
+
+const ELECTION_INF_BASE: float = 50.0
+const ELECTION_INF_PER: float = 20.0
+const ELECTION_MONEY_BASE: int = 10_000_000
+const ELECTION_COOLDOWN: int = 30
+const DISTRICT_INF_DAY: float = 2.0          # пассивное влияние за район/день
+const DISTRICT_INCOME_STEP: float = 0.02     # +2% к доходу бизнеса за район
+const DISTRICT_INCOME_MAX: float = 0.20
+const DISTRICT_LOSE_BASE: float = 0.08       # месячный риск потерять район
+
 var gm: Node
 
 func _ready() -> void:
@@ -289,6 +304,107 @@ func _tick_campaigns() -> void:
 		if left <= 0: campaign_cd.erase(id)
 		else: campaign_cd[id] = left
 
+# ── Контроль районов и выборы ─────────────────────────────────────────────────
+func _zm() -> Node:
+	return get_node_or_null("/root/ZoneManager")
+
+func district_count() -> int:
+	var zm := _zm()
+	return zm.ZONE_META.size() if zm else 9
+
+func district_name(i: int) -> String:
+	var zm := _zm()
+	if zm and i >= 0 and i < zm.ZONE_META.size():
+		return zm.ZONE_META[i].icon + " " + zm.ZONE_META[i].name
+	return "Район %d" % (i + 1)
+
+func controls(i: int) -> bool:
+	return bool(districts.get(i, false))
+
+func controlled_count() -> int:
+	var n: int = 0
+	for k in districts:
+		if bool(districts[k]): n += 1
+	return n
+
+func power_level() -> int:
+	return controlled_count()
+
+func election_inf_cost(i: int) -> int:
+	return int(ELECTION_INF_BASE + i * ELECTION_INF_PER)
+
+func election_money_cost(i: int) -> int:
+	return ELECTION_MONEY_BASE * (i + 1)
+
+func election_cd_left(i: int) -> int:
+	return int(election_cd.get(i, 0))
+
+func district_difficulty(i: int) -> float:
+	return clampf(0.10 + i * 0.05, 0.10, 0.55)
+
+# Шанс победы на выборах: репутация + охват СМИ + связи − сложность района.
+func election_win_chance(i: int) -> float:
+	var rm := get_node_or_null("/root/ReputationManager")
+	var rep: float = (float(rm.reputation) / 100.0) if rm else 0.3
+	var power: float = 0.15 + media_reach() * 0.03 + rep * 0.25 \
+		+ connection_level("mayor") * 0.05 + controlled_count() * 0.03
+	return clampf(power - district_difficulty(i), 0.05, 0.95)
+
+func can_run_election(i: int) -> bool:
+	if not politics_unlocked() or controls(i): return false
+	if election_cd_left(i) > 0: return false
+	return influence >= float(election_inf_cost(i)) and gm.money >= float(election_money_cost(i))
+
+# Выдвижение: тратит ресурсы, бросает кубик. Победа → контроль района.
+func run_election(i: int) -> bool:
+	if not can_run_election(i): return false
+	if not gm.spend_money(election_money_cost(i)): return false
+	add_influence(-float(election_inf_cost(i)))
+	var es := get_node_or_null("/root/EventSystem")
+	var won: bool = randf() < election_win_chance(i)
+	if won:
+		districts[i] = true
+		if es:
+			es.event_triggered.emit({
+				"text": "🗳 Победа на выборах! Район «%s» под вашим контролем." % district_name(i),
+				"money": 0, "health": 0})
+	else:
+		election_cd[i] = ELECTION_COOLDOWN
+		if es:
+			es.event_triggered.emit({
+				"text": "🗳 Выборы в районе «%s» проиграны. Кампания впустую." % district_name(i),
+				"money": 0, "health": 0})
+	emit_signal("connections_changed")
+	gm.save_game()
+	return won
+
+func _tick_elections() -> void:
+	for i in election_cd.keys():
+		var left: int = int(election_cd[i]) - 1
+		if left <= 0: election_cd.erase(i)
+		else: election_cd[i] = left
+
+# Месячно: соперники могут отбить район при слабом удержании (мало СМИ).
+func _maybe_lose_districts() -> void:
+	var flip: float = maxf(0.0, DISTRICT_LOSE_BASE - media_reach() * 0.01)
+	if flip <= 0.0: return
+	var es := get_node_or_null("/root/EventSystem")
+	for i in districts.keys():
+		if bool(districts[i]) and randf() < flip:
+			districts[i] = false
+			if es:
+				es.event_triggered.emit({
+					"text": "🗳 Район «%s» перешёл под контроль соперников." % district_name(int(i)),
+					"money": 0, "health": 0})
+
+# Бонус к доходу бизнеса от контролируемых районов.
+func district_income_mult() -> float:
+	return 1.0 + minf(DISTRICT_INCOME_MAX, controlled_count() * DISTRICT_INCOME_STEP)
+
+# Совокупный политический множитель дохода (лобби-субсидия × контроль районов).
+func political_income_mult() -> float:
+	return law_business_mult() * district_income_mult()
+
 # ── Пассивные бонусы (читаются другими системами) ─────────────────────────────
 func police_raid_mult() -> float:
 	return maxf(0.0, 1.0 - 0.25 * connection_level("police"))   # до −75% шанса
@@ -307,11 +423,15 @@ func expense_mult() -> float:
 func deposit_bonus() -> float:
 	return 0.005 * connection_level("banker")                  # до +1.5%/мес
 
-# Ежедневно: тикают законы и кампании; пассивное влияние (СМИ + полит. машина).
+# Ежедневно: тикают законы/кампании/выборы; пассивное влияние (СМИ + машина + районы).
 func process_day() -> void:
 	_tick_laws()
 	_tick_campaigns()
+	_tick_elections()
+	if gm.day % 30 == 0:
+		_maybe_lose_districts()
 	var passive: float = media_influence_day()        # СМИ работают всегда
+	passive += controlled_count() * DISTRICT_INF_DAY  # контроль районов
 	if politics_unlocked():
 		passive += total_connection_levels() * 0.2 + connection_level("mayor") * 0.5
 	if passive > 0.0:
@@ -324,6 +444,8 @@ func reset() -> void:
 	law_cooldowns = {}
 	media_owned = {}
 	campaign_cd = {}
+	districts = {}
+	election_cd = {}
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
@@ -332,6 +454,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "law_cooldowns", law_cooldowns)
 	cfg.set_value("influence", "media_owned", media_owned)
 	cfg.set_value("influence", "campaign_cd", campaign_cd)
+	cfg.set_value("influence", "districts", districts)
+	cfg.set_value("influence", "election_cd", election_cd)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
@@ -340,3 +464,5 @@ func load_data(cfg: ConfigFile) -> void:
 	law_cooldowns = cfg.get_value("influence", "law_cooldowns", {})
 	media_owned = cfg.get_value("influence", "media_owned", {})
 	campaign_cd = cfg.get_value("influence", "campaign_cd", {})
+	districts = cfg.get_value("influence", "districts", {})
+	election_cd = cfg.get_value("influence", "election_cd", {})

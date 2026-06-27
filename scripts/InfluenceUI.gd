@@ -107,6 +107,16 @@ func _rebuild() -> void:
 		_vb.add_child(_campaign_card("smear"))
 	else:
 		_note("Купите хотя бы одно СМИ, чтобы запускать PR и компромат.")
+	_sep()
+
+	# Контроль районов
+	_header("🗳 Контроль районов")
+	_lbl(_vb, "Под контролем: %d из %d  ·  +%d%% к доходу бизнеса" % [
+		im.controlled_count(), im.district_count(),
+		int(round((im.district_income_mult() - 1.0) * 100.0))],
+		Color(0.74, 0.70, 0.88), 12)
+	for i in range(im.district_count()):
+		_vb.add_child(_district_card(i))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -294,6 +304,47 @@ func _campaign_card(kind: String) -> PanelContainer:
 			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
 			if is_pr: btn.pressed.connect(func(): im.run_pr())
 			else: btn.pressed.connect(func(): im.run_smear())
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _district_card(i: int) -> PanelContainer:
+	var controlled: bool = im.controls(i)
+	var cd: int = im.election_cd_left(i)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.07, 0.10, 0.08, 0.92) if controlled else Color(0.09, 0.07, 0.13, 0.92)
+	cs.border_color = Color(0.40, 0.65, 0.42, 0.85) if controlled else Color(0.32, 0.28, 0.42, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	var status: String = "  ✅ под контролем" if controlled else ""
+	_lbl(col, im.district_name(i) + status, Color(0.86, 0.92, 0.86) if controlled else Color(0.88, 0.84, 0.98), 14)
+	if not controlled:
+		_lbl(col, "Шанс победы: %d%%  ·  %d вл. + %s" % [
+			int(round(im.election_win_chance(i) * 100.0)), im.election_inf_cost(i),
+			gm.format_money(im.election_money_cost(i))], Color(0.68, 0.64, 0.80), 11)
+	else:
+		_lbl(col, "Даёт +%d влияния/день и долю бонуса к доходу." % int(im.DISTRICT_INF_DAY), Color(0.64, 0.80, 0.66), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if controlled:
+		btn.text = "Ваш"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif cd > 0:
+		btn.text = "⏳ %d дн." % cd
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	elif not im.politics_unlocked():
+		btn.text = "🔒 Титул %d" % im.CONN_MIN_TITLE
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Выдвинуться"
+		if im.can_run_election(i):
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.run_election(i))
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
