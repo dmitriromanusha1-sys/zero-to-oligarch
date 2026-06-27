@@ -181,6 +181,12 @@ func buy_property(type_id: String) -> bool:
 func mortgage_monthly_rate() -> float:
 	var cb := get_node_or_null("/root/CentralBankManager")
 	var kr: float = cb.key_rate if cb else 0.16
+	# Закон «Заморозка ставки ЦБ» (лобби) ограничивает ключевую ставку сверху
+	var inf := get_node_or_null("/root/InfluenceManager")
+	if inf and inf.has_method("law_rate_cap"):
+		var cap: float = inf.law_rate_cap()
+		if cap < 1.0:
+			kr = minf(kr, cap)
 	return (kr + MORTGAGE_SPREAD) / 12.0
 
 func mortgage_down_payment(type_id: String) -> int:

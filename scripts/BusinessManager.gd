@@ -438,7 +438,11 @@ func _foreign_risk_tick() -> void:
 
 # Доход, который получает игрок: валовый × доля владения (после IPO < 100%).
 func get_daily_income() -> float:
-	return get_gross_income() * owner_fraction
+	var law_mult: float = 1.0
+	var inf := get_node_or_null("/root/InfluenceManager")
+	if inf and inf.has_method("law_business_mult"):
+		law_mult = inf.law_business_mult()   # субсидия бизнесу (лобби)
+	return get_gross_income() * owner_fraction * law_mult
 
 # Суммарная стоимость всех бизнесов империи.
 func get_empire_value() -> float:
@@ -1044,7 +1048,11 @@ func process_day() -> void:
 			var tax_mult: float = 1.0
 			if sm and sm.has_method("get_diff"):
 				tax_mult = sm.get_diff().get("tax", 1.0)
-			var tax: float = month_income * TAX_RATE * tax_mult * (1.0 - research_tax_reduction())
+			var law_tax: float = 1.0
+			var inf_t := get_node_or_null("/root/InfluenceManager")
+			if inf_t and inf_t.has_method("law_tax_mult"):
+				law_tax = inf_t.law_tax_mult()
+			var tax: float = month_income * TAX_RATE * tax_mult * (1.0 - research_tax_reduction()) * law_tax
 			if tax > 0.0:
 				gm.spend_money(tax)
 				total_tax_paid += tax

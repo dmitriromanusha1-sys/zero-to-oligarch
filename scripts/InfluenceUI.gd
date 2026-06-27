@@ -87,6 +87,12 @@ func _rebuild() -> void:
 	_header("🤝 Связи с чиновниками")
 	for o in im.OFFICIALS:
 		_vb.add_child(_official_card(o))
+	_sep()
+
+	# Лобби законов
+	_header("📜 Лобби законов")
+	for l in im.LAWS:
+		_vb.add_child(_law_card(l))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -155,6 +161,50 @@ func _official_card(o: Dictionary) -> PanelContainer:
 		if im.can_raise_connection(oid):
 			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
 			btn.pressed.connect(func(): im.raise_connection(oid))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _law_card(l: Dictionary) -> PanelContainer:
+	var lid: String = l.id
+	var active: bool = im.law_active(lid)
+	var cooldown: int = im.law_cooldown_left(lid)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.07, 0.13, 0.92)
+	cs.border_color = Color(0.55, 0.45, 0.30, 0.85) if active else Color(0.32, 0.28, 0.42, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = l.get("icon", "📜")
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	var status: String = ""
+	if active: status = "  🟢 действует %d дн." % im.law_days_left(lid)
+	elif cooldown > 0: status = "  ⏳ остывание %d дн." % cooldown
+	_lbl(col, l.get("name", "?") + status, Color(0.90, 0.84, 1.0), 14)
+	_lbl(col, "%s  ·  %d вл.%s · −%d реп." % [l.get("desc", ""), int(l.inf),
+		(" + " + gm.format_money(l.money)) if int(l.money) > 0 else "", -int(l.get("rep", 0))],
+		Color(0.68, 0.64, 0.80), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if active:
+		btn.text = "Активен"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif cooldown > 0:
+		btn.text = "Остывание"
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	elif not im.politics_unlocked():
+		btn.text = "🔒 Титул %d" % im.CONN_MIN_TITLE
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Провести"
+		if im.can_pass_law(lid):
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.pass_law(lid))
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)

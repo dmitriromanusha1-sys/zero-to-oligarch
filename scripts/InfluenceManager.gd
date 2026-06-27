@@ -32,6 +32,21 @@ const DONATIONS: Array = [
 const CONN_INF_COST: Array = [40, 120, 300]
 const CONN_MONEY_COST: Array = [2_000_000, 10_000_000, 40_000_000]
 
+# ── Лобби законов (Фаза 2) ────────────────────────────────────────────────────
+# Тратишь влияние, чтобы временно продавить закон под себя. Закон действует
+# `days` дней, потом уходит на «остывание» `cooldown`. Лоббизм бьёт по репутации.
+const LAWS: Array = [
+	{"id":"tax_break",     "name":"Налоговые каникулы",   "icon":"🧾", "inf":120, "money":5_000_000,  "days":30, "cooldown":60, "rep":-3, "desc":"−60% налога на прибыль бизнеса."},
+	{"id":"subsidy",       "name":"Субсидия бизнесу",     "icon":"🏭", "inf":150, "money":10_000_000, "days":30, "cooldown":60, "rep":-2, "desc":"+25% к ежедневному доходу бизнеса."},
+	{"id":"rate_freeze",   "name":"Заморозка ставки ЦБ",  "icon":"🏦", "inf":180, "money":0,          "days":40, "cooldown":80, "rep":-2, "desc":"Ставка по ипотеке не выше 8%."},
+	{"id":"price_control", "name":"Госрегулирование цен", "icon":"🛒", "inf":140, "money":3_000_000,  "days":30, "cooldown":60, "rep":-3, "desc":"−15% стоимости жизни в городе."},
+]
+
+const RATE_FREEZE_CAP: float = 0.08
+
+var active_laws: Dictionary = {}    # id -> осталось дней действия
+var law_cooldowns: Dictionary = {}  # id -> осталось дней до повторного принятия
+
 var gm: Node
 
 func _ready() -> void:
@@ -107,6 +122,70 @@ func donate(id: String) -> bool:
 	gm.save_game()
 	return true
 
+# ── Лобби законов ─────────────────────────────────────────────────────────────
+func _law(id: String) -> Dictionary:
+	for l in LAWS:
+		if l.id == id: return l
+	return {}
+
+func law_active(id: String) -> bool:
+	return int(active_laws.get(id, 0)) > 0
+
+func law_days_left(id: String) -> int:
+	return int(active_laws.get(id, 0))
+
+func law_cooldown_left(id: String) -> int:
+	return int(law_cooldowns.get(id, 0))
+
+func can_pass_law(id: String) -> bool:
+	if not politics_unlocked(): return false
+	var l := _law(id)
+	if l.is_empty(): return false
+	if law_active(id) or law_cooldown_left(id) > 0: return false
+	return influence >= float(l.inf) and gm.money >= float(l.money)
+
+func pass_law(id: String) -> bool:
+	if not can_pass_law(id): return false
+	var l := _law(id)
+	if not gm.spend_money(l.money): return false
+	add_influence(-float(l.inf))
+	active_laws[id] = int(l.days)
+	var rm := get_node_or_null("/root/ReputationManager")
+	if rm and rm.has_method("add"):
+		rm.add(int(l.get("rep", 0)))
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func _tick_laws() -> void:
+	var es := get_node_or_null("/root/EventSystem")
+	for id in active_laws.keys():
+		var left: int = int(active_laws[id]) - 1
+		if left <= 0:
+			active_laws.erase(id)
+			var l := _law(id)
+			law_cooldowns[id] = int(l.get("cooldown", 0))
+			if es:
+				es.event_triggered.emit({
+					"text": "📜 Закон «%s» утратил силу." % l.get("name", "?"),
+					"money": 0, "health": 0})
+		else:
+			active_laws[id] = left
+	for id in law_cooldowns.keys():
+		var cl: int = int(law_cooldowns[id]) - 1
+		if cl <= 0: law_cooldowns.erase(id)
+		else: law_cooldowns[id] = cl
+
+# Эффекты активных законов (читаются другими системами)
+func law_tax_mult() -> float:
+	return 0.40 if law_active("tax_break") else 1.0
+
+func law_business_mult() -> float:
+	return 1.25 if law_active("subsidy") else 1.0
+
+func law_rate_cap() -> float:
+	return RATE_FREEZE_CAP if law_active("rate_freeze") else 1.0   # 1.0 = без ограничения
+
 # ── Пассивные бонусы (читаются другими системами) ─────────────────────────────
 func police_raid_mult() -> float:
 	return maxf(0.0, 1.0 - 0.25 * connection_level("police"))   # до −75% шанса
@@ -118,13 +197,16 @@ func tax_discount() -> float:
 	return 0.05 * connection_level("tax")                       # до −15% налога
 
 func expense_mult() -> float:
-	return maxf(0.0, 1.0 - 0.04 * connection_level("mayor"))    # до −12% стоимости жизни
+	var m: float = 1.0 - 0.04 * connection_level("mayor")        # до −12% (связь с мэром)
+	if law_active("price_control"): m *= 0.85                    # −15% (госрегулирование цен)
+	return maxf(0.0, m)
 
 func deposit_bonus() -> float:
 	return 0.005 * connection_level("banker")                  # до +1.5%/мес
 
-# Ежедневно: пассивное влияние от политической машины (мэр + сеть связей).
+# Ежедневно: тикают законы; пассивное влияние от политической машины.
 func process_day() -> void:
+	_tick_laws()
 	if not politics_unlocked(): return
 	var passive: float = total_connection_levels() * 0.2 + connection_level("mayor") * 0.5
 	if passive > 0.0:
@@ -133,11 +215,17 @@ func process_day() -> void:
 func reset() -> void:
 	influence = 0.0
 	connections = {}
+	active_laws = {}
+	law_cooldowns = {}
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
 	cfg.set_value("influence", "connections", connections)
+	cfg.set_value("influence", "active_laws", active_laws)
+	cfg.set_value("influence", "law_cooldowns", law_cooldowns)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
 	connections = cfg.get_value("influence", "connections", {})
+	active_laws = cfg.get_value("influence", "active_laws", {})
+	law_cooldowns = cfg.get_value("influence", "law_cooldowns", {})
