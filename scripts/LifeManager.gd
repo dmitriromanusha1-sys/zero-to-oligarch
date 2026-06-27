@@ -1323,6 +1323,39 @@ func productivity_mult() -> float:
 	var calm: float = 1.0 - stress / 100.0 * 0.25            # выгорание режет продуктивность
 	return mood * smarts * calm
 
+# ── Благополучие и его цена (Фаза 22) ─────────────────────────────────────────
+# Сводное благополучие из счастья, здоровья, низкого стресса и трезвости.
+# Влияет на ВЕСЬ пассивный доход — чтобы личная жизнь имела ставки и у богатых.
+func wellbeing() -> float:
+	var w: float = happiness * 0.45 + gm.health * 0.25 \
+		+ (100.0 - stress) * 0.20 + (100.0 - avg_addiction()) * 0.10
+	return clampf(w, 0.0, 100.0)
+
+func wellbeing_label() -> String:
+	var w: float = wellbeing()
+	if w >= 80.0: return "Полон сил"
+	if w >= 60.0: return "В форме"
+	if w >= 40.0: return "Так себе"
+	if w >= 20.0: return "Измотан"
+	return "На дне"
+
+# Множитель к доходу бизнеса и недвижимости: 0.90..1.10.
+func wellbeing_mult() -> float:
+	return 0.90 + wellbeing() / 100.0 * 0.20
+
+# При низком благополучии — риск дорогой ошибки в делах.
+func _wellbeing_tick() -> void:
+	if wellbeing() >= 35.0: return
+	if randf() < 0.03:
+		var loss: float = clampf(gm.get_net_worth() * 0.002, 1000.0, gm.money)
+		if loss <= 0.0: return
+		gm.add_money(-loss)
+		var es := get_node_or_null("/root/EventSystem")
+		if es:
+			es.event_triggered.emit({
+				"text": "😵 Из-за упадка сил вы приняли плохое решение — потеря %s." % gm.format_money(loss),
+				"money": 0, "health": 0})
+
 # ── Ежедневный ход жизни ──────────────────────────────────────────────────────
 func process_day() -> void:
 	happiness = clampf(happiness + (happiness_baseline() - happiness) * HAPPINESS_DRIFT, 0.0, 100.0)
@@ -1341,6 +1374,7 @@ func process_day() -> void:
 	_vice_tick()
 	_stress_tick()
 	_illness_tick()
+	_wellbeing_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)

@@ -89,6 +89,14 @@ func _rebuild() -> void:
 	var pm: float = life.productivity_mult()
 	var pcol: Color = Color(0.55, 0.9, 0.6) if pm >= 1.0 else Color(0.95, 0.55, 0.5)
 	_lbl(_vb, "Продуктивность работы: ×%.2f" % pm, pcol, 12)
+	# Благополучие — влияет на весь доход
+	var wb: float = life.wellbeing()
+	var wm: float = life.wellbeing_mult()
+	var wcol: Color = Color(0.55, 0.9, 0.6) if wb >= 60.0 else (Color(0.9, 0.8, 0.45) if wb >= 35.0 else Color(0.95, 0.55, 0.5))
+	_lbl(_vb, "Благополучие: %d%% · %s · доход бизнеса и аренды ×%.2f" % [
+		int(round(wb)), life.wellbeing_label(), wm], wcol, 12)
+	if wb < 35.0:
+		_lbl(_vb, "⚠ Упадок сил грозит дорогими ошибками в делах.", Color(0.95, 0.55, 0.5), 11)
 	_sep()
 
 	# Тело и форма

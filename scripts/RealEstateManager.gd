@@ -367,7 +367,12 @@ func portfolio_value() -> float:
 # Ежедневно: чистый поток (аренда − обслуживание − управляющий);
 # раз в месяц — ипотека, заселённость и движение рынка.
 func process_day() -> void:
-	var net := net_daily_income()
+	# Личное благополучие владельца влияет на собранную аренду
+	var wb: float = 1.0
+	var life := get_node_or_null("/root/LifeManager")
+	if life and life.has_method("wellbeing_mult"):
+		wb = life.wellbeing_mult()
+	var net := rental_income() * wb - maintenance_cost() - manager_fee()
 	if net != 0.0:
 		gm.add_money(net)
 	_update_projects()
