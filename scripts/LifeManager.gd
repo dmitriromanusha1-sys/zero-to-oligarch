@@ -53,6 +53,15 @@ var _last_date_day: int = -99
 const MEET_COST: int = 3000
 const DATE_COST: int = 5000
 const COUPLE_THRESHOLD: float = 70.0   # симпатия, при которой можно сойтись
+
+# ── Отношения с партнёром (Фаза 5) ────────────────────────────────────────────
+var _last_pdate_day: int = -99
+var _last_gift_day: int = -99
+const RELATIONSHIP_DECAY: float = 0.4   # отношения остывают без внимания
+const PARTNER_DATE_COST: int = 8000
+const PARTNER_DATE_REL: float = 6.0
+const GIFT_COST: int = 30000
+const GIFT_REL: float = 12.0
 const DATING_NAMES: Array = [
 	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
 	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
@@ -93,7 +102,7 @@ func happiness_baseline() -> float:
 	b += (appearance() - 50.0) * 0.06          # хорошо выглядеть приятно
 	b += (skill("charisma") - 50.0) * 0.05     # социальная уверенность
 	if not partner.is_empty():
-		b += 10.0                              # отношения делают счастливее
+		b += relationship() / 100.0 * 18.0     # крепкие отношения делают счастливее
 	return clampf(b, 5.0, 100.0)
 
 # ── Личные навыки ─────────────────────────────────────────────────────────────
@@ -184,6 +193,73 @@ func stop_seeing() -> void:
 	emit_signal("life_changed")
 	gm.save_game()
 
+# ── Отношения с партнёром ─────────────────────────────────────────────────────
+func relationship() -> float:
+	return float(partner.get("relationship", 0.0))
+
+func add_relationship(amount: float) -> void:
+	if partner.is_empty(): return
+	partner["relationship"] = clampf(relationship() + amount, 0.0, 100.0)
+
+func relationship_label() -> String:
+	var r: float = relationship()
+	if r >= 85.0: return "Крепкие как никогда"
+	if r >= 65.0: return "Гармония"
+	if r >= 45.0: return "Стабильно"
+	if r >= 25.0: return "Прохладно"
+	return "На грани разрыва"
+
+func can_partner_date() -> bool:
+	return not partner.is_empty() and gm.day > _last_pdate_day and gm.money >= float(gm.shop_price(PARTNER_DATE_COST))
+
+func partner_date() -> bool:
+	if not can_partner_date(): return false
+	if not gm.spend_money(gm.shop_price(PARTNER_DATE_COST)): return false
+	add_relationship(PARTNER_DATE_REL)
+	add_happiness(2.0)
+	_last_pdate_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func can_gift() -> bool:
+	return not partner.is_empty() and gm.day > _last_gift_day and gm.money >= float(gm.shop_price(GIFT_COST))
+
+func give_gift() -> bool:
+	if not can_gift(): return false
+	if not gm.spend_money(gm.shop_price(GIFT_COST)): return false
+	add_relationship(GIFT_REL)
+	add_happiness(1.5)
+	_last_gift_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func breakup() -> void:
+	if partner.is_empty(): return
+	var nm: String = String(partner.get("name", "?"))
+	partner = {}
+	add_happiness(-12.0)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({"text": "💔 Вы расстались с %s." % nm, "money": 0, "health": 0})
+	emit_signal("life_changed")
+	gm.save_game()
+
+# Отношения остывают без внимания; иногда — ссоры; на нуле — разрыв.
+func _relationship_tick() -> void:
+	if partner.is_empty(): return
+	add_relationship(-RELATIONSHIP_DECAY)
+	if gm.day % 30 == 0:
+		var conflict: float = 0.12 * (1.0 - relationship() / 100.0)
+		if randf() < conflict:
+			add_relationship(-randf_range(4.0, 10.0))
+			var es := get_node_or_null("/root/EventSystem")
+			if es:
+				es.event_triggered.emit({"text": "😠 Ссора с %s подпортила отношения." % partner.get("name", "?"), "money": 0, "health": 0})
+	if relationship() <= 0.0:
+		breakup()
+
 # ── Тело, форма и внешность ───────────────────────────────────────────────────
 # Внешность складывается из формы, стиля и возраста (молодость — плюс).
 func appearance() -> float:
@@ -250,6 +326,7 @@ func process_day() -> void:
 	var disc: float = discipline_mult()
 	fitness = clampf(fitness - FITNESS_DECAY * disc, 0.0, 100.0)
 	style = clampf(style - STYLE_DECAY * disc, 0.0, 100.0)
+	_relationship_tick()
 	# День рождения
 	if gm.day > 1 and days_into_year() == 0:
 		var es := get_node_or_null("/root/EventSystem")
@@ -271,6 +348,8 @@ func reset() -> void:
 	partner = {}
 	prospect = {}
 	_last_date_day = -99
+	_last_pdate_day = -99
+	_last_gift_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -284,6 +363,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "partner", partner)
 	cfg.set_value("life", "prospect", prospect)
 	cfg.set_value("life", "last_date_day", _last_date_day)
+	cfg.set_value("life", "last_pdate_day", _last_pdate_day)
+	cfg.set_value("life", "last_gift_day", _last_gift_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -297,3 +378,5 @@ func load_data(cfg: ConfigFile) -> void:
 	partner = cfg.get_value("life", "partner", {})
 	prospect = cfg.get_value("life", "prospect", {})
 	_last_date_day = cfg.get_value("life", "last_date_day", -99)
+	_last_pdate_day = cfg.get_value("life", "last_pdate_day", -99)
+	_last_gift_day = cfg.get_value("life", "last_gift_day", -99)
