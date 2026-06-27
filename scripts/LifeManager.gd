@@ -96,6 +96,20 @@ const EDU_STAGES: Array = [
 	{"name":"Престижный вуз",       "min_age":17, "cost":3_000_000,  "edu":35},
 	{"name":"Зарубежная стажировка","min_age":20, "cost":10_000_000, "edu":40},
 ]
+
+# ── Семейные события (Фаза 10) ────────────────────────────────────────────────
+const FAMILY_EVENT_CHANCE: float = 0.04   # шанс семейного события в день
+const FAMILY_EVENTS: Array = [
+	{"id":"anniversary",  "need":"partner",  "text":"💐 Годовщина отношений — тёплый вечер вдвоём.", "happy":4,  "rel":5},
+	{"id":"family_trip",  "need":"partner",  "text":"🏖 Семейная поездка подняла всем настроение.",   "happy":6,  "rel":4,  "bond":4, "money_pct":-0.005},
+	{"id":"quarrel",      "need":"partner",  "text":"😠 Бытовая ссора подпортила настроение.",         "happy":-3, "rel":-6},
+	{"id":"in_laws",      "need":"partner",  "text":"👵 Визит родни немного вымотал.",                  "happy":-2},
+	{"id":"gift_money",   "need":"partner",  "text":"🎁 Родственники подарили деньги.",                 "happy":2,  "money":300000},
+	{"id":"kid_award",    "need":"children", "text":"🏅 Ваш ребёнок получил награду — вы горды!",        "happy":5,  "upbringing":4},
+	{"id":"kid_milestone","need":"children", "text":"🎉 Ребёнок сделал большие успехи.",                "happy":4,  "bond":3},
+	{"id":"kid_sick",     "need":"children", "text":"🤒 Ребёнок заболел — расходы на лечение.",          "happy":-4, "money_pct":-0.01},
+	{"id":"school_event", "need":"children", "text":"🎭 Школьный праздник — приятные хлопоты.",          "happy":3,  "bond":2, "money_pct":-0.002},
+]
 const DATING_NAMES: Array = [
 	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
 	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
@@ -235,6 +249,42 @@ func develop_children() -> bool:
 func _parenting_tick() -> void:
 	for ch in children:
 		ch["bond"] = clampf(float(ch.get("bond", 50.0)) - BOND_DECAY, 0.0, 100.0)
+
+# ── Семейные события ──────────────────────────────────────────────────────────
+func _apply_family_event(ev: Dictionary) -> void:
+	if ev.has("happy"): add_happiness(float(ev.happy))
+	if ev.has("rel") and not partner.is_empty(): add_relationship(float(ev.rel))
+	if ev.has("bond"):
+		for ch in children:
+			ch["bond"] = clampf(float(ch.get("bond", 50.0)) + float(ev.bond), 0.0, 100.0)
+	if ev.has("upbringing"):
+		for ch in children:
+			ch["upbringing"] = clampf(float(ch.get("upbringing", 0.0)) + float(ev.upbringing), 0.0, 100.0)
+	var money_delta: float = float(ev.get("money", 0))
+	if ev.has("money_pct"):
+		money_delta += gm.money * float(ev.money_pct)
+	money_delta = round(money_delta)
+	if money_delta != 0.0:
+		gm.add_money(money_delta)
+	var txt: String = String(ev.text)
+	if money_delta != 0.0:
+		txt += " (%s)" % gm.format_money(money_delta)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({"text": txt, "money": 0, "health": 0})
+	emit_signal("life_changed")
+
+func _family_events_tick() -> void:
+	if partner.is_empty() and children.is_empty(): return
+	if randf() >= FAMILY_EVENT_CHANCE: return
+	var pool: Array = []
+	for ev in FAMILY_EVENTS:
+		var need: String = String(ev.get("need", ""))
+		if need == "partner" and partner.is_empty(): continue
+		if need == "children" and children.is_empty(): continue
+		pool.append(ev)
+	if pool.is_empty(): return
+	_apply_family_event(pool[randi() % pool.size()])
 
 # ── Образование детей ─────────────────────────────────────────────────────────
 func child_edu_stage(index: int) -> int:
@@ -561,6 +611,7 @@ func process_day() -> void:
 	style = clampf(style - STYLE_DECAY * disc, 0.0, 100.0)
 	_relationship_tick()
 	_parenting_tick()
+	_family_events_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
