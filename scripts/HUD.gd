@@ -169,7 +169,7 @@ func _ready() -> void:
 const _MODAL_GROUPS := ["shift_ui", "sleep_ui", "food_shop", "business_shop",
 	"education_shop", "transport_shop", "radio_shop", "casino_ui", "stock_ui",
 	"travel_agency_ui", "loan_ui", "exam_ui", "quest_ui", "settings_ui",
-	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui"]
+	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui"]
 
 func _is_blocking_ui_open() -> bool:
 	if _game_over_shown or pause_menu.visible:

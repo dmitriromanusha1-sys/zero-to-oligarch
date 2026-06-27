@@ -706,6 +706,11 @@ func next_day() -> void:
 	if rem_d and rem_d.has_method("process_day"):
 		rem_d.process_day()
 
+	# Политическое влияние (пассивный прирост от связей)
+	var inf_d = get_node_or_null("/root/InfluenceManager")
+	if inf_d and inf_d.has_method("process_day"):
+		inf_d.process_day()
+
 	# Платежи по кредитам
 	var lm = get_node_or_null("/root/LoanManager")
 	if lm:
@@ -752,9 +757,15 @@ func _police_check() -> void:
 		return
 	# Шанс облавы зависит от того насколько плоха репутация
 	var chance: float = 0.15 + (40 - rm.reputation) * 0.01
+	# Связь с начальником полиции снижает и шанс облавы, и размер штрафа
+	var inf := get_node_or_null("/root/InfluenceManager")
+	if inf and inf.has_method("police_raid_mult"):
+		chance *= inf.police_raid_mult()
 	if randf() > chance:
 		return
 	var fine: float = money * 0.1 * (_diff().penalty as float)
+	if inf and inf.has_method("police_fine_mult"):
+		fine *= inf.police_fine_mult()
 	money -= fine
 	emit_signal("money_changed", money)
 	_check_title()
@@ -940,7 +951,10 @@ func shop_price(base: float) -> int:
 	# Стоимость жизни зависит от района: дороже в богатых зонах
 	var zm := get_node_or_null("/root/ZoneManager")
 	var col: float = zm.cost_of_living_mult() if zm and zm.has_method("cost_of_living_mult") else 1.0
-	return int(round(base * idx * col * shock))
+	# Связь с мэром удешевляет жизнь в городе
+	var inf := get_node_or_null("/root/InfluenceManager")
+	var pol: float = inf.expense_mult() if inf and inf.has_method("expense_mult") else 1.0
+	return int(round(base * idx * col * shock * pol))
 
 # Множитель дохода от работы (индекс зарплат ЦБ): в рецессию отстаёт от цен,
 # в бум обгоняет их.
@@ -1018,6 +1032,8 @@ func save_game() -> void:
 	if tm: tm.save(cfg)
 	var rem = get_node_or_null("/root/RealEstateManager")
 	if rem: rem.save(cfg)
+	var inf = get_node_or_null("/root/InfluenceManager")
+	if inf: inf.save(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.save(cfg)
 	# Запись на диск — в фоновом потоке, чтобы кадр не фризил. Ящик по пути слота:
@@ -1149,6 +1165,8 @@ func load_game() -> void:
 	if tm: tm.load_data(cfg)
 	var rem = get_node_or_null("/root/RealEstateManager")
 	if rem: rem.load_data(cfg)
+	var inf = get_node_or_null("/root/InfluenceManager")
+	if inf: inf.load_data(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.load_data(cfg)
 	_emit_loaded_signals()
@@ -1203,6 +1221,8 @@ func _reset_state() -> void:
 	if tm: tm.current_vehicle_id = "walk"; tm.owned_vehicles = ["walk"]
 	var rem = get_node_or_null("/root/RealEstateManager")
 	if rem: rem.reset()
+	var inf = get_node_or_null("/root/InfluenceManager")
+	if inf: inf.reset()
 	var im = get_node_or_null("/root/InventoryManager")
 	if im: im.inventory.clear()
 

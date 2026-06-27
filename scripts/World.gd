@@ -185,6 +185,7 @@ const ZONE_BUILDINGS: Array = [
 		{"name":"🧠 НИИ (Наука)",    "action":"Получить образование (гений)",    "reward":0,       "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.15,0.20,0.40), "edu_shop":true, "edu_max":10, "tex":"res://assets/textures/NIИ.png"},
 		{"name":"🎰 Казино VIP",     "action":"Сыграть в казино (±500 000 ₽)",   "reward":500000,  "cd":5.0,  "pos":Vector2(-400,-500), "color":Color(0.55,0.22,0.45), "casino":true, "tex":"res://assets/textures/Casino.png"},
 		{"name":"🏥 Госпиталь «Олимп»","action":"Лечение (+55 здоровья)",        "reward":0,       "cd":11.0, "pos":Vector2( 900, 200), "color":Color(0.28,0.52,0.52), "heal":55, "tex":"res://assets/textures/Medical clinic building.png"},
+		{"name":"🏛 Политический клуб","action":"Власть и влияние",               "reward":0,       "cd":999,  "pos":Vector2(-150, -600), "color":Color(0.38,0.28,0.50), "influence":true, "tex":"res://assets/textures/Meria.png"},
 		{"name":"✈ Тур.фирма",       "action":"Переехать в следующий район",     "reward":0,       "cd":999,  "pos":Vector2(   0,  250), "color":Color(0.15,0.30,0.50), "travel":true, "tex":"res://assets/textures/Travel agency office.png"},
 	],
 
@@ -2719,6 +2720,7 @@ func _spawn_building(d: Dictionary) -> void:
 	b.opens_stock_ui        = d.get("stock", false)
 	b.opens_radio_shop      = d.get("radio_shop", false)
 	b.opens_real_estate     = d.get("realestate", false)
+	b.opens_influence       = d.get("influence", false)
 	if d.get("casino", false):
 		b.money_reward = d.get("reward", 50000)
 		b.is_casino    = true
@@ -2794,6 +2796,8 @@ func _spawn_building(d: Dictionary) -> void:
 		wc = Color(0.52, 0.70, 1.0, 0.80)
 	elif d.get("realestate", false):
 		wc = Color(0.55, 0.95, 0.65, 0.80)
+	elif d.get("influence", false):
+		wc = Color(0.85, 0.70, 1.0, 0.85)
 	elif d.get("heal", 0) > 0:
 		wc = Color(0.42, 0.90, 0.82, 0.80)
 	elif d.get("edu_shop", false):
