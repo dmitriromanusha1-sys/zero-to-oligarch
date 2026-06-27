@@ -105,6 +105,23 @@ const THERAPY_COST: int = 100_000
 const THERAPY_RELIEF: float = 25.0
 const BURNOUT_THRESHOLD: float = 90.0
 
+# ── Болезни и медицина (Фаза 18) ──────────────────────────────────────────────
+var illnesses: Array = []   # активные id болезней
+var medical_tier: int = 0
+const ILLNESSES: Array = [
+	{"id":"flu",          "name":"Грипп",            "drain":1.5, "happy":3.0, "cure":50_000,    "min_age":0},
+	{"id":"injury",       "name":"Травма",           "drain":2.0, "happy":4.0, "cure":150_000,   "min_age":0},
+	{"id":"hypertension", "name":"Гипертония",       "drain":1.0, "happy":2.0, "cure":300_000,   "min_age":45},
+	{"id":"diabetes",     "name":"Диабет",           "drain":1.2, "happy":3.0, "cure":800_000,   "min_age":50},
+	{"id":"heart",        "name":"Болезнь сердца",   "drain":2.5, "happy":5.0, "cure":3_000_000, "min_age":55},
+]
+const MEDICAL_TIERS: Array = [
+	{"name":"Базовая медицина",      "install":0,          "upkeep":0,         "longevity":0,  "illness_mult":1.0},
+	{"name":"Семейный врач",         "install":1_000_000,  "upkeep":50_000,    "longevity":2,  "illness_mult":0.7},
+	{"name":"Частная клиника",       "install":10_000_000, "upkeep":300_000,   "longevity":5,  "illness_mult":0.5},
+	{"name":"Программа долголетия",   "install":100_000_000,"upkeep":2_000_000, "longevity":10, "illness_mult":0.3},
+]
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -225,9 +242,9 @@ func life_expectancy() -> float:
 	base += longevity_bonus()
 	return clampf(base, 55.0, 110.0)
 
-# Бонус долголетия от медицины — наполняется в фазе 18 (по умолчанию 0).
+# Бонус долголетия от медицины (см. фазу 18).
 func longevity_bonus() -> float:
-	return 0.0
+	return float(MEDICAL_TIERS[medical_tier].get("longevity", 0))
 
 func years_left() -> int:
 	return maxi(0, int(round(life_expectancy())) - age())
@@ -259,6 +276,7 @@ func happiness_baseline() -> float:
 	b += minf(luxury_happiness(), 12.0)                            # роскошь и комфорт
 	b -= avg_addiction() * 0.12                                    # зависимости подтачивают
 	b -= stress * 0.12                                             # стресс/выгорание
+	b -= illness_happy_penalty()                                  # болезни угнетают
 	return clampf(b, 5.0, 100.0)
 
 # ── Ментальное здоровье и выгорание ───────────────────────────────────────────
@@ -312,6 +330,86 @@ func _stress_tick() -> void:
 			es.event_triggered.emit({
 				"text": "🧠 Выгорание! Вы сорвались от перегрузки — нужен отдых.",
 				"money": 0, "health": -10})
+
+# ── Болезни и медицина ────────────────────────────────────────────────────────
+func _illness(id: String) -> Dictionary:
+	for d in ILLNESSES:
+		if d.id == id: return d
+	return {}
+
+func has_illness(id: String) -> bool:
+	return id in illnesses
+
+func illness_happy_penalty() -> float:
+	var t: float = 0.0
+	for id in illnesses:
+		t += float(_illness(id).get("happy", 0.0))
+	return t
+
+func medical_illness_mult() -> float:
+	return float(MEDICAL_TIERS[medical_tier].get("illness_mult", 1.0))
+
+# Риск заболеть в день: возраст, форма, пороки, стресс; медицина снижает.
+func illness_risk() -> float:
+	var r: float = 0.004
+	r += maxf(0.0, age() - 40) * 0.0004
+	r += maxf(0.0, 50.0 - fitness) * 0.0001
+	r += avg_addiction() * 0.0002
+	r += stress * 0.0001
+	r *= medical_illness_mult()
+	return clampf(r, 0.0, 0.25)
+
+func cure_cost(id: String) -> int:
+	return gm.shop_price(int(_illness(id).get("cure", 0)))
+
+func can_cure(id: String) -> bool:
+	return has_illness(id) and gm.money >= float(cure_cost(id))
+
+func cure(id: String) -> bool:
+	if not can_cure(id): return false
+	if not gm.spend_money(cure_cost(id)): return false
+	illnesses.erase(id)
+	add_happiness(2.0)
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func medical_next_cost() -> int:
+	if medical_tier + 1 >= MEDICAL_TIERS.size(): return 0
+	return int(MEDICAL_TIERS[medical_tier + 1].install)
+
+func can_upgrade_medical() -> bool:
+	return medical_tier + 1 < MEDICAL_TIERS.size() and gm.money >= float(medical_next_cost())
+
+func upgrade_medical() -> bool:
+	if not can_upgrade_medical(): return false
+	if not gm.spend_money(medical_next_cost()): return false
+	medical_tier += 1
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func medical_monthly() -> float:
+	return float(gm.shop_price(int(MEDICAL_TIERS[medical_tier].get("upkeep", 0))))
+
+func _illness_tick() -> void:
+	# Урон от активных болезней
+	for id in illnesses:
+		gm.health = maxf(0.0, gm.health - float(_illness(id).get("drain", 0.0)))
+	# Новая болезнь
+	if illnesses.size() < 3 and randf() < illness_risk():
+		var pool: Array = []
+		for d in ILLNESSES:
+			if age() >= int(d.min_age) and not has_illness(String(d.id)):
+				pool.append(d)
+		if not pool.is_empty():
+			var d: Dictionary = pool[randi() % pool.size()]
+			illnesses.append(String(d.id))
+			var es := get_node_or_null("/root/EventSystem")
+			if es:
+				es.event_triggered.emit({
+					"text": "🤒 У вас обнаружили: %s. Нужно лечение." % d.get("name", "болезнь"),
+					"money": 0, "health": 0})
 
 # ── Пороки и зависимости ──────────────────────────────────────────────────────
 func _vice(id: String) -> Dictionary:
@@ -1033,9 +1131,14 @@ func process_day() -> void:
 	_hobby_tick()
 	_vice_tick()
 	_stress_tick()
+	_illness_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
+	if gm.day % 30 == 0:
+		var med: float = medical_monthly()
+		if med > 0.0:
+			gm.add_money(-med)
 	# День рождения
 	if gm.day > 1 and days_into_year() == 0:
 		var es := get_node_or_null("/root/EventSystem")
@@ -1071,6 +1174,8 @@ func reset() -> void:
 	vices = {}
 	stress = 20.0
 	_last_therapy_day = -99
+	illnesses = []
+	medical_tier = 0
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -1098,6 +1203,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "vices", vices)
 	cfg.set_value("life", "stress", stress)
 	cfg.set_value("life", "last_therapy_day", _last_therapy_day)
+	cfg.set_value("life", "illnesses", illnesses)
+	cfg.set_value("life", "medical_tier", medical_tier)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -1125,3 +1232,5 @@ func load_data(cfg: ConfigFile) -> void:
 	vices = cfg.get_value("life", "vices", {})
 	stress = cfg.get_value("life", "stress", 20.0)
 	_last_therapy_day = cfg.get_value("life", "last_therapy_day", -99)
+	illnesses = cfg.get_value("life", "illnesses", [])
+	medical_tier = cfg.get_value("life", "medical_tier", 0)

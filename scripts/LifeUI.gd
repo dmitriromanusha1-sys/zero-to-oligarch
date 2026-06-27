@@ -222,6 +222,20 @@ func _rebuild() -> void:
 	_vb.add_child(_bar(life.stress / 100.0, life.mental_color()))
 	_lbl(_vb, "Работа и пороки растят стресс; хобби, сила воли и отдых снижают.", Color(0.64, 0.66, 0.7), 11)
 	_vb.add_child(_therapy_card())
+	_sep()
+
+	# Здоровье и медицина
+	_header("🏥 Здоровье и медицина")
+	var tier = life.MEDICAL_TIERS[life.medical_tier]
+	_lbl(_vb, "Медицина: %s · долголетие +%d лет" % [tier.get("name",""), int(tier.get("longevity",0))], Color(0.7, 0.85, 0.82), 12)
+	if life.illnesses.is_empty():
+		_lbl(_vb, "Активных болезней нет. Риск заболеть: %.1f%%/день." % (life.illness_risk() * 100.0), Color(0.6, 0.82, 0.66), 11)
+	else:
+		_lbl(_vb, "⚠ Активные болезни:", Color(0.95, 0.6, 0.55), 11)
+		for id in life.illnesses:
+			_vb.add_child(_illness_card(id))
+	if life.medical_tier + 1 < life.MEDICAL_TIERS.size():
+		_vb.add_child(_medical_card())
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -232,6 +246,55 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _illness_card(id: String) -> PanelContainer:
+	var d = life._illness(id)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.13, 0.08, 0.08, 0.92)
+	cs.border_color = Color(0.7, 0.4, 0.36, 0.8)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "🤒 %s" % d.get("name","?"), Color(0.95, 0.72, 0.68), 14)
+	_lbl(col, "−%.1f здоровья/день, −%d к настроению" % [float(d.get("drain",0)), int(d.get("happy",0))], Color(0.78, 0.6, 0.58), 11)
+	var btn := Button.new()
+	btn.text = "Лечить (%s)" % gm.format_money(life.cure_cost(id))
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.can_cure(id):
+		_style(btn, Color(0.10, 0.16, 0.14), Color(0.3, 0.55, 0.45))
+		btn.pressed.connect(func(): life.cure(id))
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _medical_card() -> PanelContainer:
+	var nxt = life.MEDICAL_TIERS[life.medical_tier + 1]
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.08, 0.11, 0.12, 0.92)
+	cs.border_color = Color(0.4, 0.55, 0.55, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "⬆ %s" % nxt.get("name",""), Color(0.82, 0.9, 0.9), 14)
+	_lbl(col, "Меньше болезней, +%d к долголетию · содержание %s/мес" % [
+		int(nxt.get("longevity",0)), gm.format_money(int(nxt.get("upkeep",0)))], Color(0.66, 0.72, 0.74), 11)
+	var btn := Button.new()
+	btn.text = "Подключить (%s)" % gm.format_money(life.medical_next_cost())
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.can_upgrade_medical():
+		_style(btn, Color(0.10, 0.16, 0.18), Color(0.3, 0.5, 0.55))
+		btn.pressed.connect(func(): life.upgrade_medical())
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 func _therapy_card() -> PanelContainer:
 	var card := PanelContainer.new()
