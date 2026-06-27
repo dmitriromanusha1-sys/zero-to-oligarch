@@ -133,6 +133,20 @@ func _rebuild() -> void:
 			im.controlled_count(), im.GC_DISTRICTS, im.total_connection_levels(), im.max_connection_total()],
 			Color(0.66, 0.62, 0.76), 11)
 	_vb.add_child(_coverup_card())
+	if im.has_immunity():
+		_lbl(_vb, "🛡 Иммунитет от расследований: ещё %d дн." % im.intel_immunity_days, Color(0.55, 0.85, 0.6), 11)
+	_sep()
+
+	# Спецслужбы и досье
+	_header("🕵 Спецслужбы и досье")
+	_vb.add_child(_intel_service_card())
+	if im.intel_active():
+		_lbl(_vb, "Досье: %d/%d  ·  слежка: %d%%" % [im.dossiers, im.DOSSIER_MAX,
+			int(round(im.surveillance_progress() * 100.0))], Color(0.74, 0.70, 0.88), 12)
+		_vb.add_child(_intel_action_card("surveil"))
+		_vb.add_child(_intel_action_card("blackmail"))
+		_vb.add_child(_intel_action_card("sabotage"))
+		_vb.add_child(_intel_action_card("immunity"))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -395,6 +409,93 @@ func _coverup_card() -> PanelContainer:
 			btn.pressed.connect(func(): im.coverup())
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _intel_service_card() -> PanelContainer:
+	var lvl: int = im.intel_level
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.08, 0.08, 0.11, 0.92)
+	cs.border_color = Color(0.50, 0.50, 0.58, 0.8) if lvl > 0 else Color(0.30, 0.30, 0.38, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "🕵"
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	var dots: String = ""
+	for s in range(im.INTEL_MAX_LEVEL):
+		dots += "●" if s < lvl else "○"
+	_lbl(col, "Спецслужба  %s" % dots, Color(0.88, 0.88, 0.94), 14)
+	_lbl(col, "Ведёт слежку и копит досье. Выше уровень — быстрее.", Color(0.66, 0.66, 0.76), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if lvl >= im.INTEL_MAX_LEVEL:
+		btn.text = "✅ Максимум"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif gm.current_title_index < im.INTEL_MIN_TITLE:
+		btn.text = "🔒 Титул %d" % im.INTEL_MIN_TITLE
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "%s (%d вл. + %s)" % ["Создать" if lvl == 0 else "Усилить", im.intel_next_inf(), gm.format_money(im.intel_next_money())]
+		if im.can_upgrade_intel():
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.upgrade_intel())
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _intel_action_card(kind: String) -> PanelContainer:
+	var titles := {"surveil":"Заказать слежку", "blackmail":"Шантаж конкурента",
+		"sabotage":"Саботаж конкурента", "immunity":"Досье на следователя"}
+	var descs := {
+		"surveil":"+1 досье · %d вл. + %s" % [int(im.SURVEIL_INF), gm.format_money(im.SURVEIL_MONEY)],
+		"blackmail":"Конкурент откупается и отдаёт долю · 1 досье",
+		"sabotage":"Жёстко обваливает долю конкурента · 1 досье",
+		"immunity":"−подозрение до 0 и %d дн. иммунитета · %d досье" % [im.IMMUNITY_DAYS, im.IMMUNITY_DOSSIERS]}
+	var icons := {"surveil":"🔍", "blackmail":"💼", "sabotage":"💣", "immunity":"🛡"}
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.07, 0.11, 0.92)
+	cs.border_color = Color(0.45, 0.40, 0.52, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = icons[kind]
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, titles[kind], Color(0.88, 0.84, 0.96), 14)
+	_lbl(col, descs[kind], Color(0.68, 0.64, 0.78), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ok: bool = false
+	var label: String = "Запустить"
+	if kind == "surveil":
+		var cd: int = im.campaign_cd_left("surveil")
+		if cd > 0: label = "⏳ %d дн." % cd
+		ok = im.can_order_surveillance()
+	elif kind == "blackmail":
+		ok = im.can_blackmail()
+	elif kind == "sabotage":
+		ok = im.can_sabotage()
+	elif kind == "immunity":
+		ok = im.can_buy_immunity()
+	btn.text = label
+	if ok:
+		_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+		match kind:
+			"surveil": btn.pressed.connect(func(): im.order_surveillance())
+			"blackmail": btn.pressed.connect(func(): im.blackmail())
+			"sabotage": btn.pressed.connect(func(): im.sabotage())
+			"immunity": btn.pressed.connect(func(): im.buy_immunity())
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
 	return card
 

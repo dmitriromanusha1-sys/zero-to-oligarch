@@ -709,6 +709,33 @@ func media_smear_competitor(power: float) -> String:
 	emit_signal("business_changed")
 	return "%s (%s)" % [rivals[idx].get("name", "?"), target_sector]
 
+# Шантаж: крупнейший конкурент откупается деньгами и отдаёт часть доли рынка.
+# Возвращает {"name":..., "money":...} или {} если шантажировать некого.
+func intel_blackmail() -> Dictionary:
+	var sectors := active_sectors()
+	if sectors.is_empty(): return {}
+	var target_sector := ""
+	for s in sectors:
+		_ensure_competitors(s)
+		if get_competitors(s).size() > 0:
+			target_sector = s
+			break
+	if target_sector == "": return {}
+	var rivals: Array = get_competitors(target_sector)
+	var idx: int = 0
+	for i in range(rivals.size()):
+		if float(rivals[i].get("share", 0.0)) > float(rivals[idx].get("share", 0.0)):
+			idx = i
+	var rshare: float = float(rivals[idx].get("share", 0.0))
+	var payout: float = maxf(5_000_000.0, company_valuation() * 0.02 + rshare * company_valuation() * 0.05)
+	gm.add_money(payout)
+	var drop: float = minf(rshare - 0.05, 0.08)
+	if drop > 0.0:
+		rivals[idx]["share"] = maxf(0.05, rshare - drop)
+		market_share[target_sector] = clampf(get_share(target_sector) + drop, 0.03, 0.98)
+	emit_signal("business_changed")
+	return {"name": "%s (%s)" % [rivals[idx].get("name", "?"), target_sector], "money": payout}
+
 # Управление повесткой: снижает антимонопольный жар во всех секторах.
 func media_reduce_heat(amount: float) -> void:
 	for s in antitrust_heat.keys():

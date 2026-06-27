@@ -102,6 +102,30 @@ const COVERUP_REDUCE: float = 0.55           # «замятие» срезает
 
 const GC_DISTRICTS: int = 6                  # условия титула «Серый кардинал»
 
+# ── Спецслужбы и компромат-досье (Фаза 6) ─────────────────────────────────────
+# Карманная «контора» ведёт слежку и копит ДОСЬЕ — компромат, который пускаешь
+# в ход: шантаж и саботаж конкурентов или иммунитет от расследований.
+var intel_level: int = 0                     # уровень спецслужбы 0..3
+var dossiers: int = 0                        # готовые досье на руках
+var surveillance: float = 0.0               # накопленный прогресс слежки (≥1 → +досье)
+var intel_immunity_days: int = 0             # дней иммунитета от расследований
+
+const INTEL_MAX_LEVEL: int = 3
+const INTEL_MIN_TITLE: int = 6
+const INTEL_COST_MONEY: Array = [30_000_000, 100_000_000, 300_000_000]  # за уровень 1..3
+const INTEL_COST_INF: Array = [80, 200, 450]
+const SURVEIL_PER_DAY: Array = [0.0, 0.04, 0.08, 0.14]   # прогресс/день по уровню
+const DOSSIER_MAX: int = 5
+
+const SURVEIL_INF: float = 40.0              # «заказать слежку» (ускоренно)
+const SURVEIL_MONEY: int = 5_000_000
+const SURVEIL_COOLDOWN: int = 10
+const INTEL_OP_HEAT: float = 0.06            # нелегальные операции поднимают подозрение
+
+const IMMUNITY_DOSSIERS: int = 2
+const IMMUNITY_DAYS: int = 60
+const SABOTAGE_POWER: float = 0.18           # саботаж сильнее обычного компромата
+
 var gm: Node
 
 func _ready() -> void:
@@ -434,6 +458,7 @@ func media_shield() -> float:
 	return media_reach() * 0.02   # охват СМИ маскирует подозрение
 
 func investigation_chance() -> float:
+	if has_immunity(): return 0.0
 	return clampf(scrutiny() - media_shield(), 0.0, 0.90)
 
 # Замять скандал: СМИ-машина хоронит историю, жар падает.
@@ -484,9 +509,114 @@ func _trigger_scandal() -> void:
 		es.event_triggered.emit({"text": txt, "money": -fine, "health": 0})
 	emit_signal("connections_changed")
 
+# ── Спецслужбы и компромат-досье ──────────────────────────────────────────────
+func intel_active() -> bool:
+	return intel_level > 0
+
+func intel_next_money() -> int:
+	if intel_level >= INTEL_MAX_LEVEL: return 0
+	return int(INTEL_COST_MONEY[intel_level])
+
+func intel_next_inf() -> int:
+	if intel_level >= INTEL_MAX_LEVEL: return 0
+	return int(INTEL_COST_INF[intel_level])
+
+func can_upgrade_intel() -> bool:
+	if not politics_unlocked() or gm.current_title_index < INTEL_MIN_TITLE: return false
+	if intel_level >= INTEL_MAX_LEVEL: return false
+	return influence >= float(intel_next_inf()) and gm.money >= float(intel_next_money())
+
+func upgrade_intel() -> bool:
+	if not can_upgrade_intel(): return false
+	if not gm.spend_money(intel_next_money()): return false
+	add_influence(-float(intel_next_inf()))
+	intel_level += 1
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func surveillance_progress() -> float:
+	return surveillance
+
+func can_order_surveillance() -> bool:
+	if not intel_active() or campaign_cd_left("surveil") > 0: return false
+	if dossiers >= DOSSIER_MAX: return false
+	return influence >= SURVEIL_INF and gm.money >= float(SURVEIL_MONEY)
+
+func order_surveillance() -> bool:
+	if not can_order_surveillance(): return false
+	if not gm.spend_money(SURVEIL_MONEY): return false
+	add_influence(-SURVEIL_INF)
+	dossiers = mini(DOSSIER_MAX, dossiers + 1)
+	corruption_heat = minf(HEAT_MAX, corruption_heat + INTEL_OP_HEAT)
+	campaign_cd["surveil"] = SURVEIL_COOLDOWN
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+# Шантаж: конкурент откупается деньгами и отдаёт часть доли (тратит 1 досье).
+func can_blackmail() -> bool:
+	if dossiers < 1: return false
+	var bm := get_node_or_null("/root/BusinessManager")
+	return bm != null and bm.has_method("intel_blackmail") and not bm.active_sectors().is_empty()
+
+func blackmail() -> Dictionary:
+	if not can_blackmail(): return {}
+	var bm := get_node_or_null("/root/BusinessManager")
+	var res: Dictionary = bm.intel_blackmail()
+	if res.is_empty(): return {}
+	dossiers -= 1
+	corruption_heat = minf(HEAT_MAX, corruption_heat + INTEL_OP_HEAT)
+	emit_signal("connections_changed")
+	gm.save_game()
+	return res
+
+# Саботаж: жёстко обваливает долю крупнейшего конкурента (тратит 1 досье).
+func can_sabotage() -> bool:
+	if dossiers < 1: return false
+	var bm := get_node_or_null("/root/BusinessManager")
+	return bm != null and bm.has_method("media_smear_competitor") and not bm.active_sectors().is_empty()
+
+func sabotage() -> String:
+	if not can_sabotage(): return ""
+	var bm := get_node_or_null("/root/BusinessManager")
+	var target: String = bm.media_smear_competitor(SABOTAGE_POWER)
+	if target == "": return ""
+	dossiers -= 1
+	corruption_heat = minf(HEAT_MAX, corruption_heat + INTEL_OP_HEAT)
+	emit_signal("connections_changed")
+	gm.save_game()
+	return target
+
+# Иммунитет: досье на следователя гасит подозрение и защищает от расследований.
+func can_buy_immunity() -> bool:
+	return dossiers >= IMMUNITY_DOSSIERS
+
+func buy_immunity() -> bool:
+	if not can_buy_immunity(): return false
+	dossiers -= IMMUNITY_DOSSIERS
+	corruption_heat = 0.0
+	intel_immunity_days = IMMUNITY_DAYS
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func has_immunity() -> bool:
+	return intel_immunity_days > 0
+
+# Ежедневный прогресс слежки → новые досье.
+func _intel_tick() -> void:
+	if intel_active() and dossiers < DOSSIER_MAX:
+		surveillance += float(SURVEIL_PER_DAY[intel_level])
+		while surveillance >= 1.0 and dossiers < DOSSIER_MAX:
+			surveillance -= 1.0
+			dossiers += 1
+	if intel_immunity_days > 0:
+		intel_immunity_days -= 1
+
 # ── Ранг власти / эндгейм ─────────────────────────────────────────────────────
 func power_score() -> int:
-	return controlled_count() * 10 + total_connection_levels() * 4 + media_reach() * 2 + active_laws.size() * 2
+	return controlled_count() * 10 + total_connection_levels() * 4 + media_reach() * 2 + active_laws.size() * 2 + intel_level * 5
 
 func power_rank() -> String:
 	var s: int = power_score()
@@ -540,6 +670,7 @@ func process_day() -> void:
 	_tick_laws()
 	_tick_campaigns()
 	_tick_elections()
+	_intel_tick()
 	if gm.day % 30 == 0:
 		_maybe_lose_districts()
 		_corruption_tick()
@@ -562,6 +693,10 @@ func reset() -> void:
 	election_cd = {}
 	corruption_heat = 0.0
 	grey_cardinal = false
+	intel_level = 0
+	dossiers = 0
+	surveillance = 0.0
+	intel_immunity_days = 0
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
@@ -574,6 +709,10 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "election_cd", election_cd)
 	cfg.set_value("influence", "corruption_heat", corruption_heat)
 	cfg.set_value("influence", "grey_cardinal", grey_cardinal)
+	cfg.set_value("influence", "intel_level", intel_level)
+	cfg.set_value("influence", "dossiers", dossiers)
+	cfg.set_value("influence", "surveillance", surveillance)
+	cfg.set_value("influence", "intel_immunity_days", intel_immunity_days)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
@@ -586,3 +725,7 @@ func load_data(cfg: ConfigFile) -> void:
 	election_cd = cfg.get_value("influence", "election_cd", {})
 	corruption_heat = cfg.get_value("influence", "corruption_heat", 0.0)
 	grey_cardinal = cfg.get_value("influence", "grey_cardinal", false)
+	intel_level = cfg.get_value("influence", "intel_level", 0)
+	dossiers = cfg.get_value("influence", "dossiers", 0)
+	surveillance = cfg.get_value("influence", "surveillance", 0.0)
+	intel_immunity_days = cfg.get_value("influence", "intel_immunity_days", 0)
