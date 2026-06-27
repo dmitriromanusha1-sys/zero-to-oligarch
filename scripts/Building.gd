@@ -21,6 +21,7 @@ const FloatingText = preload("res://scripts/FloatingText.gd")
 @export var opens_transport_shop: bool = false
 @export var opens_stock_ui: bool = false
 @export var opens_radio_shop: bool = false
+@export var opens_real_estate: bool = false
 
 var player_inside: bool = false
 var on_cooldown: bool = false
@@ -160,6 +161,8 @@ func _show_hint() -> void:
 		sub = "📈 Торговля акциями"
 	elif opens_business_shop:
 		sub = "💼 Бизнес / Банк"
+	elif opens_real_estate:
+		sub = "🏘 Недвижимость"
 
 	_hint_sub_lbl.text = sub
 	_hint_sub_lbl.visible = sub != ""
@@ -228,6 +231,11 @@ func _do_action() -> void:
 	if opens_business_shop:
 		var shop = get_tree().get_first_node_in_group("business_shop")
 		if shop: shop.open()
+		return
+
+	if opens_real_estate:
+		var reui = get_tree().get_first_node_in_group("realestate_ui")
+		if reui: reui.open()
 		return
 
 	var gm: Node = get_node("/root/GameManager")
@@ -312,6 +320,7 @@ func _is_job() -> bool:
 	return money_reward > 0.0 and not is_casino and heal_amount <= 0.0 \
 		and not opens_business_shop and not opens_stock_ui and not opens_travel_agency \
 		and not opens_education_shop and not opens_transport_shop and not opens_radio_shop \
+		and not opens_real_estate \
 		and food_shop_name == ""
 
 func _energy_cost(hours: int, housing_bonus: float) -> float:

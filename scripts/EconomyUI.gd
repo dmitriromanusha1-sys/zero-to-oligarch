@@ -82,6 +82,7 @@ func _rebuild() -> void:
 	if b.stocks > 0:   _row("Акции", b.stocks)
 	if b.inventory > 0:_row("Инвентарь", b.inventory)
 	if b.transport > 0:_row("Транспорт", b.transport)
+	if b.get("realestate", 0.0) > 0: _row("Недвижимость", b.realestate)
 	if b.debt > 0:     _row("Долги по кредитам", -b.debt, Color(0.95, 0.45, 0.4))
 	_sep()
 	_row("ИТОГО капитал", b.total, Color(0.95, 0.82, 0.32))

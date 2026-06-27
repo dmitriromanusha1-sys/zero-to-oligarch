@@ -1,7 +1,8 @@
-[gd_scene load_steps=12 format=3 uid="uid://world001"]
+[gd_scene load_steps=13 format=3 uid="uid://world001"]
 
 [ext_resource type="Script" path="res://scripts/World.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/TutorialUI.gd" id="12"]
+[ext_resource type="Script" path="res://scripts/RealEstateUI.gd" id="14"]
 [ext_resource type="Script" path="res://scripts/EconomyUI.gd" id="13"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://scenes/HUD.tscn" id="3"]
@@ -51,3 +52,6 @@ script = ExtResource("12")
 
 [node name="EconomyUI" type="CanvasLayer" parent="."]
 script = ExtResource("13")
+
+[node name="RealEstateUI" type="CanvasLayer" parent="."]
+script = ExtResource("14")

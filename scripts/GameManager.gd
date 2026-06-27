@@ -701,6 +701,11 @@ func next_day() -> void:
 	if bm:
 		bm.process_day()
 
+	# Доход с аренды недвижимости
+	var rem_d = get_node_or_null("/root/RealEstateManager")
+	if rem_d and rem_d.has_method("process_day"):
+		rem_d.process_day()
+
 	# Платежи по кредитам
 	var lm = get_node_or_null("/root/LoanManager")
 	if lm:
@@ -784,6 +789,10 @@ func get_net_worth() -> float:
 			nw += bm.get_empire_value() * 0.7
 		# Банковский депозит — 100%
 		nw += bm.bank_deposit
+	# Доходная недвижимость — по стоимости портфеля
+	var rem: Node = get_node_or_null("/root/RealEstateManager")
+	if rem and rem.has_method("portfolio_value"):
+		nw += rem.portfolio_value()
 
 	# Акции — текущая рыночная стоимость
 	var sm: Node = get_node_or_null("/root/StockMarket")
@@ -822,7 +831,7 @@ func get_net_worth() -> float:
 # Разбивка капитала по составляющим — для экрана «Финансы».
 func get_net_worth_breakdown() -> Dictionary:
 	var d := {"cash": money, "property": 0.0, "business": 0.0, "deposit": 0.0,
-		"stocks": 0.0, "inventory": 0.0, "transport": 0.0, "debt": 0.0}
+		"stocks": 0.0, "inventory": 0.0, "transport": 0.0, "realestate": 0.0, "debt": 0.0}
 	var h: Dictionary = HOUSINGS[current_housing_index]
 	if h.price > 0:
 		d.property = h.price * 0.8
@@ -852,6 +861,9 @@ func get_net_worth_breakdown() -> Dictionary:
 				if vt.id == vid:
 					d.transport += vt.price * 0.6
 					break
+	var rem: Node = get_node_or_null("/root/RealEstateManager")
+	if rem and rem.has_method("portfolio_value"):
+		d.realestate = rem.portfolio_value()
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm:
 		d.debt = lm.get_total_debt()
@@ -896,6 +908,9 @@ func get_finance() -> Dictionary:
 			income += bm.bank_deposit * bm.get_tiered_rate() / 30.0
 		if bm.has_method("get_executive_salary"):
 			expense += bm.get_executive_salary()   # зарплата топ-менеджмента
+	var rem_f: Node = get_node_or_null("/root/RealEstateManager")
+	if rem_f and rem_f.has_method("rental_income"):
+		income += rem_f.rental_income()            # доход с аренды недвижимости
 	var h: Dictionary = HOUSINGS[current_housing_index]
 	var monthly: float = h.get("monthly", 0) as float
 	if monthly > 0.0:
@@ -993,6 +1008,8 @@ func save_game() -> void:
 	if zm: zm.save(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
 	if tm: tm.save(cfg)
+	var rem = get_node_or_null("/root/RealEstateManager")
+	if rem: rem.save(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.save(cfg)
 	# Запись на диск — в фоновом потоке, чтобы кадр не фризил. Ящик по пути слота:
@@ -1122,6 +1139,8 @@ func load_game() -> void:
 	if zm: zm.load_data(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
 	if tm: tm.load_data(cfg)
+	var rem = get_node_or_null("/root/RealEstateManager")
+	if rem: rem.load_data(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.load_data(cfg)
 	_emit_loaded_signals()
@@ -1174,6 +1193,8 @@ func _reset_state() -> void:
 		sm.active_event = {}; sm.event_days_left = 0; sm._day_counter = 0
 	var tm = get_node_or_null("/root/TransportManager")
 	if tm: tm.current_vehicle_id = "walk"; tm.owned_vehicles = ["walk"]
+	var rem = get_node_or_null("/root/RealEstateManager")
+	if rem: rem.reset()
 	var im = get_node_or_null("/root/InventoryManager")
 	if im: im.inventory.clear()
 

@@ -166,7 +166,7 @@ const ZONE_BUILDINGS: Array = [
 		{"name":"🛥 Яхт-клуб",       "action":"Менеджер яхт-клуба (+40 000 ₽)", "reward":40000, "cd":10.0, "pos":Vector2(-800,-300), "color":Color(0.15,0.30,0.50), "minigame":true, "edu_req":7, "tex":"res://assets/textures/Yacht club.png"},
 		{"name":"✈ Аэропорт",        "action":"Деловой рейс за границу (+150 000 ₽)", "reward":150000,"cd":20.0, "pos":Vector2( 700,-400), "color":Color(0.30,0.30,0.50), "minigame":true, "edu_req":8, "tex":"res://assets/textures/Private airport.png"},
 		{"name":"🎰 Казино",         "action":"Сыграть в казино (±50 000 ₽)",   "reward":50000, "cd":5.0,  "pos":Vector2(-500, 500), "color":Color(0.50,0.20,0.40), "casino":true, "tex":"res://assets/textures/Casino.png"},
-		{"name":"🏡 Агентство",      "action":"Купить элитное жильё",           "reward":0,     "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.40,0.35,0.25), "biz":true, "tex":"res://assets/textures/Office.png"},
+		{"name":"🏡 Агентство недвижимости", "action":"Доходная недвижимость",      "reward":0,     "cd":999,  "pos":Vector2( 500,-600), "color":Color(0.30,0.45,0.30), "realestate":true, "tex":"res://assets/textures/Office.png"},
 		{"name":"🥂 VIP-Ресторан",  "action":"Гастрономический ужин",          "reward":0,     "cd":999,  "pos":Vector2( 700, 600), "color":Color(0.50,0.28,0.38), "food_shop":"🥂 VIP-Ресторан", "food_items":["steak","sushi","cocktail","smoothie","elite_medkit","meal_elite"], "tex":"res://assets/textures/Restoran.png"},
 		{"name":"🏥 Частная клиника","action":"Лечиться (+50 здоровья)",        "reward":0,     "cd":10.0, "pos":Vector2( 800, 400), "color":Color(0.30,0.55,0.55), "heal":50,   "tex":"res://assets/textures/Poliklinika.png"},
 		{"name":"🔬 Аспирантура",    "action":"Получить образование (аспирант)","reward":0,     "cd":999,  "pos":Vector2(-900, 500), "color":Color(0.18,0.25,0.45), "edu_shop":true, "edu_max":8, "tex":"res://assets/textures/Univerciti.png"},
@@ -2718,6 +2718,7 @@ func _spawn_building(d: Dictionary) -> void:
 	b.opens_transport_shop  = d.get("transport_shop", false)
 	b.opens_stock_ui        = d.get("stock", false)
 	b.opens_radio_shop      = d.get("radio_shop", false)
+	b.opens_real_estate     = d.get("realestate", false)
 	if d.get("casino", false):
 		b.money_reward = d.get("reward", 50000)
 		b.is_casino    = true
@@ -2791,6 +2792,8 @@ func _spawn_building(d: Dictionary) -> void:
 		wc = Color(1.0, 0.75, 0.15, 0.90)
 	elif d.get("biz", false):
 		wc = Color(0.52, 0.70, 1.0, 0.80)
+	elif d.get("realestate", false):
+		wc = Color(0.55, 0.95, 0.65, 0.80)
 	elif d.get("heal", 0) > 0:
 		wc = Color(0.42, 0.90, 0.82, 0.80)
 	elif d.get("edu_shop", false):
