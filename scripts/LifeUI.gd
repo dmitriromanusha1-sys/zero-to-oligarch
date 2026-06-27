@@ -200,6 +200,16 @@ func _rebuild() -> void:
 		Color(0.92, 0.82, 0.6), 12)
 	for l in life.LUXURIES:
 		_vb.add_child(_luxury_card(l))
+	_sep()
+
+	# Пороки
+	_header("🍷 Пороки и зависимости")
+	if life.avg_addiction() > 1.0:
+		_lbl(_vb, "⚠ Зависимости подтачивают счастье и здоровье.", Color(0.95, 0.55, 0.5), 11)
+	else:
+		_lbl(_vb, "Соблазны дают радость, но затягивают. Сила воли помогает.", Color(0.7, 0.66, 0.62), 11)
+	for v in life.VICES:
+		_vb.add_child(_vice_card(v))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -210,6 +220,50 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _vice_card(v: Dictionary) -> PanelContainer:
+	var vid: String = v.id
+	var addiction: float = life.vice_addiction(vid)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.12, 0.08, 0.08, 0.92)
+	cs.border_color = Color(0.7, 0.4, 0.35, 0.8) if addiction >= 50.0 else Color(0.45, 0.36, 0.34, 0.65)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 10)
+	var outer := VBoxContainer.new(); outer.add_theme_constant_override("separation", 4); card.add_child(outer)
+	outer.add_child(top)
+	var icon := Label.new(); icon.text = v.get("icon", "🍷")
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(col)
+	var acol: Color = Color(0.95, 0.55, 0.5) if addiction >= 50.0 else (Color(0.9, 0.78, 0.45) if addiction >= 20.0 else Color(0.7, 0.72, 0.7))
+	_lbl(col, "%s · зависимость %d%%" % [v.get("name","?"), int(round(addiction))], acol, 14)
+	_lbl(col, v.get("desc",""), Color(0.7, 0.62, 0.6), 11)
+	# Кнопки
+	var btns := HBoxContainer.new(); btns.add_theme_constant_override("separation", 6); outer.add_child(btns)
+	var ib := Button.new()
+	ib.text = "Поддаться (%s)" % gm.format_money(life.vice_cost(vid))
+	ib.add_theme_font_size_override("font_size", 11)
+	ib.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if life.can_indulge(vid):
+		_style(ib, Color(0.18, 0.11, 0.11), Color(0.55, 0.35, 0.32))
+		ib.pressed.connect(func(): life.indulge(vid))
+	else:
+		_style(ib, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); ib.disabled = true
+	btns.add_child(ib)
+	if addiction > 0.0:
+		var rb := Button.new()
+		rb.text = "Лечиться (%s)" % gm.format_money(life.rehab_cost())
+		rb.add_theme_font_size_override("font_size", 11)
+		rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if life.can_rehab(vid):
+			_style(rb, Color(0.10, 0.16, 0.14), Color(0.3, 0.55, 0.45))
+			rb.pressed.connect(func(): life.rehab(vid))
+		else:
+			_style(rb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); rb.disabled = true
+		btns.add_child(rb)
+	return card
 
 func _luxury_card(l: Dictionary) -> PanelContainer:
 	var lid: String = l.id

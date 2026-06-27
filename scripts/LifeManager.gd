@@ -82,6 +82,20 @@ const LUXURIES: Array = [
 	{"id":"jet",     "name":"Частный джет",         "icon":"🛩", "cost":500_000_000, "prestige":25.0, "happy":10.0, "value":350_000_000, "min_title":8, "desc":"Весь мир за несколько часов."},
 ]
 
+# ── Пороки и зависимости (Фаза 15) ────────────────────────────────────────────
+# Соблазны дают всплеск счастья, но растят зависимость (вред здоровью/деньгам и
+# подрыв базового счастья). Сила воли сопротивляется, лечение сбивает зависимость.
+var vices: Dictionary = {}   # id -> уровень зависимости 0..100
+const VICE_RECOVER: float = 0.8     # естественное восстановление в день
+const REHAB_COST: int = 200_000
+const REHAB_AMOUNT: float = 40.0
+const VICES: Array = [
+	{"id":"alcohol",  "name":"Алкоголь",       "icon":"🍷", "happy":5.0, "addict":7.0, "cost":3000,  "harm_health":0.020, "harm_money":0.0,    "desc":"Расслабляет, но затягивает."},
+	{"id":"smoking",  "name":"Курение",        "icon":"🚬", "happy":3.0, "addict":8.0, "cost":1000,  "harm_health":0.030, "harm_money":0.0,    "desc":"Минутное удовольствие, долгий вред."},
+	{"id":"gambling", "name":"Азартные игры",  "icon":"🎰", "happy":6.0, "addict":9.0, "cost":50000, "harm_health":0.0,   "harm_money":0.0030, "desc":"Адреналин и пустые карманы."},
+	{"id":"parties",  "name":"Вечеринки",      "icon":"🎉", "happy":6.0, "addict":5.0, "cost":80000, "harm_health":0.010, "harm_money":0.0010, "desc":"Веселье до утра."},
+]
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -208,7 +222,71 @@ func happiness_baseline() -> float:
 	b += (social_rep - 40.0) * 0.08                                # уважение в обществе
 	b += minf(hobby_happiness(), 16.0)                             # любимые занятия
 	b += minf(luxury_happiness(), 12.0)                            # роскошь и комфорт
+	b -= avg_addiction() * 0.12                                    # зависимости подтачивают
 	return clampf(b, 5.0, 100.0)
+
+# ── Пороки и зависимости ──────────────────────────────────────────────────────
+func _vice(id: String) -> Dictionary:
+	for v in VICES:
+		if v.id == id: return v
+	return {}
+
+func vice_addiction(id: String) -> float:
+	return float(vices.get(id, 0.0))
+
+func avg_addiction() -> float:
+	var t: float = 0.0
+	for v in VICES:
+		t += vice_addiction(v.id)
+	return t / float(VICES.size())
+
+func vice_cost(id: String) -> int:
+	return gm.shop_price(int(_vice(id).get("cost", 0)))
+
+func can_indulge(id: String) -> bool:
+	return not _vice(id).is_empty() and gm.money >= float(vice_cost(id))
+
+# Поддаться пороку: всплеск счастья, но рост зависимости (сила воли тормозит).
+func indulge(id: String) -> bool:
+	var v := _vice(id)
+	if v.is_empty(): return false
+	if not gm.spend_money(vice_cost(id)): return false
+	add_happiness(float(v.happy))
+	var resist: float = 1.0 - skill("willpower") * 0.004   # до −40% роста зависимости
+	vices[id] = clampf(vice_addiction(id) + float(v.addict) * resist, 0.0, 100.0)
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func rehab_cost() -> int:
+	return gm.shop_price(REHAB_COST)
+
+func can_rehab(id: String) -> bool:
+	return vice_addiction(id) > 0.0 and gm.money >= float(rehab_cost())
+
+# Лечение: резко сбивает зависимость.
+func rehab(id: String) -> bool:
+	if not can_rehab(id): return false
+	if not gm.spend_money(rehab_cost()): return false
+	vices[id] = maxf(0.0, vice_addiction(id) - REHAB_AMOUNT)
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+# Ежедневно: вред от зависимостей и естественное восстановление (с силой воли).
+func _vice_tick() -> void:
+	var recover: float = VICE_RECOVER * (1.0 + skill("willpower") / 100.0)
+	for v in VICES:
+		var id: String = String(v.id)
+		var a: float = vice_addiction(id)
+		if a <= 0.0: continue
+		var hh: float = float(v.get("harm_health", 0.0))
+		if hh > 0.0:
+			gm.health = maxf(0.0, gm.health - a * hh)
+		var hm: float = float(v.get("harm_money", 0.0))
+		if hm > 0.0:
+			gm.add_money(-(gm.money * a / 100.0 * hm))
+		vices[id] = maxf(0.0, a - recover)
 
 # ── Хобби ─────────────────────────────────────────────────────────────────────
 func _hobby(id: String) -> Dictionary:
@@ -861,6 +939,7 @@ func process_day() -> void:
 	_social_tick()
 	_social_rep_tick()
 	_hobby_tick()
+	_vice_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
@@ -896,6 +975,7 @@ func reset() -> void:
 	_last_social_day = -99
 	hobbies = []
 	luxuries = []
+	vices = {}
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -920,6 +1000,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_social_day", _last_social_day)
 	cfg.set_value("life", "hobbies", hobbies)
 	cfg.set_value("life", "luxuries", luxuries)
+	cfg.set_value("life", "vices", vices)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -944,3 +1025,4 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_social_day = cfg.get_value("life", "last_social_day", -99)
 	hobbies = cfg.get_value("life", "hobbies", [])
 	luxuries = cfg.get_value("life", "luxuries", [])
+	vices = cfg.get_value("life", "vices", {})
