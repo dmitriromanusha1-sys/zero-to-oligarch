@@ -106,6 +106,24 @@ func _rebuild() -> void:
 		_lbl(_vb, "Одно занятие в день · %s" % gm.format_money(life.dev_cost()), Color(0.64, 0.62, 0.72), 11)
 	for sk in life.SKILLS:
 		_vb.add_child(_skill_card(sk))
+	_sep()
+
+	# Личная жизнь
+	_header("❤ Личная жизнь")
+	if not life.is_single():
+		_lbl(_vb, "В отношениях с %s 💞" % life.partner.get("name", "?"), Color(0.95, 0.7, 0.78), 14)
+	elif life.has_prospect():
+		var interest: float = float(life.prospect.get("interest", 0.0))
+		_lbl(_vb, "Встречаетесь с %s" % life.prospect.get("name", "?"), Color(0.95, 0.8, 0.85), 14)
+		_lbl(_vb, "Симпатия: %d%%" % int(round(interest)), Color(0.9, 0.7, 0.78), 12)
+		_vb.add_child(_bar(interest / 100.0, Color(0.9, 0.45, 0.55)))
+		_vb.add_child(_love_card("date"))
+		if life.can_become_couple():
+			_vb.add_child(_love_card("couple"))
+		_vb.add_child(_love_card("stop"))
+	else:
+		_lbl(_vb, "Вы одиноки. Привлекательность: %d%%" % int(round(life.dating_appeal())), Color(0.8, 0.74, 0.82), 12)
+		_vb.add_child(_love_card("meet"))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -116,6 +134,50 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _love_card(kind: String) -> PanelContainer:
+	var titles := {"meet":"Найти пару", "date":"Сходить на свидание", "couple":"Начать отношения", "stop":"Перестать встречаться"}
+	var descs := {
+		"meet":"Познакомиться · %s" % gm.format_money(gm.shop_price(life.MEET_COST)),
+		"date":"Поднять симпатию · %s" % gm.format_money(gm.shop_price(life.DATE_COST)),
+		"couple":"Стать парой 💞",
+		"stop":"Разойтись с текущим увлечением"}
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.13, 0.08, 0.11, 0.92)
+	cs.border_color = Color(0.6, 0.35, 0.45, 0.7) if kind != "stop" else Color(0.45, 0.35, 0.4, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, titles[kind], Color(0.95, 0.82, 0.88), 14)
+	_lbl(col, descs[kind], Color(0.74, 0.64, 0.70), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ok: bool = true
+	var label: String = "Сделать"
+	if kind == "meet":
+		ok = life.can_meet()
+	elif kind == "date":
+		ok = life.can_date()
+		if gm.day <= life._last_date_day: label = "✅ Сегодня"
+	elif kind == "couple":
+		label = "💞 Сойтись"; ok = life.can_become_couple()
+	elif kind == "stop":
+		label = "Разойтись"
+	if ok:
+		_style(btn, Color(0.20, 0.12, 0.16), Color(0.6, 0.38, 0.48))
+		match kind:
+			"meet": btn.pressed.connect(func(): life.meet_someone())
+			"date": btn.pressed.connect(func(): life.go_on_date())
+			"couple": btn.pressed.connect(func(): life.become_couple())
+			"stop": btn.pressed.connect(func(): life.stop_seeing())
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	btn.text = label
+	row.add_child(btn)
+	return card
 
 func _skill_card(sk: Dictionary) -> PanelContainer:
 	var sid: String = sk.id

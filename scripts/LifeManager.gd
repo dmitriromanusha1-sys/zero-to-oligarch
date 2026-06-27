@@ -45,6 +45,19 @@ var skills: Dictionary = {"intellect": 30.0, "charisma": 30.0, "willpower": 30.0
 var _last_dev_day: int = -99
 const DEV_BASE_COST: int = 3000
 
+# ── Знакомства и свидания (Фаза 4) ────────────────────────────────────────────
+var partner: Dictionary = {}       # текущий партнёр (пусто = одинок) — развивается в фазе 5
+var prospect: Dictionary = {}      # с кем сейчас встречаешься {name, interest}
+var _last_date_day: int = -99
+
+const MEET_COST: int = 3000
+const DATE_COST: int = 5000
+const COUPLE_THRESHOLD: float = 70.0   # симпатия, при которой можно сойтись
+const DATING_NAMES: Array = [
+	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
+	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
+]
+
 var gm: Node
 
 func _ready() -> void:
@@ -79,6 +92,8 @@ func happiness_baseline() -> float:
 	b += (fitness - 50.0) * 0.10               # спорт радует
 	b += (appearance() - 50.0) * 0.06          # хорошо выглядеть приятно
 	b += (skill("charisma") - 50.0) * 0.05     # социальная уверенность
+	if not partner.is_empty():
+		b += 10.0                              # отношения делают счастливее
 	return clampf(b, 5.0, 100.0)
 
 # ── Личные навыки ─────────────────────────────────────────────────────────────
@@ -106,6 +121,68 @@ func train_skill(id: String) -> bool:
 # Дисциплина (сила воли) замедляет деградацию формы и стиля.
 func discipline_mult() -> float:
 	return 1.0 - skill("willpower") / 100.0 * 0.5
+
+# ── Знакомства и свидания ─────────────────────────────────────────────────────
+func is_single() -> bool:
+	return partner.is_empty()
+
+func has_prospect() -> bool:
+	return not prospect.is_empty()
+
+# Привлекательность как партнёра: внешность + харизма + статус.
+func dating_appeal() -> float:
+	var status: float = minf(20.0, gm.current_title_index * 2.0)
+	return clampf(appearance() * 0.40 + skill("charisma") * 0.40 + status, 0.0, 100.0)
+
+func can_meet() -> bool:
+	return is_single() and not has_prospect() and gm.money >= float(gm.shop_price(MEET_COST))
+
+func meet_someone() -> bool:
+	if not can_meet(): return false
+	if not gm.spend_money(gm.shop_price(MEET_COST)): return false
+	var nm: String = DATING_NAMES[randi() % DATING_NAMES.size()]
+	var start: float = clampf(dating_appeal() * 0.4 + randf_range(0.0, 20.0), 5.0, 60.0)
+	prospect = {"name": nm, "interest": start}
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func can_date() -> bool:
+	return has_prospect() and gm.day > _last_date_day and gm.money >= float(gm.shop_price(DATE_COST))
+
+# Свидание: симпатия растёт (зависит от харизмы/внешности), но бывает и осечка.
+func go_on_date() -> String:
+	if not can_date(): return ""
+	if not gm.spend_money(gm.shop_price(DATE_COST)): return ""
+	_last_date_day = gm.day
+	var gain: float = 8.0 + (dating_appeal() - 50.0) * 0.12 + randf_range(-4.0, 7.0)
+	prospect["interest"] = clampf(float(prospect.get("interest", 0.0)) + gain, 0.0, 100.0)
+	add_happiness(1.5)
+	emit_signal("life_changed")
+	gm.save_game()
+	return "%+d симпатии" % int(round(gain))
+
+func can_become_couple() -> bool:
+	return has_prospect() and float(prospect.get("interest", 0.0)) >= COUPLE_THRESHOLD
+
+func become_couple() -> bool:
+	if not can_become_couple(): return false
+	partner = {"name": String(prospect.get("name", "?")), "relationship": 50.0, "since_day": gm.day}
+	prospect = {}
+	add_happiness(8.0)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "❤ Теперь вы в отношениях с %s!" % partner.get("name", "?"),
+			"money": 0, "health": 0})
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func stop_seeing() -> void:
+	prospect = {}
+	emit_signal("life_changed")
+	gm.save_game()
 
 # ── Тело, форма и внешность ───────────────────────────────────────────────────
 # Внешность складывается из формы, стиля и возраста (молодость — плюс).
@@ -191,6 +268,9 @@ func reset() -> void:
 	_last_groom_day = -99
 	skills = {"intellect": 30.0, "charisma": 30.0, "willpower": 30.0}
 	_last_dev_day = -99
+	partner = {}
+	prospect = {}
+	_last_date_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -201,6 +281,9 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_groom_day", _last_groom_day)
 	cfg.set_value("life", "skills", skills)
 	cfg.set_value("life", "last_dev_day", _last_dev_day)
+	cfg.set_value("life", "partner", partner)
+	cfg.set_value("life", "prospect", prospect)
+	cfg.set_value("life", "last_date_day", _last_date_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -211,3 +294,6 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_groom_day = cfg.get_value("life", "last_groom_day", -99)
 	skills = cfg.get_value("life", "skills", {"intellect": 30.0, "charisma": 30.0, "willpower": 30.0})
 	_last_dev_day = cfg.get_value("life", "last_dev_day", -99)
+	partner = cfg.get_value("life", "partner", {})
+	prospect = cfg.get_value("life", "prospect", {})
+	_last_date_day = cfg.get_value("life", "last_date_day", -99)
