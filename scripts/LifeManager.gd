@@ -79,6 +79,15 @@ const CHILD_COST_DAY: int = 800          # ежедневное содержан
 const CHILD_JOY: float = 4.0
 const CHILD_NAMES_M: Array = ["Артём", "Максим", "Лев", "Марк", "Тимур", "Глеб", "Илья", "Роман"]
 const CHILD_NAMES_F: Array = ["Алиса", "Вера", "Майя", "София", "Ника", "Ева", "Рита", "Лана"]
+
+# ── Воспитание (Фаза 8) ───────────────────────────────────────────────────────
+var _last_family_day: int = -99
+var _last_develop_day: int = -99
+const FAMILY_TIME_BOND: float = 6.0
+const FAMILY_TIME_HAPPY: float = 2.0
+const DEVELOP_COST: int = 20000
+const DEVELOP_UPBRINGING: float = 8.0
+const BOND_DECAY: float = 0.5
 const DATING_NAMES: Array = [
 	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
 	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
@@ -121,7 +130,11 @@ func happiness_baseline() -> float:
 	if not partner.is_empty():
 		var f: float = 25.0 if is_married() else 18.0
 		b += relationship() / 100.0 * f        # крепкие отношения/брак делают счастливее
-	b += minf(child_count() * CHILD_JOY, 16.0) # дети приносят радость
+	# Радость от детей зависит от близости (связи): близкая семья — счастливее
+	var joy: float = 0.0
+	for ch in children:
+		joy += float(ch.get("bond", 50.0)) / 100.0 * CHILD_JOY
+	b += minf(joy, 18.0)
 	return clampf(b, 5.0, 100.0)
 
 # ── Дети ──────────────────────────────────────────────────────────────────────
@@ -147,7 +160,7 @@ func have_child() -> bool:
 	var girl: bool = randf() < 0.5
 	var pool: Array = CHILD_NAMES_F if girl else CHILD_NAMES_M
 	var nm: String = pool[randi() % pool.size()]
-	children.append({"name": nm, "born_day": gm.day, "gender": ("f" if girl else "m")})
+	children.append({"name": nm, "born_day": gm.day, "gender": ("f" if girl else "m"), "bond": 60.0, "upbringing": 0.0})
 	add_happiness(8.0)
 	var es := get_node_or_null("/root/EventSystem")
 	if es:
@@ -157,6 +170,63 @@ func have_child() -> bool:
 	emit_signal("life_changed")
 	gm.save_game()
 	return true
+
+# ── Воспитание ────────────────────────────────────────────────────────────────
+func child_bond(index: int) -> float:
+	if index < 0 or index >= children.size(): return 0.0
+	return float(children[index].get("bond", 50.0))
+
+func child_upbringing(index: int) -> float:
+	if index < 0 or index >= children.size(): return 0.0
+	return float(children[index].get("upbringing", 0.0))
+
+func avg_child_bond() -> float:
+	if children.is_empty(): return 0.0
+	var t: float = 0.0
+	for ch in children: t += float(ch.get("bond", 50.0))
+	return t / float(children.size())
+
+func avg_child_upbringing() -> float:
+	if children.is_empty(): return 0.0
+	var t: float = 0.0
+	for ch in children: t += float(ch.get("upbringing", 0.0))
+	return t / float(children.size())
+
+func can_family_time() -> bool:
+	return child_count() > 0 and gm.day > _last_family_day
+
+# Время с семьёй: бесплатно, укрепляет связь и поднимает настроение.
+func family_time() -> bool:
+	if not can_family_time(): return false
+	for ch in children:
+		ch["bond"] = clampf(float(ch.get("bond", 50.0)) + FAMILY_TIME_BOND, 0.0, 100.0)
+	add_happiness(FAMILY_TIME_HAPPY)
+	_last_family_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func develop_cost() -> int:
+	return gm.shop_price(DEVELOP_COST) * child_count()
+
+func can_develop_children() -> bool:
+	return child_count() > 0 and gm.day > _last_develop_day and gm.money >= float(develop_cost())
+
+# Развивающие занятия: растят воспитание (пригодится наследнику).
+func develop_children() -> bool:
+	if not can_develop_children(): return false
+	if not gm.spend_money(develop_cost()): return false
+	for ch in children:
+		ch["upbringing"] = clampf(float(ch.get("upbringing", 0.0)) + DEVELOP_UPBRINGING, 0.0, 100.0)
+	_last_develop_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+# Связь с детьми слабеет без внимания.
+func _parenting_tick() -> void:
+	for ch in children:
+		ch["bond"] = clampf(float(ch.get("bond", 50.0)) - BOND_DECAY, 0.0, 100.0)
 
 # ── Личные навыки ─────────────────────────────────────────────────────────────
 func skill(id: String) -> float:
@@ -440,6 +510,7 @@ func process_day() -> void:
 	fitness = clampf(fitness - FITNESS_DECAY * disc, 0.0, 100.0)
 	style = clampf(style - STYLE_DECAY * disc, 0.0, 100.0)
 	_relationship_tick()
+	_parenting_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
@@ -467,6 +538,8 @@ func reset() -> void:
 	_last_pdate_day = -99
 	_last_gift_day = -99
 	children = []
+	_last_family_day = -99
+	_last_develop_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -483,6 +556,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_pdate_day", _last_pdate_day)
 	cfg.set_value("life", "last_gift_day", _last_gift_day)
 	cfg.set_value("life", "children", children)
+	cfg.set_value("life", "last_family_day", _last_family_day)
+	cfg.set_value("life", "last_develop_day", _last_develop_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -499,3 +574,5 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_pdate_day = cfg.get_value("life", "last_pdate_day", -99)
 	_last_gift_day = cfg.get_value("life", "last_gift_day", -99)
 	children = cfg.get_value("life", "children", [])
+	_last_family_day = cfg.get_value("life", "last_family_day", -99)
+	_last_develop_day = cfg.get_value("life", "last_develop_day", -99)
