@@ -594,10 +594,25 @@ func advance_time(hours: int, drain_mult: float = 1.0) -> void:
 		_time_acc = 0.0
 		emit_signal("time_changed", current_hour, current_minute)
 
-# Пропуск суток: прокручиваем до утра следующего дня (с расходом еды/воды за эти
-# часы и обработкой нового дня — аренда, события, доход бизнеса и т.д.).
+# Пропуск суток (T): человек не работал, занимался своими делами — тратит еду/воду
+# (через advance_time), но ОТДЫХАЕТ: восстанавливает энергию и здоровье. Бонус
+# обеда усиливает восстановление (сытый отдыхает лучше).
+const LEISURE_ENERGY_BASE := 1.5     # базовое восстановление энергии/час
+const LEISURE_ENERGY_FACTOR := 0.6   # + доля от скорости сна (зависит от жилья)
+const LEISURE_HEALTH_BASE := 0.4
+const LEISURE_HEALTH_FACTOR := 0.6
+
 func skip_day() -> void:
-	advance_time(maxi(1, 24 - current_hour))
+	var hours: int = maxi(1, 24 - current_hour)
+	var meal_m: float = 1.0 + meal_drain_bonus
+	var cap: float = stat_max()
+	var e_gain: float = (LEISURE_ENERGY_BASE + get_sleep_energy_per_hour() * LEISURE_ENERGY_FACTOR) * hours * meal_m
+	var h_gain: float = (LEISURE_HEALTH_BASE + get_sleep_health_per_hour() * LEISURE_HEALTH_FACTOR) * hours * meal_m
+	energy = clamp(energy + e_gain, 0.0, cap)
+	health = clamp(health + h_gain, 0.0, cap)
+	emit_signal("energy_changed", energy)
+	emit_signal("health_changed", health)
+	advance_time(hours)   # тратит еду/воду и обрабатывает новый день
 
 func next_day() -> void:
 	var old_season: int = get_season_index()
