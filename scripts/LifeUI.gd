@@ -256,6 +256,18 @@ func _rebuild() -> void:
 			_vb.add_child(_heir_card(i))
 	if life.estate_planning + 1 < life.ESTATE_PLANS.size():
 		_vb.add_child(_estate_card())
+	_sep()
+
+	# Наследие и память
+	_header("🏛 Наследие и память")
+	_lbl(_vb, "Наследие: %d · %s · поколение %d" % [int(life.legacy), life.legacy_rank(), life.generation],
+		Color(0.95, 0.85, 0.55), 14)
+	_lbl(_vb, "Благотворительность:", Color(0.66, 0.7, 0.66), 11)
+	for c in life.CHARITY_TIERS:
+		_vb.add_child(_charity_card(c))
+	_lbl(_vb, "Монументы вашего имени:", Color(0.66, 0.7, 0.66), 11)
+	for p in life.LEGACY_PROJECTS:
+		_vb.add_child(_project_card(p))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -266,6 +278,59 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _charity_card(c: Dictionary) -> PanelContainer:
+	var cid: String = c.id
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.10, 0.09, 0.92)
+	cs.border_color = Color(0.45, 0.5, 0.42, 0.65)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "🤲 %s" % c.get("name","?"), Color(0.86, 0.9, 0.84), 14)
+	_lbl(col, "+%d наследия, +статус · %s" % [int(c.legacy), gm.format_money(int(c.cost))], Color(0.66, 0.72, 0.66), 11)
+	var btn := Button.new()
+	btn.text = "Пожертвовать"
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.can_donate_charity(cid):
+		_style(btn, Color(0.12, 0.16, 0.12), Color(0.35, 0.5, 0.38))
+		btn.pressed.connect(func(): life.donate_charity(cid))
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _project_card(p: Dictionary) -> PanelContainer:
+	var pid: String = p.id
+	var owned: bool = life.has_project(pid)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.11, 0.10, 0.06, 0.92) if owned else Color(0.09, 0.08, 0.07, 0.9)
+	cs.border_color = Color(0.75, 0.62, 0.32, 0.85) if owned else Color(0.42, 0.38, 0.3, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "🏛 %s%s" % [p.get("name","?"), ("  ✅" if owned else "")], Color(0.95, 0.88, 0.68), 14)
+	_lbl(col, "%s · +%d наследия, +статус" % [p.get("desc",""), int(p.legacy)], Color(0.74, 0.7, 0.58), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if owned:
+		btn.text = "Построено"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif life.can_build_project(pid):
+		btn.text = "Построить (%s)" % gm.format_money(int(p.cost))
+		_style(btn, Color(0.18, 0.14, 0.08), Color(0.6, 0.48, 0.26))
+		btn.pressed.connect(func(): life.build_project(pid))
+	else:
+		btn.text = "Построить (%s)" % gm.format_money(int(p.cost))
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 func _heir_card(i: int) -> PanelContainer:
 	var ch = life.children[i]
