@@ -915,6 +915,10 @@ func get_finance() -> Dictionary:
 	var rem_f: Node = get_node_or_null("/root/RealEstateManager")
 	if rem_f and rem_f.has_method("rental_income"):
 		income += rem_f.rental_income()            # доход с аренды недвижимости
+		if rem_f.has_method("maintenance_cost"):
+			expense += rem_f.maintenance_cost()    # обслуживание объектов
+		if rem_f.has_method("manager_fee"):
+			expense += rem_f.manager_fee()         # комиссия управляющего
 	var h: Dictionary = HOUSINGS[current_housing_index]
 	var monthly: float = h.get("monthly", 0) as float
 	if monthly > 0.0:

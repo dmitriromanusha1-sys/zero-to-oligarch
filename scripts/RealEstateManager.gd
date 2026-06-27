@@ -39,7 +39,21 @@ const LEVEL_RENT_BONUS: float = 0.20   # +20% аренды за уровень
 const LEVEL_VALUE_BONUS: float = 0.15  # +15% стоимости за уровень
 const RENO_COST_FACTOR: float = 0.20   # цена ремонта = база × индекс × фактор × (ур+1)
 
-# Портфель: массив словарей {type_id}
+# ── Управление и риски (Фаза 5) ───────────────────────────────────────────────
+# Объект может простаивать (нет жильца → нет аренды), требует обслуживания,
+# а плохой жилец иногда съезжает с ущербом. Управляющий снижает все риски за %.
+const MAINT_RATE_MONTHLY: float = 0.004   # обслуживание = 0.4%/мес от стоимости
+const VACANCY_MONTHLY: float = 0.10       # шанс сдан → простой за месяц
+const FILL_MONTHLY: float = 0.55          # шанс найти жильца на простаивающий
+const BAD_TENANT_MONTHLY: float = 0.05    # шанс плохого жильца (ущерб + простой)
+const MANAGER_FEE_RATE: float = 0.12      # управляющий берёт 12% от аренды
+const MGR_VACANCY_MULT: float = 0.40      # ×0.40 к шансу простоя
+const MGR_FILL_MULT: float = 1.35         # ×1.35 к шансу заселения
+const MGR_BAD_MULT: float = 0.30          # ×0.30 к шансу плохого жильца
+
+var has_manager: bool = false
+
+# Портфель: массив словарей {type_id, mortgage, mort_orig, missed, level, vacant}
 var properties: Array = []
 
 var gm: Node
@@ -95,6 +109,43 @@ func renovate(index: int) -> bool:
 	gm.save_game()
 	return true
 
+# ── Заселённость / простой ────────────────────────────────────────────────────
+func is_vacant(index: int) -> bool:
+	if index < 0 or index >= properties.size(): return false
+	return bool(properties[index].get("vacant", false))
+
+func occupied_count() -> int:
+	var n: int = 0
+	for p in properties:
+		if not bool(p.get("vacant", false)): n += 1
+	return n
+
+func occupancy_rate() -> float:
+	if properties.is_empty(): return 0.0
+	return float(occupied_count()) / float(properties.size())
+
+# Обслуживание объектов в день (от рыночной стоимости портфеля).
+func maintenance_cost() -> float:
+	var total: float = 0.0
+	for i in range(properties.size()):
+		total += property_value(i) * MAINT_RATE_MONTHLY / 30.0
+	return total
+
+# Комиссия управляющего в день (% от собранной аренды).
+func manager_fee() -> float:
+	if not has_manager: return 0.0
+	return rental_income() * MANAGER_FEE_RATE
+
+# Чистый денежный поток с недвижимости в день.
+func net_daily_income() -> float:
+	return rental_income() - maintenance_cost() - manager_fee()
+
+func set_manager(on: bool) -> void:
+	if has_manager == on: return
+	has_manager = on
+	emit_signal("portfolio_changed")
+	gm.save_game()
+
 # Тренд рынка: 1 рост, -1 спад, 0 стабильно.
 func market_trend() -> int:
 	if market_index > _prev_index + 0.005: return 1
@@ -119,7 +170,7 @@ func buy_property(type_id: String) -> bool:
 	if t.is_empty(): return false
 	if gm.current_title_index < int(t.min_title): return false
 	if not gm.spend_money(current_price(type_id)): return false
-	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0, "level": 0})
+	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0, "level": 0, "vacant": false})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
@@ -145,7 +196,7 @@ func buy_property_mortgage(type_id: String) -> bool:
 	var down: int = int(price * MORTGAGE_DOWN)
 	if not gm.spend_money(down): return false
 	var principal: float = float(price - down)
-	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0, "level": 0})
+	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0, "level": 0, "vacant": false})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
@@ -172,11 +223,12 @@ func sell_property(index: int) -> float:
 	gm.save_game()
 	return net
 
-# Суммарная аренда в день (рынок × ремонт каждого объекта).
+# Суммарная аренда в день (только заселённые объекты: рынок × ремонт).
 func rental_income() -> float:
 	var total: float = 0.0
 	for i in range(properties.size()):
-		total += property_rent(i)
+		if not bool(properties[i].get("vacant", false)):
+			total += property_rent(i)
 	return total
 
 # Стоимость портфеля по рыночной цене с учётом ремонта (для капитала / net worth).
@@ -186,14 +238,49 @@ func portfolio_value() -> float:
 		total += property_value(i)
 	return total
 
-# Ежедневно: зачисляем доход с аренды; раз в месяц двигаем рынок.
+# Ежедневно: чистый поток (аренда − обслуживание − управляющий);
+# раз в месяц — ипотека, заселённость и движение рынка.
 func process_day() -> void:
-	var inc := rental_income()
-	if inc > 0.0:
-		gm.add_money(inc)
+	var net := net_daily_income()
+	if net != 0.0:
+		gm.add_money(net)
 	if gm.day % 30 == 0:
 		_pay_mortgages()
+		_update_occupancy()
 		_update_market()
+
+# Ежемесячно: простаивающие ищут жильца, заселённые рискуют простоем/плохим жильцом.
+func _update_occupancy() -> void:
+	if properties.is_empty(): return
+	var changed: bool = false
+	var es := get_node_or_null("/root/EventSystem")
+	for i in range(properties.size()):
+		var p = properties[i]
+		var t := _get_type(String(p.get("type_id", "")))
+		if bool(p.get("vacant", false)):
+			var fill: float = FILL_MONTHLY * (MGR_FILL_MULT if has_manager else 1.0)
+			if randf() < fill:
+				p["vacant"] = false
+				changed = true
+		else:
+			var bad: float = BAD_TENANT_MONTHLY * (MGR_BAD_MULT if has_manager else 1.0)
+			if randf() < bad:
+				var dmg: float = property_value(i) * randf_range(0.01, 0.03)
+				gm.add_money(-dmg)
+				p["vacant"] = true
+				changed = true
+				if es:
+					es.event_triggered.emit({
+						"text": "🚪 Плохой жилец съехал из «%s» — ремонт −%s." % [
+							t.get("name", "объект"), gm.format_money(dmg)],
+						"money": 0, "health": 0})
+			else:
+				var vac: float = VACANCY_MONTHLY * (MGR_VACANCY_MULT if has_manager else 1.0)
+				if randf() < vac:
+					p["vacant"] = true
+					changed = true
+	if changed:
+		emit_signal("portfolio_changed")
 
 # Ежемесячные платежи по ипотеке; при просрочках — взыскание объекта.
 func _pay_mortgages() -> void:
@@ -251,12 +338,15 @@ func reset() -> void:
 	properties.clear()
 	market_index = 1.0
 	_prev_index = 1.0
+	has_manager = false
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("realestate", "properties", properties)
 	cfg.set_value("realestate", "market_index", market_index)
+	cfg.set_value("realestate", "has_manager", has_manager)
 
 func load_data(cfg: ConfigFile) -> void:
 	properties = cfg.get_value("realestate", "properties", [])
 	market_index = cfg.get_value("realestate", "market_index", 1.0)
 	_prev_index = market_index
+	has_manager = cfg.get_value("realestate", "has_manager", false)

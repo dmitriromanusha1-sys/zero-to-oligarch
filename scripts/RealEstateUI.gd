@@ -69,13 +69,27 @@ func _rebuild() -> void:
 	if rem == null or gm == null:
 		return
 	_title("🏘 Недвижимость")
-	_note("Портфель: %d объект(ов) · аренда +%s/день · стоимость %s" % [
-		rem.property_count(), gm.format_money(rem.rental_income()), gm.format_money(rem.portfolio_value())])
+	_note("Портфель: %d объект(ов) · стоимость %s" % [
+		rem.property_count(), gm.format_money(rem.portfolio_value())])
+	if rem.property_count() > 0:
+		_lbl(_vb, "Чистый поток: %s/день  (аренда +%s − обслуж. %s%s)" % [
+			gm.format_money(rem.net_daily_income()), gm.format_money(rem.rental_income()),
+			gm.format_money(rem.maintenance_cost()),
+			(" − управл. " + gm.format_money(rem.manager_fee())) if rem.has_manager else ""],
+			Color(0.55, 0.9, 0.6) if rem.net_daily_income() >= 0 else Color(0.95, 0.55, 0.5), 12)
+		_lbl(_vb, "Заселённость: %d/%d  (%.0f%%)" % [
+			rem.occupied_count(), rem.property_count(), rem.occupancy_rate() * 100.0],
+			Color(0.7, 0.85, 0.72), 12)
 	var tr: int = rem.market_trend()
 	var arrow: String = "📈 рост" if tr > 0 else ("📉 спад" if tr < 0 else "➡ стабильно")
 	var tcol: Color = Color(0.55, 0.9, 0.6) if tr > 0 else (Color(0.95, 0.55, 0.5) if tr < 0 else Color(0.7, 0.72, 0.78))
 	_lbl(_vb, "Индекс рынка: %.2f  (%s)" % [rem.market_index, arrow], tcol, 12)
 	_sep()
+
+	# Управляющий
+	if rem.property_count() > 0:
+		_vb.add_child(_manager_card())
+		_sep()
 
 	# Свои объекты
 	if rem.property_count() > 0:
@@ -99,6 +113,36 @@ func _rebuild() -> void:
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
 
+func _manager_card() -> PanelContainer:
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.06, 0.10, 0.14, 0.92)
+	cs.border_color = Color(0.35, 0.50, 0.70, 0.8) if rem.has_manager else Color(0.30, 0.40, 0.48, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "🧑‍💼"
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "Управляющий" + ("  ✅ нанят" if rem.has_manager else ""), Color(0.82, 0.88, 0.98), 14)
+	_lbl(col, "Снижает простои и плохих жильцов. Комиссия %d%% от аренды (%s/день)." % [
+		int(rem.MANAGER_FEE_RATE * 100.0), gm.format_money(rem.rental_income() * rem.MANAGER_FEE_RATE)],
+		Color(0.66, 0.72, 0.82), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	if rem.has_manager:
+		btn.text = "Уволить"
+		_style(btn, Color(0.18, 0.12, 0.10), Color(0.6, 0.4, 0.3))
+		btn.pressed.connect(func(): rem.set_manager(false))
+	else:
+		btn.text = "Нанять"
+		_style(btn, Color(0.10, 0.16, 0.24), Color(0.30, 0.50, 0.7))
+		btn.pressed.connect(func(): rem.set_manager(true))
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(btn)
+	return card
+
 func _owned_card(i: int) -> PanelContainer:
 	var p = rem.properties[i]
 	var t = rem._get_type(String(p.get("type_id", "")))
@@ -118,8 +162,12 @@ func _owned_card(i: int) -> PanelContainer:
 	var stars: String = ""
 	for s in range(rem.MAX_RENO_LEVEL):
 		stars += "⭐" if s < lvl else "☆"
-	_lbl(col, "%s  %s" % [t.get("name", "?"), stars], Color(0.80, 1.0, 0.80), 14)
-	_lbl(col, "Аренда +%s/день · оценка %s" % [gm.format_money(rem.property_rent(i)), gm.format_money(rem.property_value(i))], Color(0.62, 0.85, 0.66), 11)
+	var vacant: bool = rem.is_vacant(i)
+	var status: String = "🔴 Простой" if vacant else "🟢 Сдан"
+	var scol: Color = Color(0.95, 0.55, 0.5) if vacant else Color(0.55, 0.9, 0.6)
+	_lbl(col, "%s  %s   %s" % [t.get("name", "?"), stars, status], scol, 14)
+	var rent_str: String = "—" if vacant else "+%s/день" % gm.format_money(rem.property_rent(i))
+	_lbl(col, "Аренда %s · оценка %s" % [rent_str, gm.format_money(rem.property_value(i))], Color(0.62, 0.85, 0.66), 11)
 	var mort: float = float(p.get("mortgage", 0.0))
 	if mort > 0.0:
 		_lbl(col, "🏦 Ипотека: остаток %s" % gm.format_money(mort), Color(0.85, 0.70, 0.55), 11)
