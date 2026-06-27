@@ -381,6 +381,10 @@ func add_money(amount: float) -> void:
 # Доход от работы (смены): зачисляется как обычные деньги, но копится для
 # месячного подоходного налога (НДФЛ) с необлагаемым минимумом.
 func add_work_income(amount: float) -> void:
+	# Счастье/мотивация влияет на продуктивность работы
+	var life := get_node_or_null("/root/LifeManager")
+	if life and life.has_method("productivity_mult"):
+		amount *= life.productivity_mult()
 	month_wage_income += amount
 	add_money(amount)
 
@@ -711,6 +715,11 @@ func next_day() -> void:
 	if inf_d and inf_d.has_method("process_day"):
 		inf_d.process_day()
 
+	# Личная жизнь (счастье, возраст)
+	var life_d = get_node_or_null("/root/LifeManager")
+	if life_d and life_d.has_method("process_day"):
+		life_d.process_day()
+
 	# Платежи по кредитам
 	var lm = get_node_or_null("/root/LoanManager")
 	if lm:
@@ -1034,6 +1043,8 @@ func save_game() -> void:
 	if rem: rem.save(cfg)
 	var inf = get_node_or_null("/root/InfluenceManager")
 	if inf: inf.save(cfg)
+	var life = get_node_or_null("/root/LifeManager")
+	if life: life.save(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.save(cfg)
 	# Запись на диск — в фоновом потоке, чтобы кадр не фризил. Ящик по пути слота:
@@ -1167,6 +1178,8 @@ func load_game() -> void:
 	if rem: rem.load_data(cfg)
 	var inf = get_node_or_null("/root/InfluenceManager")
 	if inf: inf.load_data(cfg)
+	var life = get_node_or_null("/root/LifeManager")
+	if life: life.load_data(cfg)
 	var am = get_node_or_null("/root/AudioManager")
 	if am: am.load_data(cfg)
 	_emit_loaded_signals()
@@ -1223,6 +1236,8 @@ func _reset_state() -> void:
 	if rem: rem.reset()
 	var inf = get_node_or_null("/root/InfluenceManager")
 	if inf: inf.reset()
+	var life = get_node_or_null("/root/LifeManager")
+	if life: life.reset()
 	var im = get_node_or_null("/root/InventoryManager")
 	if im: im.inventory.clear()
 

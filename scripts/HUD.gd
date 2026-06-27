@@ -53,6 +53,7 @@ var _settings_btn: Button = null
 var _journal: CanvasLayer = null
 var _journal_btn: Button = null
 var _economy_btn: Button = null
+var _life_btn: Button = null
 var _system_btn: Button = null
 var _system_popup: PanelContainer = null
 
@@ -169,7 +170,7 @@ func _ready() -> void:
 const _MODAL_GROUPS := ["shift_ui", "sleep_ui", "food_shop", "business_shop",
 	"education_shop", "transport_shop", "radio_shop", "casino_ui", "stock_ui",
 	"travel_agency_ui", "loan_ui", "exam_ui", "quest_ui", "settings_ui",
-	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui"]
+	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui", "life_ui"]
 
 func _is_blocking_ui_open() -> bool:
 	if _game_over_shown or pause_menu.visible:
@@ -568,6 +569,16 @@ func _setup_journal_and_system(am: Node) -> void:
 		if am: am.play_click()
 		var eu = get_tree().get_first_node_in_group("economy_ui")
 		if eu and eu.has_method("open"): eu.open())
+
+	# «Жизнь»: личное измерение — возраст, счастье, семья
+	_life_btn = Button.new()
+	_life_btn.tooltip_text = "Жизнь: возраст, настроение, семья и наследие"
+	dock.add_child(_life_btn)
+	_style_dock_btn(_life_btn, "👤")
+	_life_btn.pressed.connect(func():
+		if am: am.play_click()
+		var lu = get_tree().get_first_node_in_group("life_ui")
+		if lu and lu.has_method("open"): lu.open())
 
 	# «Система»: Настройки / Главное меню
 	_system_btn = Button.new()
