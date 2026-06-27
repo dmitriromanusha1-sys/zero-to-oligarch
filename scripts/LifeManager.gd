@@ -35,6 +35,20 @@ const GROOM_BASE_COST: int = 4000
 const GROOM_STYLE: float = 10.0
 const GROOM_HAPPY: float = 1.5
 
+# ── Друзья и круг общения (Фаза 11) ───────────────────────────────────────────
+var friends: Array = []   # {name, level, since_day}
+var _last_hangout_day: int = -99
+const MAX_FRIENDS: int = 8
+const FRIEND_MEET_COST: int = 4000
+const HANGOUT_COST: int = 6000
+const HANGOUT_LEVEL: float = 5.0
+const HANGOUT_HAPPY: float = 2.0
+const FRIEND_DECAY: float = 0.3
+const FRIEND_NAMES: Array = [
+	"Олег", "Дима", "Костя", "Паша", "Юля", "Катя", "Настя", "Боря",
+	"Слава", "Гена", "Инна", "Жора", "Лера", "Стас", "Аня", "Витя",
+]
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -157,7 +171,71 @@ func happiness_baseline() -> float:
 	for ch in children:
 		joy += float(ch.get("bond", 50.0)) / 100.0 * CHILD_JOY
 	b += minf(joy, 18.0)
+	b += minf(friend_count() * 1.0 + close_friends() * 2.0, 14.0)  # круг общения
 	return clampf(b, 5.0, 100.0)
+
+# ── Друзья и круг общения ─────────────────────────────────────────────────────
+func friend_count() -> int:
+	return friends.size()
+
+func close_friends() -> int:
+	var n: int = 0
+	for f in friends:
+		if float(f.get("level", 0.0)) >= 60.0: n += 1
+	return n
+
+func avg_friend_level() -> float:
+	if friends.is_empty(): return 0.0
+	var t: float = 0.0
+	for f in friends: t += float(f.get("level", 0.0))
+	return t / float(friends.size())
+
+func friend_meet_cost() -> int:
+	return gm.shop_price(FRIEND_MEET_COST)
+
+func can_make_friend() -> bool:
+	return friend_count() < MAX_FRIENDS and gm.money >= float(friend_meet_cost())
+
+func make_friend() -> bool:
+	if not can_make_friend(): return false
+	if not gm.spend_money(friend_meet_cost()): return false
+	var nm: String = FRIEND_NAMES[randi() % FRIEND_NAMES.size()]
+	var start: float = clampf(25.0 + skill("charisma") * 0.25 + randf_range(0.0, 15.0), 10.0, 70.0)
+	friends.append({"name": nm, "level": start, "since_day": gm.day})
+	add_happiness(2.0)
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func hangout_cost() -> int:
+	return gm.shop_price(HANGOUT_COST)
+
+func can_hangout() -> bool:
+	return friend_count() > 0 and gm.day > _last_hangout_day and gm.money >= float(hangout_cost())
+
+# Встреча с друзьями: укрепляет все дружбы (харизма помогает) и радует.
+func hangout() -> bool:
+	if not can_hangout(): return false
+	if not gm.spend_money(hangout_cost()): return false
+	var gain: float = HANGOUT_LEVEL + skill("charisma") * 0.03
+	for f in friends:
+		f["level"] = clampf(float(f.get("level", 0.0)) + gain, 0.0, 100.0)
+	add_happiness(HANGOUT_HAPPY)
+	_last_hangout_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+# Дружбы слабеют без общения; совсем заброшенные сходят на нет.
+func _social_tick() -> void:
+	var drifted: Array = []
+	for i in range(friends.size()):
+		friends[i]["level"] = float(friends[i].get("level", 0.0)) - FRIEND_DECAY
+		if friends[i]["level"] <= 0.0:
+			drifted.append(i)
+	drifted.reverse()
+	for i in drifted:
+		friends.remove_at(i)
 
 # ── Дети ──────────────────────────────────────────────────────────────────────
 func child_count() -> int:
@@ -612,6 +690,7 @@ func process_day() -> void:
 	_relationship_tick()
 	_parenting_tick()
 	_family_events_tick()
+	_social_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
@@ -641,6 +720,8 @@ func reset() -> void:
 	children = []
 	_last_family_day = -99
 	_last_develop_day = -99
+	friends = []
+	_last_hangout_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -659,6 +740,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "children", children)
 	cfg.set_value("life", "last_family_day", _last_family_day)
 	cfg.set_value("life", "last_develop_day", _last_develop_day)
+	cfg.set_value("life", "friends", friends)
+	cfg.set_value("life", "last_hangout_day", _last_hangout_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -677,3 +760,5 @@ func load_data(cfg: ConfigFile) -> void:
 	children = cfg.get_value("life", "children", [])
 	_last_family_day = cfg.get_value("life", "last_family_day", -99)
 	_last_develop_day = cfg.get_value("life", "last_develop_day", -99)
+	friends = cfg.get_value("life", "friends", [])
+	_last_hangout_day = cfg.get_value("life", "last_hangout_day", -99)
