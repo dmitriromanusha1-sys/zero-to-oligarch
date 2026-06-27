@@ -150,6 +150,21 @@ const IDEOLOGIES: Array = [
 	{"id":"technocrats", "name":"Технократы",  "icon":"⚙", "desc":"+25% пассивного влияния."},
 ]
 
+# ── Президентская гонка (Фаза 8, капстоун) ────────────────────────────────────
+# Высший пост страны. Чтобы баллотироваться, нужен национальный рейтинг ≥60% —
+# а он складывается из ВСЕХ систем власти: районы, партия, СМИ, репутация, связи.
+var is_president: bool = false
+var election_attempt_cd: int = 0             # кулдаун после провала гонки
+
+const PRES_MIN_SUPPORT: float = 0.60
+const PRES_ENTRY_MONEY: int = 1_000_000_000
+const PRES_ENTRY_INF: float = 1000.0
+const PRES_FAIL_COOLDOWN: int = 90
+const PRES_FAIL_REP: int = -10
+const PRES_INCOME_BONUS: float = 0.25        # +25% к доходу бизнеса
+const PRES_INFLUENCE_DAY: float = 30.0       # большой пассив у президента
+const PRES_RISK_MULT: float = 0.30           # президентский иммунитет к расследованиям
+
 var gm: Node
 
 func _ready() -> void:
@@ -470,9 +485,11 @@ func _maybe_lose_districts() -> void:
 func district_income_mult() -> float:
 	return 1.0 + minf(DISTRICT_INCOME_MAX, controlled_count() * DISTRICT_INCOME_STEP)
 
-# Совокупный политический множитель дохода (лобби-субсидия × контроль районов).
+# Совокупный политический множитель дохода (лобби-субсидия × контроль × президент).
 func political_income_mult() -> float:
-	return law_business_mult() * district_income_mult()
+	var m: float = law_business_mult() * district_income_mult()
+	if is_president: m *= (1.0 + PRES_INCOME_BONUS)
+	return m
 
 # ── Высшая власть и риски ─────────────────────────────────────────────────────
 func scrutiny() -> float:
@@ -483,7 +500,9 @@ func media_shield() -> float:
 
 func investigation_chance() -> float:
 	if has_immunity(): return 0.0
-	return clampf((scrutiny() - media_shield()) * ideology_risk_mult(), 0.0, 0.90)
+	var c: float = (scrutiny() - media_shield()) * ideology_risk_mult()
+	if is_president: c *= PRES_RISK_MULT       # президентский иммунитет
+	return clampf(c, 0.0, 0.90)
 
 # Замять скандал: СМИ-машина хоронит историю, жар падает.
 func can_coverup() -> bool:
@@ -722,6 +741,57 @@ func _party_tick() -> void:
 	var growth: float = (PARTY_MEMBERS_PER_DAY + media_reach() * 20.0 + controlled_count() * 30.0) * rep_f
 	party_members += growth
 
+# ── Президентская гонка ───────────────────────────────────────────────────────
+func _media_total_reach() -> int:
+	var r: int = 0
+	for m in MEDIA:
+		r += int(m.reach)
+	return r
+
+# Национальный рейтинг (0..1): складывается из всех систем власти.
+func national_support() -> float:
+	var rm := get_node_or_null("/root/ReputationManager")
+	var rep: float = (float(rm.reputation) / 100.0) if rm else 0.3
+	var s: float = 0.0
+	s += float(controlled_count()) / float(maxi(1, district_count())) * 0.30
+	s += party_strength() * 0.25
+	s += clampf(float(media_reach()) / float(maxi(1, _media_total_reach())), 0.0, 1.0) * 0.20
+	s += rep * 0.15
+	s += clampf(float(total_connection_levels()) / float(maxi(1, max_connection_total())), 0.0, 1.0) * 0.10
+	return clampf(s, 0.0, 1.0)
+
+func can_run_president() -> bool:
+	if is_president or not politics_unlocked() or election_attempt_cd > 0: return false
+	if national_support() < PRES_MIN_SUPPORT: return false
+	return influence >= PRES_ENTRY_INF and gm.money >= float(PRES_ENTRY_MONEY)
+
+func run_for_president() -> bool:
+	if not can_run_president(): return false
+	if not gm.spend_money(PRES_ENTRY_MONEY): return false
+	add_influence(-PRES_ENTRY_INF)
+	var es := get_node_or_null("/root/EventSystem")
+	var won: bool = randf() < national_support()
+	if won:
+		is_president = true
+		if es:
+			es.event_triggered.emit({
+				"text": "🏛 Вы избраны Президентом страны! Высшая власть в ваших руках.",
+				"money": 0, "health": 0})
+		var achm := get_node_or_null("/root/AchievementManager")
+		if achm and achm.has_method("unlock"):
+			achm.unlock("president")
+	else:
+		election_attempt_cd = PRES_FAIL_COOLDOWN
+		var rm := get_node_or_null("/root/ReputationManager")
+		if rm and rm.has_method("add"): rm.add(PRES_FAIL_REP)
+		if es:
+			es.event_triggered.emit({
+				"text": "🏛 Президентские выборы проиграны. Кампания и репутация подорваны.",
+				"money": 0, "health": 0})
+	emit_signal("connections_changed")
+	gm.save_game()
+	return won
+
 # ── Ранг власти / эндгейм ─────────────────────────────────────────────────────
 func power_score() -> int:
 	return controlled_count() * 10 + total_connection_levels() * 4 + media_reach() * 2 \
@@ -729,6 +799,7 @@ func power_score() -> int:
 
 func power_rank() -> String:
 	var s: int = power_score()
+	if is_president: return "Президент"
 	if grey_cardinal: return "Серый кардинал"
 	if s >= 90: return "Теневой магнат"
 	if s >= 45: return "Влиятельная фигура"
@@ -781,12 +852,16 @@ func process_day() -> void:
 	_tick_elections()
 	_intel_tick()
 	_party_tick()
+	if election_attempt_cd > 0:
+		election_attempt_cd -= 1
 	if gm.day % 30 == 0:
 		_maybe_lose_districts()
 		_corruption_tick()
 	var passive: float = media_influence_day()        # СМИ работают всегда
 	passive += controlled_count() * DISTRICT_INF_DAY  # контроль районов
 	passive += party_influence_day()                  # партийная машина
+	if is_president:
+		passive += PRES_INFLUENCE_DAY                 # президентский ресурс
 	if politics_unlocked():
 		passive += total_connection_levels() * 0.2 + connection_level("mayor") * 0.5
 	passive *= ideology_influence_mult()              # бафф технократов
@@ -812,6 +887,8 @@ func reset() -> void:
 	party_founded = false
 	party_members = 0.0
 	party_ideology = ""
+	is_president = false
+	election_attempt_cd = 0
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
@@ -831,6 +908,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "party_founded", party_founded)
 	cfg.set_value("influence", "party_members", party_members)
 	cfg.set_value("influence", "party_ideology", party_ideology)
+	cfg.set_value("influence", "is_president", is_president)
+	cfg.set_value("influence", "election_attempt_cd", election_attempt_cd)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
@@ -850,3 +929,5 @@ func load_data(cfg: ConfigFile) -> void:
 	party_founded = cfg.get_value("influence", "party_founded", false)
 	party_members = cfg.get_value("influence", "party_members", 0.0)
 	party_ideology = cfg.get_value("influence", "party_ideology", "")
+	is_president = cfg.get_value("influence", "is_president", false)
+	election_attempt_cd = cfg.get_value("influence", "election_attempt_cd", 0)

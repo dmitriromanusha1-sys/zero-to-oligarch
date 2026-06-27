@@ -162,6 +162,21 @@ func _rebuild() -> void:
 		_vb.add_child(_intel_action_card("blackmail"))
 		_vb.add_child(_intel_action_card("sabotage"))
 		_vb.add_child(_intel_action_card("immunity"))
+	_sep()
+
+	# Президентская гонка (капстоун)
+	_header("🏛 Президентская гонка")
+	if im.is_president:
+		_lbl(_vb, "🏛 Вы — Президент страны. Высшая власть достигнута.", Color(0.95, 0.85, 0.45), 14)
+		_lbl(_vb, "Бонусы: +%d%% к доходу бизнеса, +%d влияния/день, иммунитет к расследованиям." % [
+			int(im.PRES_INCOME_BONUS * 100.0), int(im.PRES_INFLUENCE_DAY)], Color(0.74, 0.80, 0.70), 11)
+	else:
+		var sup: int = int(round(im.national_support() * 100.0))
+		var req: int = int(im.PRES_MIN_SUPPORT * 100.0)
+		var scol: Color = Color(0.55, 0.85, 0.6) if sup >= req else Color(0.95, 0.78, 0.4)
+		_lbl(_vb, "Национальный рейтинг: %d%%  (нужно %d%%)" % [sup, req], scol, 13)
+		_lbl(_vb, "Рейтинг растят районы, партия, СМИ, репутация и связи.", Color(0.66, 0.62, 0.76), 11)
+		_vb.add_child(_president_card())
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -603,6 +618,40 @@ func _ideology_card(ig: Dictionary) -> PanelContainer:
 		if im.can_set_ideology(iid):
 			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
 			btn.pressed.connect(func(): im.set_ideology(iid))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _president_card() -> PanelContainer:
+	var cd: int = im.election_attempt_cd
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.10, 0.09, 0.06, 0.94)
+	cs.border_color = Color(0.70, 0.58, 0.30, 0.85)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "🏛"
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "Баллотироваться в Президенты", Color(0.96, 0.90, 0.70), 14)
+	_lbl(col, "Шанс = рейтинг · %d вл. + %s" % [int(im.PRES_ENTRY_INF), gm.format_money(im.PRES_ENTRY_MONEY)], Color(0.80, 0.74, 0.60), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if cd > 0:
+		btn.text = "⏳ %d дн." % cd
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	elif not im.politics_unlocked():
+		btn.text = "🔒 Титул %d" % im.CONN_MIN_TITLE
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Идти на выборы"
+		if im.can_run_president():
+			_style(btn, Color(0.22, 0.17, 0.10), Color(0.7, 0.55, 0.3))
+			btn.pressed.connect(func(): im.run_for_president())
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
