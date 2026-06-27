@@ -93,6 +93,20 @@ func _rebuild() -> void:
 	_header("📜 Лобби законов")
 	for l in im.LAWS:
 		_vb.add_child(_law_card(l))
+	_sep()
+
+	# Медиа-империя
+	_header("📡 Медиа-империя")
+	_lbl(_vb, "Охват: %d · влияние от СМИ: +%d/день" % [im.media_reach(), int(im.media_influence_day())],
+		Color(0.74, 0.70, 0.88), 12)
+	for m in im.MEDIA:
+		_vb.add_child(_media_card(m))
+	# Кампании
+	if im.media_reach() > 0:
+		_vb.add_child(_campaign_card("pr"))
+		_vb.add_child(_campaign_card("smear"))
+	else:
+		_note("Купите хотя бы одно СМИ, чтобы запускать PR и компромат.")
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -205,6 +219,81 @@ func _law_card(l: Dictionary) -> PanelContainer:
 		if im.can_pass_law(lid):
 			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
 			btn.pressed.connect(func(): im.pass_law(lid))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _media_card(m: Dictionary) -> PanelContainer:
+	var mid: String = m.id
+	var owned: bool = im.owns_media(mid)
+	var locked: bool = gm.current_title_index < int(m.min_title)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.07, 0.13, 0.92)
+	cs.border_color = Color(0.55, 0.42, 0.78, 0.85) if owned else Color(0.32, 0.28, 0.42, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = m.get("icon", "📡")
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, m.get("name", "?") + ("  ✅" if owned else ""), Color(0.90, 0.84, 1.0), 14)
+	_lbl(col, "%s  ·  охват +%d · +%d влияния/день" % [m.get("desc", ""), int(m.reach), int(m.inf_day)],
+		Color(0.68, 0.64, 0.80), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if owned:
+		btn.text = "В собственности"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif locked:
+		btn.text = "🔒 Титул %d" % int(m.min_title)
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Купить (%s)" % gm.format_money(m.cost)
+		if im.can_buy_media(mid):
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.buy_media(mid))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _campaign_card(kind: String) -> PanelContainer:
+	var is_pr: bool = kind == "pr"
+	var cd: int = im.campaign_cd_left(kind)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.11, 0.08, 0.10, 0.92) if not is_pr else Color(0.08, 0.10, 0.13, 0.92)
+	cs.border_color = Color(0.62, 0.40, 0.45, 0.7) if not is_pr else Color(0.40, 0.55, 0.70, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "📣" if is_pr else "🗞"
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	if is_pr:
+		_lbl(col, "PR-кампания", Color(0.86, 0.90, 1.0), 14)
+		_lbl(col, "+%d репутации · %d влияния" % [im.PR_REP_BASE + im.media_reach(), int(im.PR_INF_COST)], Color(0.68, 0.72, 0.85), 11)
+	else:
+		_lbl(col, "Компромат на конкурента", Color(1.0, 0.84, 0.86), 14)
+		_lbl(col, "Перетянуть долю рынка + сбить антимонополию · %d влияния + %s" % [int(im.SMEAR_INF_COST), gm.format_money(im.SMEAR_MONEY_COST)], Color(0.85, 0.68, 0.70), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if cd > 0:
+		btn.text = "⏳ %d дн." % cd
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Запустить"
+		var ok: bool = im.can_run_pr() if is_pr else im.can_run_smear()
+		if ok:
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			if is_pr: btn.pressed.connect(func(): im.run_pr())
+			else: btn.pressed.connect(func(): im.run_smear())
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
