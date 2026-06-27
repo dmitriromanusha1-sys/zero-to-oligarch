@@ -73,6 +73,10 @@ func _rebuild() -> void:
 	var st: Dictionary = life.life_stage()
 	_lbl(_vb, "%s  %d лет  ·  %s" % [st.get("icon", "🌱"), life.age(), st.get("name", "")],
 		Color(0.86, 0.82, 0.96), 16)
+	var yl: int = life.years_left()
+	var ycol: Color = Color(0.95, 0.55, 0.5) if yl <= 5 else (Color(0.9, 0.8, 0.5) if yl <= 15 else Color(0.66, 0.7, 0.78))
+	_lbl(_vb, "Ожидаемая продолжительность: ~%d лет · впереди ~%d %s" % [
+		int(round(life.life_expectancy())), yl, _years_word(yl)], ycol, 11)
 	_lbl(_vb, "До дня рождения: %d дн." % life.days_to_birthday(), Color(0.66, 0.64, 0.76), 11)
 	_sep()
 
@@ -654,6 +658,13 @@ func _action_card(kind: String) -> PanelContainer:
 	return card
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+func _years_word(n: int) -> String:
+	var m: int = n % 10
+	var d: int = n % 100
+	if m == 1 and d != 11: return "год"
+	if m >= 2 and m <= 4 and (d < 12 or d > 14): return "года"
+	return "лет"
+
 func _bar(frac: float, col: Color) -> Control:
 	var pb := ProgressBar.new()
 	pb.min_value = 0.0; pb.max_value = 1.0

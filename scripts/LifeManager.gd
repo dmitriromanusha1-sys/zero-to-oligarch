@@ -206,6 +206,32 @@ func life_stage() -> Dictionary:
 		if age() >= int(st.min): s = st
 	return s
 
+# ── Старение (Фаза 17) ────────────────────────────────────────────────────────
+# Чем старше — тем быстрее уходит форма и тяжелее организму.
+func aging_factor() -> float:
+	var a: int = age()
+	if a <= 40: return 1.0
+	return 1.0 + (a - 40) * 0.03   # +3% к деградации формы за год после 40
+
+func is_elderly() -> bool:
+	return age() >= 60
+
+# Ожидаемая продолжительность жизни: база ± форма/здоровье/пороки (+ медицина в ф.18).
+func life_expectancy() -> float:
+	var base: float = 78.0
+	base += (fitness - 50.0) * 0.10
+	base += (gm.health - 50.0) * 0.10
+	base -= avg_addiction() * 0.15
+	base += longevity_bonus()
+	return clampf(base, 55.0, 110.0)
+
+# Бонус долголетия от медицины — наполняется в фазе 18 (по умолчанию 0).
+func longevity_bonus() -> float:
+	return 0.0
+
+func years_left() -> int:
+	return maxi(0, int(round(life_expectancy())) - age())
+
 # ── Счастье / настроение ──────────────────────────────────────────────────────
 func add_happiness(amount: float) -> void:
 	happiness = clampf(happiness + amount, 0.0, 100.0)
@@ -994,8 +1020,11 @@ func productivity_mult() -> float:
 func process_day() -> void:
 	happiness = clampf(happiness + (happiness_baseline() - happiness) * HAPPINESS_DRIFT, 0.0, 100.0)
 	var disc: float = discipline_mult()
-	fitness = clampf(fitness - FITNESS_DECAY * disc, 0.0, 100.0)
+	fitness = clampf(fitness - FITNESS_DECAY * disc * aging_factor(), 0.0, 100.0)
 	style = clampf(style - STYLE_DECAY * disc, 0.0, 100.0)
+	# Возрастная нагрузка на организм
+	if is_elderly():
+		gm.health = maxf(0.0, gm.health - (age() - 60) * 0.04)
 	_relationship_tick()
 	_parenting_tick()
 	_family_events_tick()
