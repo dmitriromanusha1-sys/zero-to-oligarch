@@ -14,6 +14,24 @@ const PROPERTY_TYPES: Array = [
 	{"id":"complex",   "name":"ЖК / комплекс",     "price":400_000_000, "rent":320_000,"min_title":7, "icon":"🏗", "desc":"Жилой комплекс — масштаб застройщика."},
 ]
 
+# Коммерческая недвижимость (Фаза 6): выше доходность, но аренда зависит от
+# экономического цикла (бум/рецессия). cycle — чувствительность к циклу 0..1.
+const COMMERCIAL_TYPES: Array = [
+	{"id":"office",    "name":"Офис",            "price":10_000_000,  "rent":11_000,  "min_title":5, "icon":"🏢", "cycle":0.6,  "desc":"Офис под аренду бизнесу."},
+	{"id":"retail",    "name":"Торговая площадь", "price":30_000_000,  "rent":34_000,  "min_title":5, "icon":"🏪", "cycle":0.7,  "desc":"Ритейл в проходном месте."},
+	{"id":"warehouse", "name":"Склад",           "price":60_000_000,  "rent":58_000,  "min_title":6, "icon":"📦", "cycle":0.25, "desc":"Логистика — стабильный доход."},
+	{"id":"hotel",     "name":"Отель",           "price":150_000_000, "rent":190_000, "min_title":6, "icon":"🏨", "cycle":1.0,  "desc":"Отель — высокий доход, цикличен."},
+	{"id":"bizcenter", "name":"Бизнес-центр",     "price":500_000_000, "rent":600_000, "min_title":7, "icon":"🏬", "cycle":0.8,  "desc":"Бизнес-центр класса А."},
+]
+
+const CYCLE_SWING: float = 0.5   # ±50% аренды на пике цикла при cycle=1
+
+# ── Девелопмент / застройка (Фаза 7) ──────────────────────────────────────────
+# Строишь объект дешевле готового, но он возводится время и рискует задержками.
+const BUILD_COST_RATIO: float = 0.60      # стройка = 60% цены готового
+const BUILD_OVERRUN_MONTHLY: float = 0.20 # шанс задержки стройки за месяц
+var projects: Array = []   # {type_id, days_left, total_days, invested}
+
 const SELL_RATIO: float = 0.90   # при продаже возвращается 90% стоимости
 
 # ── Рынок недвижимости ────────────────────────────────────────────────────────
@@ -66,7 +84,24 @@ func _ready() -> void:
 func _get_type(type_id: String) -> Dictionary:
 	for p in PROPERTY_TYPES:
 		if p.id == type_id: return p
+	for p in COMMERCIAL_TYPES:
+		if p.id == type_id: return p
 	return {}
+
+func is_commercial(type_id: String) -> bool:
+	for p in COMMERCIAL_TYPES:
+		if p.id == type_id: return true
+	return false
+
+# Множитель аренды от экономического цикла (только для коммерции).
+func cycle_mult(type_id: String) -> float:
+	var cyc: float = float(_get_type(type_id).get("cycle", 0.0))
+	if cyc <= 0.0: return 1.0
+	var cb := get_node_or_null("/root/CentralBankManager")
+	if cb:
+		if cb.has_method("is_boom") and cb.is_boom(): return 1.0 + cyc * CYCLE_SWING
+		elif cb.has_method("is_recession") and cb.is_recession(): return 1.0 - cyc * CYCLE_SWING
+	return 1.0
 
 # Текущие рыночные цены (база × индекс рынка).
 func current_price(type_id: String) -> int:
@@ -86,7 +121,7 @@ func property_level(index: int) -> int:
 func property_rent(index: int) -> float:
 	if index < 0 or index >= properties.size(): return 0.0
 	var tid := String(properties[index].get("type_id", ""))
-	return current_rent(tid) * (1.0 + property_level(index) * LEVEL_RENT_BONUS)
+	return current_rent(tid) * (1.0 + property_level(index) * LEVEL_RENT_BONUS) * cycle_mult(tid)
 
 func property_value(index: int) -> float:
 	if index < 0 or index >= properties.size(): return 0.0
@@ -231,6 +266,77 @@ func sell_property(index: int) -> float:
 	gm.save_game()
 	return net
 
+# ── Девелопмент / застройка ───────────────────────────────────────────────────
+func build_cost(type_id: String) -> int:
+	return int(current_price(type_id) * BUILD_COST_RATIO)
+
+func build_days(type_id: String) -> int:
+	var price: float = float(_get_type(type_id).get("price", 0))
+	return clampi(int(30 + price / 5_000_000.0), 30, 180)
+
+func can_build(type_id: String) -> bool:
+	var t := _get_type(type_id)
+	return not t.is_empty() and gm.current_title_index >= int(t.min_title) and gm.money >= float(build_cost(type_id))
+
+func start_project(type_id: String) -> bool:
+	var t := _get_type(type_id)
+	if t.is_empty(): return false
+	if gm.current_title_index < int(t.min_title): return false
+	var cost: int = build_cost(type_id)
+	if not gm.spend_money(cost): return false
+	var days: int = build_days(type_id)
+	projects.append({"type_id": type_id, "days_left": days, "total_days": days, "invested": float(cost)})
+	emit_signal("portfolio_changed")
+	gm.save_game()
+	return true
+
+func project_count() -> int:
+	return projects.size()
+
+# Вложенный в стройку капитал (для net worth — деньги не исчезают).
+func projects_value() -> float:
+	var total: float = 0.0
+	for p in projects:
+		total += float(p.get("invested", 0.0))
+	return total
+
+# Ежедневно двигаем стройки; завершённые превращаем в готовые объекты.
+func _update_projects() -> void:
+	if projects.is_empty(): return
+	var changed: bool = false
+	var es := get_node_or_null("/root/EventSystem")
+	var done: Array = []
+	for i in range(projects.size()):
+		var p = projects[i]
+		p["days_left"] = int(p.get("days_left", 0)) - 1
+		if int(p["days_left"]) <= 0:
+			done.append(i)
+	done.reverse()
+	for i in done:
+		var tid: String = String(projects[i].get("type_id", ""))
+		projects.remove_at(i)
+		properties.append({"type_id": tid, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0, "level": 0, "vacant": false, "grace": NEW_GRACE_MONTHS})
+		changed = true
+		if es:
+			es.event_triggered.emit({
+				"text": "🏗 Стройка завершена: «%s» сдан в эксплуатацию!" % _get_type(tid).get("name", "объект"),
+				"money": 0, "health": 0})
+	if changed:
+		emit_signal("portfolio_changed")
+
+# Ежемесячно: риск задержки стройки.
+func _project_overruns() -> void:
+	var es := get_node_or_null("/root/EventSystem")
+	for p in projects:
+		if int(p.get("days_left", 0)) > 0 and randf() < BUILD_OVERRUN_MONTHLY:
+			var delay: int = randi_range(10, 25)
+			p["days_left"] = int(p["days_left"]) + delay
+			p["total_days"] = int(p.get("total_days", 0)) + delay
+			if es:
+				es.event_triggered.emit({
+					"text": "🏗 Задержка стройки «%s»: +%d дн." % [_get_type(String(p.get("type_id", ""))).get("name", "объект"), delay],
+					"money": 0, "health": 0})
+
 # Суммарная аренда в день (только заселённые объекты: рынок × ремонт).
 func rental_income() -> float:
 	var total: float = 0.0
@@ -239,11 +345,12 @@ func rental_income() -> float:
 			total += property_rent(i)
 	return total
 
-# Стоимость портфеля по рыночной цене с учётом ремонта (для капитала / net worth).
+# Стоимость портфеля по рыночной цене с учётом ремонта (+ вложения в стройку).
 func portfolio_value() -> float:
 	var total: float = 0.0
 	for i in range(properties.size()):
 		total += property_value(i)
+	total += projects_value()
 	return total
 
 # Ежедневно: чистый поток (аренда − обслуживание − управляющий);
@@ -252,9 +359,11 @@ func process_day() -> void:
 	var net := net_daily_income()
 	if net != 0.0:
 		gm.add_money(net)
+	_update_projects()
 	if gm.day % 30 == 0:
 		_pay_mortgages()
 		_update_occupancy()
+		_project_overruns()
 		_update_market()
 
 # Ежемесячно: простаивающие ищут жильца, заселённые рискуют простоем/плохим жильцом.
@@ -350,17 +459,20 @@ func _update_market() -> void:
 
 func reset() -> void:
 	properties.clear()
+	projects.clear()
 	market_index = 1.0
 	_prev_index = 1.0
 	has_manager = false
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("realestate", "properties", properties)
+	cfg.set_value("realestate", "projects", projects)
 	cfg.set_value("realestate", "market_index", market_index)
 	cfg.set_value("realestate", "has_manager", has_manager)
 
 func load_data(cfg: ConfigFile) -> void:
 	properties = cfg.get_value("realestate", "properties", [])
+	projects = cfg.get_value("realestate", "projects", [])
 	market_index = cfg.get_value("realestate", "market_index", 1.0)
 	_prev_index = market_index
 	has_manager = cfg.get_value("realestate", "has_manager", false)

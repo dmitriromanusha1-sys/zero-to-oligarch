@@ -69,8 +69,11 @@ func _rebuild() -> void:
 	if rem == null or gm == null:
 		return
 	_title("🏘 Недвижимость")
-	_note("Портфель: %d объект(ов) · стоимость %s" % [
-		rem.property_count(), gm.format_money(rem.portfolio_value())])
+	var pnote: String = "Портфель: %d объект(ов) · стоимость %s" % [
+		rem.property_count(), gm.format_money(rem.portfolio_value())]
+	if rem.project_count() > 0:
+		pnote += " · 🏗 строится %d" % rem.project_count()
+	_note(pnote)
 	if rem.property_count() > 0:
 		_lbl(_vb, "Чистый поток: %s/день  (аренда +%s − обслуж. %s%s)" % [
 			gm.format_money(rem.net_daily_income()), gm.format_money(rem.rental_income()),
@@ -98,9 +101,22 @@ func _rebuild() -> void:
 			_vb.add_child(_owned_card(i))
 		_sep()
 
-	# Каталог
-	_header("🏗 Купить под сдачу")
+	# Стройки в процессе
+	if rem.project_count() > 0:
+		_header("🏗 Стройки в процессе")
+		for i in range(rem.projects.size()):
+			_vb.add_child(_project_card(i))
+		_sep()
+
+	# Каталог — жилая недвижимость
+	_header("🏠 Жилая недвижимость")
 	for t in rem.PROPERTY_TYPES:
+		_vb.add_child(_buy_card(t))
+	_sep()
+
+	# Каталог — коммерческая недвижимость
+	_header("🏢 Коммерческая (доход выше, зависит от цикла)")
+	for t in rem.COMMERCIAL_TYPES:
 		_vb.add_child(_buy_card(t))
 
 	var spacer := Control.new()
@@ -213,6 +229,11 @@ func _buy_card(t: Dictionary) -> PanelContainer:
 	var cprice: int = rem.current_price(t.id)
 	_lbl(col, name_str, Color(0.85, 0.88, 0.95), 14)
 	_lbl(col, "%s · аренда +%s/день" % [t.get("desc", ""), gm.format_money(rem.current_rent(t.id))], Color(0.62, 0.68, 0.62), 11)
+	if rem.is_commercial(t.id):
+		var cm: float = rem.cycle_mult(t.id)
+		var cyc_str: String = "аренда сейчас ×%.2f (цикл)" % cm if absf(cm - 1.0) > 0.01 else "цикличная аренда"
+		var ccol: Color = Color(0.55, 0.9, 0.6) if cm > 1.01 else (Color(0.95, 0.55, 0.5) if cm < 0.99 else Color(0.6, 0.66, 0.74))
+		_lbl(col, "📊 " + cyc_str, ccol, 11)
 	var btns := VBoxContainer.new()
 	btns.add_theme_constant_override("separation", 4)
 	if locked:
@@ -241,7 +262,37 @@ func _buy_card(t: Dictionary) -> PanelContainer:
 		else:
 			_style(mb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); mb.disabled = true
 		btns.add_child(mb)
+		# Построить (дешевле, но дольше)
+		var bcost: int = rem.build_cost(t.id)
+		var bb := Button.new(); bb.text = "🏗 Построить %s · %dдн" % [gm.format_money(bcost), rem.build_days(t.id)]
+		bb.add_theme_font_size_override("font_size", 11)
+		if rem.can_build(t.id):
+			_style(bb, Color(0.16, 0.14, 0.10), Color(0.55, 0.45, 0.25))
+			bb.pressed.connect(func(): rem.start_project(tid))
+		else:
+			_style(bb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); bb.disabled = true
+		btns.add_child(bb)
 	row.add_child(btns)
+	return card
+
+func _project_card(i: int) -> PanelContainer:
+	var p = rem.projects[i]
+	var t = rem._get_type(String(p.get("type_id", "")))
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.12, 0.10, 0.05, 0.92); cs.border_color = Color(0.55, 0.45, 0.25, 0.8)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = t.get("icon", "🏗")
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	var left: int = int(p.get("days_left", 0))
+	var total: int = maxi(1, int(p.get("total_days", 1)))
+	var pct: int = int(round((1.0 - float(left) / float(total)) * 100.0))
+	_lbl(col, "%s — строится" % t.get("name", "?"), Color(0.95, 0.88, 0.70), 14)
+	_lbl(col, "Готовность %d%% · осталось %d дн. · вложено %s" % [pct, left, gm.format_money(float(p.get("invested", 0.0)))], Color(0.80, 0.74, 0.58), 11)
 	return card
 
 # ── helpers ───────────────────────────────────────────────────────────────────
