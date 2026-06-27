@@ -167,9 +167,21 @@ func _rebuild() -> void:
 	# Президентская гонка (капстоун)
 	_header("🏛 Президентская гонка")
 	if im.is_president:
-		_lbl(_vb, "🏛 Вы — Президент страны. Высшая власть достигнута.", Color(0.95, 0.85, 0.45), 14)
+		var head: String = "🏛 Вы — Пожизненный президент." if im.term_limits_abolished else "🏛 Вы — Президент страны."
+		_lbl(_vb, head, Color(0.95, 0.85, 0.45), 14)
+		if im.term_limits_abolished:
+			_lbl(_vb, "Срок №%d · сроки отменены (пожизненно)." % im.terms_served, Color(0.74, 0.80, 0.70), 11)
+		else:
+			_lbl(_vb, "Срок №%d · до переизбрания %d дн. · шанс %d%%" % [
+				im.terms_served, im.term_days_left, int(round(im.reelection_chance() * 100.0))],
+				Color(0.74, 0.80, 0.70), 11)
+		var imp: int = int(round(im.impeach_chance() * 100.0))
+		if imp > 0:
+			_lbl(_vb, "⚠ Риск импичмента при скандале: %d%%. Снизьте подозрение!" % imp, Color(0.95, 0.55, 0.5), 11)
 		_lbl(_vb, "Бонусы: +%d%% к доходу бизнеса, +%d влияния/день, иммунитет к расследованиям." % [
-			int(im.PRES_INCOME_BONUS * 100.0), int(im.PRES_INFLUENCE_DAY)], Color(0.74, 0.80, 0.70), 11)
+			int(im.PRES_INCOME_BONUS * 100.0), int(im.PRES_INFLUENCE_DAY)], Color(0.66, 0.72, 0.66), 11)
+		_vb.add_child(_president_action_card("successor"))
+		_vb.add_child(_president_action_card("reform"))
 	else:
 		var sup: int = int(round(im.national_support() * 100.0))
 		var req: int = int(im.PRES_MIN_SUPPORT * 100.0)
@@ -618,6 +630,46 @@ func _ideology_card(ig: Dictionary) -> PanelContainer:
 		if im.can_set_ideology(iid):
 			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
 			btn.pressed.connect(func(): im.set_ideology(iid))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _president_action_card(kind: String) -> PanelContainer:
+	var is_succ: bool = kind == "successor"
+	var done: bool = im.successor_appointed if is_succ else im.term_limits_abolished
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.07, 0.10, 0.08, 0.92) if done else Color(0.10, 0.09, 0.06, 0.94)
+	cs.border_color = Color(0.40, 0.65, 0.42, 0.85) if done else Color(0.66, 0.54, 0.30, 0.8)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "👤" if is_succ else "🏰"
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	if is_succ:
+		_lbl(col, "Назначить преемника", Color(0.96, 0.90, 0.70), 14)
+		_lbl(col, "+%d%% к переизбранию и вдвое меньше риск импичмента · %d вл. + %s" % [
+			int(im.SUCCESSOR_REELECT * 100.0), int(im.SUCCESSOR_INF), gm.format_money(im.SUCCESSOR_MONEY)], Color(0.80, 0.74, 0.60), 11)
+	else:
+		_lbl(col, "Конституционная реформа", Color(0.96, 0.90, 0.70), 14)
+		_lbl(col, "Отмена сроков — власть пожизненно (резко поднимает подозрение) · %d вл. + %s" % [
+			int(im.REFORM_INF), gm.format_money(im.REFORM_MONEY)], Color(0.80, 0.74, 0.60), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if done:
+		btn.text = "✅ Готово"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	else:
+		btn.text = "Назначить" if is_succ else "Провести"
+		var ok: bool = im.can_appoint_successor() if is_succ else im.can_reform_constitution()
+		if ok:
+			_style(btn, Color(0.22, 0.17, 0.10), Color(0.7, 0.55, 0.3))
+			if is_succ: btn.pressed.connect(func(): im.appoint_successor())
+			else: btn.pressed.connect(func(): im.reform_constitution())
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)

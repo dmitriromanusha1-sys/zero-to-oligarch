@@ -165,6 +165,24 @@ const PRES_INCOME_BONUS: float = 0.25        # +25% к доходу бизнес
 const PRES_INFLUENCE_DAY: float = 30.0       # большой пассив у президента
 const PRES_RISK_MULT: float = 0.30           # президентский иммунитет к расследованиям
 
+# ── Удержание власти (Фаза 9) ─────────────────────────────────────────────────
+# Президентство «живое»: ограниченный срок с переизбранием, риск импичмента при
+# высоком подозрении, конституционная реформа (пожизненная власть) и преемник.
+var term_days_left: int = 0
+var terms_served: int = 0
+var term_limits_abolished: bool = false
+var successor_appointed: bool = false
+
+const TERM_LENGTH: int = 360
+const REELECT_INCUMBENT: float = 0.10        # бонус действующего к переизбранию
+const SUCCESSOR_REELECT: float = 0.15        # бонус преемника к переизбранию
+const IMPEACH_THRESHOLD: float = 1.0         # подозрение, выше которого возможен импичмент
+const REFORM_MONEY: int = 2_000_000_000
+const REFORM_INF: float = 1500.0
+const REFORM_HEAT: float = 0.8               # реформа — непопулярный захват власти
+const SUCCESSOR_MONEY: int = 500_000_000
+const SUCCESSOR_INF: float = 400.0
+
 var gm: Node
 
 func _ready() -> void:
@@ -544,11 +562,19 @@ func _trigger_scandal() -> void:
 				lost_district = district_name(int(i))
 				districts[i] = false
 				break
+	# Импичмент: при высоком подозрении президент может лишиться поста
+	var impeached: bool = false
+	if is_president and randf() < impeach_chance():
+		is_president = false
+		term_days_left = 0
+		impeached = true
 	corruption_heat *= 0.5
 	if es:
 		var txt: String = "⚖️ Антикоррупционный скандал! Штраф %s, влияние и репутация подорваны." % gm.format_money(fine)
 		if lost_district != "":
 			txt += " Потерян район «%s»." % lost_district
+		if impeached:
+			txt += " 🏛 Объявлен импичмент — вы лишены президентского поста!"
 		es.event_triggered.emit({"text": txt, "money": -fine, "health": 0})
 	emit_signal("connections_changed")
 
@@ -773,6 +799,8 @@ func run_for_president() -> bool:
 	var won: bool = randf() < national_support()
 	if won:
 		is_president = true
+		terms_served = 1
+		term_days_left = TERM_LENGTH
 		if es:
 			es.event_triggered.emit({
 				"text": "🏛 Вы избраны Президентом страны! Высшая власть в ваших руках.",
@@ -792,6 +820,81 @@ func run_for_president() -> bool:
 	gm.save_game()
 	return won
 
+# ── Удержание власти ──────────────────────────────────────────────────────────
+func term_progress() -> float:
+	if term_limits_abolished: return 1.0
+	return clampf(1.0 - float(term_days_left) / float(TERM_LENGTH), 0.0, 1.0)
+
+# Конституционная реформа: отмена сроков — пожизненная власть.
+func can_reform_constitution() -> bool:
+	if not is_president or term_limits_abolished: return false
+	return influence >= REFORM_INF and gm.money >= float(REFORM_MONEY)
+
+func reform_constitution() -> bool:
+	if not can_reform_constitution(): return false
+	if not gm.spend_money(REFORM_MONEY): return false
+	add_influence(-REFORM_INF)
+	term_limits_abolished = true
+	corruption_heat = minf(HEAT_MAX, corruption_heat + REFORM_HEAT)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "🏰 Конституционная реформа принята — сроки отменены. Вы у власти пожизненно.",
+			"money": 0, "health": 0})
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+# Преемник: страхует переизбрание и снижает риск импичмента.
+func can_appoint_successor() -> bool:
+	if not is_president or successor_appointed: return false
+	return influence >= SUCCESSOR_INF and gm.money >= float(SUCCESSOR_MONEY)
+
+func appoint_successor() -> bool:
+	if not can_appoint_successor(): return false
+	if not gm.spend_money(SUCCESSOR_MONEY): return false
+	add_influence(-SUCCESSOR_INF)
+	successor_appointed = true
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func reelection_chance() -> float:
+	return clampf(national_support() + REELECT_INCUMBENT + (SUCCESSOR_REELECT if successor_appointed else 0.0), 0.05, 0.97)
+
+# Конец срока: переизбрание. Победа — новый срок, иначе теряешь пост.
+func _hold_reelection() -> void:
+	var es := get_node_or_null("/root/EventSystem")
+	if randf() < reelection_chance():
+		terms_served += 1
+		term_days_left = TERM_LENGTH
+		if es:
+			es.event_triggered.emit({
+				"text": "🏛 Вы переизбраны на новый срок (срок №%d)." % terms_served,
+				"money": 0, "health": 0})
+	else:
+		is_president = false
+		term_days_left = 0
+		if es:
+			es.event_triggered.emit({
+				"text": "🏛 Вы проиграли переизбрание и лишились президентского поста.",
+				"money": 0, "health": 0})
+	emit_signal("connections_changed")
+
+# Раз в день у президента: тикает срок; на нуле — переизбрание.
+func _term_tick() -> void:
+	if not is_president or term_limits_abolished: return
+	if term_days_left > 0:
+		term_days_left -= 1
+	if term_days_left <= 0:
+		_hold_reelection()
+
+# Шанс импичмента при скандале (только у президента, при высоком подозрении).
+func impeach_chance() -> float:
+	if not is_president or scrutiny() < IMPEACH_THRESHOLD: return 0.0
+	var base: float = clampf((scrutiny() - IMPEACH_THRESHOLD) * 0.8, 0.0, 0.5)
+	return base * (0.5 if successor_appointed else 1.0)
+
 # ── Ранг власти / эндгейм ─────────────────────────────────────────────────────
 func power_score() -> int:
 	return controlled_count() * 10 + total_connection_levels() * 4 + media_reach() * 2 \
@@ -799,7 +902,7 @@ func power_score() -> int:
 
 func power_rank() -> String:
 	var s: int = power_score()
-	if is_president: return "Президент"
+	if is_president: return "Пожизненный президент" if term_limits_abolished else "Президент"
 	if grey_cardinal: return "Серый кардинал"
 	if s >= 90: return "Теневой магнат"
 	if s >= 45: return "Влиятельная фигура"
@@ -852,6 +955,7 @@ func process_day() -> void:
 	_tick_elections()
 	_intel_tick()
 	_party_tick()
+	_term_tick()
 	if election_attempt_cd > 0:
 		election_attempt_cd -= 1
 	if gm.day % 30 == 0:
@@ -889,6 +993,10 @@ func reset() -> void:
 	party_ideology = ""
 	is_president = false
 	election_attempt_cd = 0
+	term_days_left = 0
+	terms_served = 0
+	term_limits_abolished = false
+	successor_appointed = false
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
@@ -910,6 +1018,10 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "party_ideology", party_ideology)
 	cfg.set_value("influence", "is_president", is_president)
 	cfg.set_value("influence", "election_attempt_cd", election_attempt_cd)
+	cfg.set_value("influence", "term_days_left", term_days_left)
+	cfg.set_value("influence", "terms_served", terms_served)
+	cfg.set_value("influence", "term_limits_abolished", term_limits_abolished)
+	cfg.set_value("influence", "successor_appointed", successor_appointed)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
@@ -931,3 +1043,7 @@ func load_data(cfg: ConfigFile) -> void:
 	party_ideology = cfg.get_value("influence", "party_ideology", "")
 	is_president = cfg.get_value("influence", "is_president", false)
 	election_attempt_cd = cfg.get_value("influence", "election_attempt_cd", 0)
+	term_days_left = cfg.get_value("influence", "term_days_left", 0)
+	terms_served = cfg.get_value("influence", "terms_served", 0)
+	term_limits_abolished = cfg.get_value("influence", "term_limits_abolished", false)
+	successor_appointed = cfg.get_value("influence", "successor_appointed", false)
