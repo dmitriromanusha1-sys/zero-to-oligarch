@@ -33,6 +33,12 @@ const MORTGAGE_MONTHS: int = 60      # срок 5 лет
 const MORTGAGE_SPREAD: float = 0.03  # спред ипотеки над ключевой ставкой
 const MORTGAGE_MISS_LIMIT: int = 3   # просрочек до взыскания
 
+# ── Ремонт / класс объекта ────────────────────────────────────────────────────
+const MAX_RENO_LEVEL: int = 3
+const LEVEL_RENT_BONUS: float = 0.20   # +20% аренды за уровень
+const LEVEL_VALUE_BONUS: float = 0.15  # +15% стоимости за уровень
+const RENO_COST_FACTOR: float = 0.20   # цена ремонта = база × индекс × фактор × (ур+1)
+
 # Портфель: массив словарей {type_id}
 var properties: Array = []
 
@@ -55,6 +61,39 @@ func current_value(type_id: String) -> float:
 
 func current_rent(type_id: String) -> float:
 	return float(_get_type(type_id).get("rent", 0)) * market_index
+
+# ── Стоимость/аренда конкретного объекта (с учётом ремонта) ──────────────────
+func property_level(index: int) -> int:
+	if index < 0 or index >= properties.size(): return 0
+	return int(properties[index].get("level", 0))
+
+func property_rent(index: int) -> float:
+	if index < 0 or index >= properties.size(): return 0.0
+	var tid := String(properties[index].get("type_id", ""))
+	return current_rent(tid) * (1.0 + property_level(index) * LEVEL_RENT_BONUS)
+
+func property_value(index: int) -> float:
+	if index < 0 or index >= properties.size(): return 0.0
+	var tid := String(properties[index].get("type_id", ""))
+	return current_value(tid) * (1.0 + property_level(index) * LEVEL_VALUE_BONUS)
+
+func reno_cost(index: int) -> int:
+	if index < 0 or index >= properties.size(): return 0
+	var t := _get_type(String(properties[index].get("type_id", "")))
+	return int(float(t.get("price", 0)) * market_index * RENO_COST_FACTOR * (property_level(index) + 1))
+
+func can_renovate(index: int) -> bool:
+	return index >= 0 and index < properties.size() \
+		and property_level(index) < MAX_RENO_LEVEL and gm.money >= float(reno_cost(index))
+
+func renovate(index: int) -> bool:
+	if index < 0 or index >= properties.size(): return false
+	if property_level(index) >= MAX_RENO_LEVEL: return false
+	if not gm.spend_money(reno_cost(index)): return false
+	properties[index]["level"] = property_level(index) + 1
+	emit_signal("portfolio_changed")
+	gm.save_game()
+	return true
 
 # Тренд рынка: 1 рост, -1 спад, 0 стабильно.
 func market_trend() -> int:
@@ -80,7 +119,7 @@ func buy_property(type_id: String) -> bool:
 	if t.is_empty(): return false
 	if gm.current_title_index < int(t.min_title): return false
 	if not gm.spend_money(current_price(type_id)): return false
-	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0})
+	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0, "level": 0})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
@@ -106,7 +145,7 @@ func buy_property_mortgage(type_id: String) -> bool:
 	var down: int = int(price * MORTGAGE_DOWN)
 	if not gm.spend_money(down): return false
 	var principal: float = float(price - down)
-	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0})
+	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0, "level": 0})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
@@ -123,8 +162,7 @@ func equity_value() -> float:
 
 func sell_property(index: int) -> float:
 	if index < 0 or index >= properties.size(): return 0.0
-	var tid := String(properties[index].get("type_id", ""))
-	var value: float = current_value(tid) * SELL_RATIO
+	var value: float = property_value(index) * SELL_RATIO
 	# Гасим остаток ипотеки из выручки
 	var mort: float = float(properties[index].get("mortgage", 0.0))
 	var net: float = maxf(0.0, value - mort)
@@ -134,18 +172,18 @@ func sell_property(index: int) -> float:
 	gm.save_game()
 	return net
 
-# Суммарная аренда в день (по текущему индексу рынка).
+# Суммарная аренда в день (рынок × ремонт каждого объекта).
 func rental_income() -> float:
 	var total: float = 0.0
-	for p in properties:
-		total += current_rent(String(p.get("type_id", "")))
+	for i in range(properties.size()):
+		total += property_rent(i)
 	return total
 
-# Стоимость портфеля по рыночной цене (для капитала / net worth).
+# Стоимость портфеля по рыночной цене с учётом ремонта (для капитала / net worth).
 func portfolio_value() -> float:
 	var total: float = 0.0
-	for p in properties:
-		total += current_value(String(p.get("type_id", "")))
+	for i in range(properties.size()):
+		total += property_value(i)
 	return total
 
 # Ежедневно: зачисляем доход с аренды; раз в месяц двигаем рынок.

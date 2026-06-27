@@ -113,19 +113,35 @@ func _owned_card(i: int) -> PanelContainer:
 	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(icon)
 	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
-	var tid: String = String(p.get("type_id", ""))
-	_lbl(col, t.get("name", "?"), Color(0.80, 1.0, 0.80), 14)
-	_lbl(col, "Аренда +%s/день · оценка %s" % [gm.format_money(rem.current_rent(tid)), gm.format_money(rem.current_value(tid))], Color(0.62, 0.85, 0.66), 11)
+	var idx: int = i
+	var lvl: int = rem.property_level(i)
+	var stars: String = ""
+	for s in range(rem.MAX_RENO_LEVEL):
+		stars += "⭐" if s < lvl else "☆"
+	_lbl(col, "%s  %s" % [t.get("name", "?"), stars], Color(0.80, 1.0, 0.80), 14)
+	_lbl(col, "Аренда +%s/день · оценка %s" % [gm.format_money(rem.property_rent(i)), gm.format_money(rem.property_value(i))], Color(0.62, 0.85, 0.66), 11)
 	var mort: float = float(p.get("mortgage", 0.0))
 	if mort > 0.0:
 		_lbl(col, "🏦 Ипотека: остаток %s" % gm.format_money(mort), Color(0.85, 0.70, 0.55), 11)
-	var sval: float = maxf(0.0, rem.current_value(tid) * rem.SELL_RATIO - mort)
+	var btns := VBoxContainer.new(); btns.add_theme_constant_override("separation", 4); row.add_child(btns)
+	# Ремонт
+	if lvl < rem.MAX_RENO_LEVEL:
+		var rcost: int = rem.reno_cost(i)
+		var rb := Button.new(); rb.text = "🔨 Ремонт (%s)" % gm.format_money(rcost)
+		rb.add_theme_font_size_override("font_size", 11)
+		if rem.can_renovate(i):
+			_style(rb, Color(0.12, 0.16, 0.20), Color(0.35, 0.5, 0.6))
+			rb.pressed.connect(func(): rem.renovate(idx))
+		else:
+			_style(rb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); rb.disabled = true
+		btns.add_child(rb)
+	# Продажа
+	var sval: float = maxf(0.0, rem.property_value(i) * rem.SELL_RATIO - mort)
 	var sb := Button.new(); sb.text = "Продать (%s)" % gm.format_money(sval)
 	sb.add_theme_font_size_override("font_size", 12)
 	_style(sb, Color(0.18, 0.12, 0.10), Color(0.6, 0.4, 0.3))
-	var idx: int = i
 	sb.pressed.connect(func(): rem.sell_property(idx))
-	row.add_child(sb)
+	btns.add_child(sb)
 	return card
 
 func _buy_card(t: Dictionary) -> PanelContainer:
