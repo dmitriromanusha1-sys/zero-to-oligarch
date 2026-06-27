@@ -62,6 +62,14 @@ const PARTNER_DATE_COST: int = 8000
 const PARTNER_DATE_REL: float = 6.0
 const GIFT_COST: int = 30000
 const GIFT_REL: float = 12.0
+
+# ── Брак и свадьба (Фаза 6) ───────────────────────────────────────────────────
+const MARRY_THRESHOLD: float = 65.0     # отношения для предложения
+const WEDDING_BASE: int = 500_000
+const PRENUP_BASE: int = 200_000
+const MARRY_REL_BONUS: float = 10.0
+const DIVORCE_FRAC: float = 0.30        # раздел без брачного договора
+const DIVORCE_FRAC_PRENUP: float = 0.05
 const DATING_NAMES: Array = [
 	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
 	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
@@ -102,7 +110,8 @@ func happiness_baseline() -> float:
 	b += (appearance() - 50.0) * 0.06          # хорошо выглядеть приятно
 	b += (skill("charisma") - 50.0) * 0.05     # социальная уверенность
 	if not partner.is_empty():
-		b += relationship() / 100.0 * 18.0     # крепкие отношения делают счастливее
+		var f: float = 25.0 if is_married() else 18.0
+		b += relationship() / 100.0 * f        # крепкие отношения/брак делают счастливее
 	return clampf(b, 5.0, 100.0)
 
 # ── Личные навыки ─────────────────────────────────────────────────────────────
@@ -246,6 +255,65 @@ func breakup() -> void:
 	emit_signal("life_changed")
 	gm.save_game()
 
+# ── Брак ──────────────────────────────────────────────────────────────────────
+func is_married() -> bool:
+	return not partner.is_empty() and bool(partner.get("married", false))
+
+func has_prenup() -> bool:
+	return bool(partner.get("prenup", false))
+
+func wedding_cost() -> int:
+	return int(gm.shop_price(WEDDING_BASE) * (1.0 + gm.current_title_index * 0.25))
+
+func prenup_cost() -> int:
+	return gm.shop_price(PRENUP_BASE)
+
+func can_marry() -> bool:
+	return not partner.is_empty() and not is_married() and relationship() >= MARRY_THRESHOLD
+
+func marry(with_prenup: bool) -> bool:
+	if not can_marry(): return false
+	var cost: int = wedding_cost() + (prenup_cost() if with_prenup else 0)
+	if gm.money < float(cost): return false
+	if not gm.spend_money(cost): return false
+	partner["married"] = true
+	partner["prenup"] = with_prenup
+	partner["wedding_day"] = gm.day
+	add_relationship(MARRY_REL_BONUS)
+	add_happiness(15.0)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "💍 Свадьба! Вы теперь в браке с %s.%s" % [partner.get("name", "?"),
+				(" Брачный договор подписан." if with_prenup else "")],
+			"money": 0, "health": 0})
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func divorce_cost() -> float:
+	var frac: float = DIVORCE_FRAC_PRENUP if has_prenup() else DIVORCE_FRAC
+	return maxf(0.0, gm.money * frac)
+
+func can_divorce() -> bool:
+	return is_married()
+
+func divorce() -> void:
+	if not is_married(): return
+	var nm: String = String(partner.get("name", "?"))
+	var cost: float = divorce_cost()
+	if cost > 0.0:
+		gm.add_money(-cost)
+	partner = {}
+	add_happiness(-15.0)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "💔 Развод с %s. Раздел имущества: −%s." % [nm, gm.format_money(cost)],
+			"money": 0, "health": 0})
+	emit_signal("life_changed")
+	gm.save_game()
+
 # Отношения остывают без внимания; иногда — ссоры; на нуле — разрыв.
 func _relationship_tick() -> void:
 	if partner.is_empty(): return
@@ -258,7 +326,8 @@ func _relationship_tick() -> void:
 			if es:
 				es.event_triggered.emit({"text": "😠 Ссора с %s подпортила отношения." % partner.get("name", "?"), "money": 0, "health": 0})
 	if relationship() <= 0.0:
-		breakup()
+		if is_married(): divorce()
+		else: breakup()
 
 # ── Тело, форма и внешность ───────────────────────────────────────────────────
 # Внешность складывается из формы, стиля и возраста (молодость — плюс).

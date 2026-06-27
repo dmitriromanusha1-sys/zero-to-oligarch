@@ -111,13 +111,25 @@ func _rebuild() -> void:
 	# Личная жизнь
 	_header("❤ Личная жизнь")
 	if not life.is_single():
-		_lbl(_vb, "В отношениях с %s 💞" % life.partner.get("name", "?"), Color(0.95, 0.7, 0.78), 14)
+		var nm: String = String(life.partner.get("name", "?"))
+		if life.is_married():
+			_lbl(_vb, "В браке с %s 💍%s" % [nm, ("  (брачный договор)" if life.has_prenup() else "")], Color(0.95, 0.78, 0.6), 14)
+		else:
+			_lbl(_vb, "В отношениях с %s 💞" % nm, Color(0.95, 0.7, 0.78), 14)
 		var rel: float = life.relationship()
 		_lbl(_vb, "Отношения: %d%% · %s" % [int(round(rel)), life.relationship_label()], Color(0.9, 0.72, 0.78), 12)
 		_vb.add_child(_bar(rel / 100.0, Color(0.9, 0.45, 0.55)))
 		_vb.add_child(_love_card("pdate"))
 		_vb.add_child(_love_card("gift"))
-		_vb.add_child(_love_card("breakup"))
+		if life.is_married():
+			_vb.add_child(_love_card("divorce"))
+		else:
+			if life.can_marry():
+				_vb.add_child(_love_card("marry"))
+				_vb.add_child(_love_card("marry_prenup"))
+			else:
+				_lbl(_vb, "Брак доступен при отношениях ≥%d%%." % int(life.MARRY_THRESHOLD), Color(0.66, 0.62, 0.7), 11)
+			_vb.add_child(_love_card("breakup"))
 	elif life.has_prospect():
 		var interest: float = float(life.prospect.get("interest", 0.0))
 		_lbl(_vb, "Встречаетесь с %s" % life.prospect.get("name", "?"), Color(0.95, 0.8, 0.85), 14)
@@ -143,7 +155,8 @@ func _rebuild() -> void:
 
 func _love_card(kind: String) -> PanelContainer:
 	var titles := {"meet":"Найти пару", "date":"Сходить на свидание", "couple":"Начать отношения", "stop":"Перестать встречаться",
-		"pdate":"Свидание вдвоём", "gift":"Подарок", "breakup":"Расстаться"}
+		"pdate":"Свидание вдвоём", "gift":"Подарок", "breakup":"Расстаться",
+		"marry":"Свадьба 💍", "marry_prenup":"Свадьба с договором 💍📜", "divorce":"Развод"}
 	var descs := {
 		"meet":"Познакомиться · %s" % gm.format_money(gm.shop_price(life.MEET_COST)),
 		"date":"Поднять симпатию · %s" % gm.format_money(gm.shop_price(life.DATE_COST)),
@@ -151,7 +164,10 @@ func _love_card(kind: String) -> PanelContainer:
 		"stop":"Разойтись с текущим увлечением",
 		"pdate":"+отношения · %s" % gm.format_money(gm.shop_price(life.PARTNER_DATE_COST)),
 		"gift":"+отношения · %s" % gm.format_money(gm.shop_price(life.GIFT_COST)),
-		"breakup":"Закончить отношения 💔"}
+		"breakup":"Закончить отношения 💔",
+		"marry":"Пожениться · %s" % gm.format_money(life.wedding_cost()),
+		"marry_prenup":"Защита капитала при разводе · %s" % gm.format_money(life.wedding_cost() + life.prenup_cost()),
+		"divorce":"Развод · раздел %s" % gm.format_money(life.divorce_cost())}
 	var card := PanelContainer.new()
 	var cs := StyleBoxFlat.new()
 	cs.bg_color = Color(0.13, 0.08, 0.11, 0.92)
@@ -184,6 +200,12 @@ func _love_card(kind: String) -> PanelContainer:
 		if gm.day <= life._last_gift_day: label = "✅ Сегодня"
 	elif kind == "breakup":
 		label = "Расстаться"
+	elif kind == "marry":
+		label = "💍 Свадьба"; ok = life.can_marry() and gm.money >= float(life.wedding_cost())
+	elif kind == "marry_prenup":
+		label = "💍📜 Свадьба"; ok = life.can_marry() and gm.money >= float(life.wedding_cost() + life.prenup_cost())
+	elif kind == "divorce":
+		label = "Развод"
 	if ok:
 		_style(btn, Color(0.20, 0.12, 0.16), Color(0.6, 0.38, 0.48))
 		match kind:
@@ -194,6 +216,9 @@ func _love_card(kind: String) -> PanelContainer:
 			"pdate": btn.pressed.connect(func(): life.partner_date())
 			"gift": btn.pressed.connect(func(): life.give_gift())
 			"breakup": btn.pressed.connect(func(): life.breakup())
+			"marry": btn.pressed.connect(func(): life.marry(false))
+			"marry_prenup": btn.pressed.connect(func(): life.marry(true))
+			"divorce": btn.pressed.connect(func(): life.divorce())
 	else:
 		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	btn.text = label
