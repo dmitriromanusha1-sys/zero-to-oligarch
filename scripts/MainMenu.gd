@@ -262,7 +262,7 @@ func _build_ui() -> void:
 
 	# ── Версия — нижний левый угол ───────────────────────────────────────────
 	var ver := Label.new()
-	ver.text = "v1.0.0 — Godot 4"
+	ver.text = "v1.3.0 — Godot 4"
 	ver.add_theme_font_size_override("font_size", 10)
 	ver.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55, 0.70))
 	ver.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
