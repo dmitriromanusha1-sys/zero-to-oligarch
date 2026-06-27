@@ -381,10 +381,11 @@ func add_money(amount: float) -> void:
 # Доход от работы (смены): зачисляется как обычные деньги, но копится для
 # месячного подоходного налога (НДФЛ) с необлагаемым минимумом.
 func add_work_income(amount: float) -> void:
-	# Счастье/мотивация влияет на продуктивность работы
+	# Счастье/мотивация влияет на продуктивность работы; работа добавляет стресс
 	var life := get_node_or_null("/root/LifeManager")
 	if life and life.has_method("productivity_mult"):
 		amount *= life.productivity_mult()
+		if life.has_method("on_worked"): life.on_worked()
 	month_wage_income += amount
 	add_money(amount)
 

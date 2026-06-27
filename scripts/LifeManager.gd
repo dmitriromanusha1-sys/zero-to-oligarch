@@ -96,6 +96,15 @@ const VICES: Array = [
 	{"id":"parties",  "name":"Вечеринки",      "icon":"🎉", "happy":6.0, "addict":5.0, "cost":80000, "harm_health":0.010, "harm_money":0.0010, "desc":"Веселье до утра."},
 ]
 
+# ── Ментальное здоровье и выгорание (Фаза 16) ─────────────────────────────────
+var stress: float = 20.0   # 0..100; высокий = выгорание
+var _last_therapy_day: int = -99
+const WORK_STRESS: float = 1.0           # стресс за смену
+const STRESS_RECOVER_BASE: float = 1.2
+const THERAPY_COST: int = 100_000
+const THERAPY_RELIEF: float = 25.0
+const BURNOUT_THRESHOLD: float = 90.0
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -223,7 +232,60 @@ func happiness_baseline() -> float:
 	b += minf(hobby_happiness(), 16.0)                             # любимые занятия
 	b += minf(luxury_happiness(), 12.0)                            # роскошь и комфорт
 	b -= avg_addiction() * 0.12                                    # зависимости подтачивают
+	b -= stress * 0.12                                             # стресс/выгорание
 	return clampf(b, 5.0, 100.0)
+
+# ── Ментальное здоровье и выгорание ───────────────────────────────────────────
+func add_stress(amount: float) -> void:
+	stress = clampf(stress + amount, 0.0, 100.0)
+
+func on_worked() -> void:
+	add_stress(WORK_STRESS)
+
+func mental_label() -> String:
+	if stress >= BURNOUT_THRESHOLD: return "На грани выгорания"
+	if stress >= 65.0: return "Сильный стресс"
+	if stress >= 40.0: return "Напряжён"
+	if stress >= 20.0: return "В тонусе"
+	return "Спокоен"
+
+func mental_color() -> Color:
+	if stress >= 65.0: return Color(0.95, 0.5, 0.45)
+	if stress >= 40.0: return Color(0.9, 0.8, 0.45)
+	return Color(0.55, 0.85, 0.65)
+
+func therapy_cost() -> int:
+	return gm.shop_price(THERAPY_COST)
+
+func can_therapy() -> bool:
+	return gm.day > _last_therapy_day and gm.money >= float(therapy_cost())
+
+# Сеанс терапии: заметно снижает стресс.
+func therapy() -> bool:
+	if not can_therapy(): return false
+	if not gm.spend_money(therapy_cost()): return false
+	stress = maxf(0.0, stress - THERAPY_RELIEF)
+	add_happiness(2.0)
+	_last_therapy_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+# Ежедневно: восстановление (хобби и сила воли помогают), пороки добавляют стресс,
+# при пике — риск выгорания.
+func _stress_tick() -> void:
+	stress = clampf(stress + avg_addiction() * 0.02, 0.0, 100.0)
+	var recover: float = STRESS_RECOVER_BASE * (1.0 + hobbies.size() * 0.20 + skill("willpower") / 200.0)
+	stress = clampf(stress - recover, 0.0, 100.0)
+	if stress >= BURNOUT_THRESHOLD and randf() < 0.10:
+		stress = maxf(0.0, stress - 40.0)
+		add_happiness(-15.0)
+		gm.health = maxf(0.0, gm.health - 10.0)
+		var es := get_node_or_null("/root/EventSystem")
+		if es:
+			es.event_triggered.emit({
+				"text": "🧠 Выгорание! Вы сорвались от перегрузки — нужен отдых.",
+				"money": 0, "health": -10})
 
 # ── Пороки и зависимости ──────────────────────────────────────────────────────
 func _vice(id: String) -> Dictionary:
@@ -925,7 +987,8 @@ func mood_color() -> Color:
 func productivity_mult() -> float:
 	var mood: float = 0.85 + (happiness / 100.0) * 0.30      # 0.85..1.15
 	var smarts: float = 0.90 + (skill("intellect") / 100.0) * 0.20  # 0.90..1.10
-	return mood * smarts
+	var calm: float = 1.0 - stress / 100.0 * 0.25            # выгорание режет продуктивность
+	return mood * smarts * calm
 
 # ── Ежедневный ход жизни ──────────────────────────────────────────────────────
 func process_day() -> void:
@@ -940,6 +1003,7 @@ func process_day() -> void:
 	_social_rep_tick()
 	_hobby_tick()
 	_vice_tick()
+	_stress_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
@@ -976,6 +1040,8 @@ func reset() -> void:
 	hobbies = []
 	luxuries = []
 	vices = {}
+	stress = 20.0
+	_last_therapy_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -1001,6 +1067,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "hobbies", hobbies)
 	cfg.set_value("life", "luxuries", luxuries)
 	cfg.set_value("life", "vices", vices)
+	cfg.set_value("life", "stress", stress)
+	cfg.set_value("life", "last_therapy_day", _last_therapy_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -1026,3 +1094,5 @@ func load_data(cfg: ConfigFile) -> void:
 	hobbies = cfg.get_value("life", "hobbies", [])
 	luxuries = cfg.get_value("life", "luxuries", [])
 	vices = cfg.get_value("life", "vices", {})
+	stress = cfg.get_value("life", "stress", 20.0)
+	_last_therapy_day = cfg.get_value("life", "last_therapy_day", -99)
