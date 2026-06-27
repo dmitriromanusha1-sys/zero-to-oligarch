@@ -183,6 +183,26 @@ const REFORM_HEAT: float = 0.8               # реформа — непопул
 const SUCCESSOR_MONEY: int = 500_000_000
 const SUCCESSOR_INF: float = 400.0
 
+# ── Народная поддержка (Фаза 10) ──────────────────────────────────────────────
+# «Одобрение народа» (0..100) дрейфует к базовому уровню (репутация, СМИ, районы
+# минус подозрение). Митинги и обещания поднимают его; референдум закрепляет
+# район навсегда. Одобрение кормит нац. рейтинг и защищает от импичмента.
+var approval: float = 50.0
+var locked_districts: Dictionary = {}        # index -> true (закреплён референдумом)
+
+const APPROVAL_DRIFT: float = 0.05
+const RALLY_MONEY: int = 10_000_000
+const RALLY_INF: float = 50.0
+const RALLY_APPROVAL: float = 8.0
+const RALLY_COOLDOWN: int = 7
+const PROMISE_MONEY: int = 50_000_000
+const PROMISE_APPROVAL: float = 20.0
+const PROMISE_HEAT: float = 0.15             # невыполнимые обещания → подозрение
+const PROMISE_COOLDOWN: int = 30
+const REFERENDUM_MONEY: int = 100_000_000
+const REFERENDUM_APPROVAL_COST: float = 30.0
+const REFERENDUM_MIN_APPROVAL: float = 60.0
+
 var gm: Node
 
 func _ready() -> void:
@@ -448,7 +468,8 @@ func election_win_chance(i: int) -> float:
 	var rm := get_node_or_null("/root/ReputationManager")
 	var rep: float = (float(rm.reputation) / 100.0) if rm else 0.3
 	var power: float = 0.15 + media_reach() * 0.03 + rep * 0.25 \
-		+ connection_level("mayor") * 0.05 + controlled_count() * 0.03 + party_election_bonus()
+		+ connection_level("mayor") * 0.05 + controlled_count() * 0.03 + party_election_bonus() \
+		+ (approval / 100.0) * 0.10
 	return clampf(power - district_difficulty(i), 0.05, 0.95)
 
 func can_run_election(i: int) -> bool:
@@ -492,7 +513,7 @@ func _maybe_lose_districts() -> void:
 	if flip <= 0.0: return
 	var es := get_node_or_null("/root/EventSystem")
 	for i in districts.keys():
-		if bool(districts[i]) and randf() < flip:
+		if bool(districts[i]) and not district_locked(int(i)) and randf() < flip:
 			districts[i] = false
 			if es:
 				es.event_triggered.emit({
@@ -784,7 +805,8 @@ func national_support() -> float:
 	s += clampf(float(media_reach()) / float(maxi(1, _media_total_reach())), 0.0, 1.0) * 0.20
 	s += rep * 0.15
 	s += clampf(float(total_connection_levels()) / float(maxi(1, max_connection_total())), 0.0, 1.0) * 0.10
-	return clampf(s, 0.0, 1.0)
+	# Народное одобрение даёт четверть веса рейтинга
+	return clampf(s * 0.75 + (approval / 100.0) * 0.25, 0.0, 1.0)
 
 func can_run_president() -> bool:
 	if is_president or not politics_unlocked() or election_attempt_cd > 0: return false
@@ -893,7 +915,87 @@ func _term_tick() -> void:
 func impeach_chance() -> float:
 	if not is_president or scrutiny() < IMPEACH_THRESHOLD: return 0.0
 	var base: float = clampf((scrutiny() - IMPEACH_THRESHOLD) * 0.8, 0.0, 0.5)
-	return base * (0.5 if successor_appointed else 1.0)
+	base *= (0.5 if successor_appointed else 1.0)
+	base *= (1.0 - approval / 100.0)            # народное одобрение защищает от импичмента
+	return clampf(base, 0.0, 0.5)
+
+# ── Народная поддержка ────────────────────────────────────────────────────────
+func add_approval(a: float) -> void:
+	approval = clampf(approval + a, 0.0, 100.0)
+
+func approval_baseline() -> float:
+	var rm := get_node_or_null("/root/ReputationManager")
+	var rep: float = float(rm.reputation) if rm else 30.0
+	var b: float = 30.0 + rep * 0.3 + media_reach() * 1.5 + controlled_count() * 2.0 - corruption_heat * 15.0
+	return clampf(b, 0.0, 100.0)
+
+func can_rally() -> bool:
+	if not politics_unlocked() or campaign_cd_left("rally") > 0: return false
+	return influence >= RALLY_INF and gm.money >= float(RALLY_MONEY)
+
+func rally() -> bool:
+	if not can_rally(): return false
+	if not gm.spend_money(RALLY_MONEY): return false
+	add_influence(-RALLY_INF)
+	add_approval(RALLY_APPROVAL)
+	campaign_cd["rally"] = RALLY_COOLDOWN
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func can_promise() -> bool:
+	if not politics_unlocked() or campaign_cd_left("promise") > 0: return false
+	return gm.money >= float(PROMISE_MONEY)
+
+func promise() -> bool:
+	if not can_promise(): return false
+	if not gm.spend_money(PROMISE_MONEY): return false
+	add_approval(PROMISE_APPROVAL)
+	corruption_heat = minf(HEAT_MAX, corruption_heat + PROMISE_HEAT)
+	campaign_cd["promise"] = PROMISE_COOLDOWN
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func district_locked(i: int) -> bool:
+	return bool(locked_districts.get(i, false))
+
+func locked_count() -> int:
+	var n: int = 0
+	for k in locked_districts:
+		if bool(locked_districts[k]): n += 1
+	return n
+
+# Первый контролируемый, но ещё не закреплённый район.
+func _next_referendum_district() -> int:
+	for i in range(district_count()):
+		if controls(i) and not district_locked(i):
+			return i
+	return -1
+
+func can_referendum() -> bool:
+	if approval < REFERENDUM_MIN_APPROVAL: return false
+	if gm.money < float(REFERENDUM_MONEY): return false
+	return _next_referendum_district() >= 0
+
+func referendum() -> String:
+	if not can_referendum(): return ""
+	var i: int = _next_referendum_district()
+	if i < 0: return ""
+	if not gm.spend_money(REFERENDUM_MONEY): return ""
+	add_approval(-REFERENDUM_APPROVAL_COST)
+	locked_districts[i] = true
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "📣 Референдум закрепил район «%s» за вами навсегда." % district_name(i),
+			"money": 0, "health": 0})
+	emit_signal("connections_changed")
+	gm.save_game()
+	return district_name(i)
+
+func _approval_tick() -> void:
+	approval = clampf(approval + (approval_baseline() - approval) * APPROVAL_DRIFT, 0.0, 100.0)
 
 # ── Ранг власти / эндгейм ─────────────────────────────────────────────────────
 func power_score() -> int:
@@ -956,6 +1058,7 @@ func process_day() -> void:
 	_intel_tick()
 	_party_tick()
 	_term_tick()
+	_approval_tick()
 	if election_attempt_cd > 0:
 		election_attempt_cd -= 1
 	if gm.day % 30 == 0:
@@ -997,6 +1100,8 @@ func reset() -> void:
 	terms_served = 0
 	term_limits_abolished = false
 	successor_appointed = false
+	approval = 50.0
+	locked_districts = {}
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
@@ -1022,6 +1127,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "terms_served", terms_served)
 	cfg.set_value("influence", "term_limits_abolished", term_limits_abolished)
 	cfg.set_value("influence", "successor_appointed", successor_appointed)
+	cfg.set_value("influence", "approval", approval)
+	cfg.set_value("influence", "locked_districts", locked_districts)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
@@ -1047,3 +1154,5 @@ func load_data(cfg: ConfigFile) -> void:
 	terms_served = cfg.get_value("influence", "terms_served", 0)
 	term_limits_abolished = cfg.get_value("influence", "term_limits_abolished", false)
 	successor_appointed = cfg.get_value("influence", "successor_appointed", false)
+	approval = cfg.get_value("influence", "approval", 50.0)
+	locked_districts = cfg.get_value("influence", "locked_districts", {})

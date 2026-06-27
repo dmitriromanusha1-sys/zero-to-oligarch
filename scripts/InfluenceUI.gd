@@ -135,6 +135,19 @@ func _rebuild() -> void:
 			_vb.add_child(_ideology_card(ig))
 	_sep()
 
+	# Народная поддержка
+	_header("📣 Народная поддержка")
+	var appr: int = int(round(im.approval))
+	var base: int = int(round(im.approval_baseline()))
+	var acol: Color = Color(0.55, 0.85, 0.6) if appr >= 60 else (Color(0.95, 0.78, 0.4) if appr >= 35 else Color(0.95, 0.55, 0.5))
+	_lbl(_vb, "Одобрение народа: %d%%  (стремится к %d%%)" % [appr, base], acol, 12)
+	if im.locked_count() > 0:
+		_lbl(_vb, "🔒 Закреплено районов референдумом: %d" % im.locked_count(), Color(0.66, 0.80, 0.68), 11)
+	_vb.add_child(_support_card("rally"))
+	_vb.add_child(_support_card("promise"))
+	_vb.add_child(_support_card("referendum"))
+	_sep()
+
 	# Высшая власть и риски
 	_header("⚖️ Высшая власть и риски")
 	var heat_pct: int = int(round(im.scrutiny() / im.HEAT_MAX * 100.0))
@@ -392,7 +405,9 @@ func _district_card(i: int) -> PanelContainer:
 	card.add_theme_stylebox_override("panel", cs)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
 	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
-	var status: String = "  ✅ под контролем" if controlled else ""
+	var status: String = ""
+	if controlled:
+		status = "  🔒 закреплён" if im.district_locked(i) else "  ✅ под контролем"
 	_lbl(col, im.district_name(i) + status, Color(0.86, 0.92, 0.86) if controlled else Color(0.88, 0.84, 0.98), 14)
 	if not controlled:
 		_lbl(col, "Шанс победы: %d%%  ·  %d вл. + %s" % [
@@ -536,6 +551,54 @@ func _intel_action_card(kind: String) -> PanelContainer:
 			"blackmail": btn.pressed.connect(func(): im.blackmail())
 			"sabotage": btn.pressed.connect(func(): im.sabotage())
 			"immunity": btn.pressed.connect(func(): im.buy_immunity())
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _support_card(kind: String) -> PanelContainer:
+	var titles := {"rally":"Митинг", "promise":"Популистское обещание", "referendum":"Референдум"}
+	var icons := {"rally":"📢", "promise":"🤝", "referendum":"🗳"}
+	var descs := {
+		"rally":"+%d%% одобрения · %d вл. + %s" % [int(im.RALLY_APPROVAL), int(im.RALLY_INF), gm.format_money(im.RALLY_MONEY)],
+		"promise":"+%d%% одобрения, но +подозрение · %s" % [int(im.PROMISE_APPROVAL), gm.format_money(im.PROMISE_MONEY)],
+		"referendum":"Закрепить район навсегда · нужно %d%% одобрения + %s" % [int(im.REFERENDUM_MIN_APPROVAL), gm.format_money(im.REFERENDUM_MONEY)]}
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.07, 0.10, 0.11, 0.92)
+	cs.border_color = Color(0.40, 0.55, 0.58, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = icons[kind]
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, titles[kind], Color(0.86, 0.92, 0.94), 14)
+	_lbl(col, descs[kind], Color(0.66, 0.74, 0.78), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ok: bool = false
+	var label: String = "Запустить"
+	if kind == "rally":
+		var cd: int = im.campaign_cd_left("rally")
+		if cd > 0: label = "⏳ %d дн." % cd
+		ok = im.can_rally()
+	elif kind == "promise":
+		var cd2: int = im.campaign_cd_left("promise")
+		if cd2 > 0: label = "⏳ %d дн." % cd2
+		ok = im.can_promise()
+	else:
+		label = "Провести"
+		ok = im.can_referendum()
+	btn.text = label
+	if ok:
+		_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+		match kind:
+			"rally": btn.pressed.connect(func(): im.rally())
+			"promise": btn.pressed.connect(func(): im.promise())
+			"referendum": btn.pressed.connect(func(): im.referendum())
 	else:
 		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
