@@ -35,6 +35,16 @@ const GROOM_BASE_COST: int = 4000
 const GROOM_STYLE: float = 10.0
 const GROOM_HAPPY: float = 1.5
 
+# ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
+const SKILLS: Array = [
+	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
+	{"id":"charisma",  "name":"Харизма",   "icon":"😎", "action":"Нетворкинг / тренинг",   "desc":"Помогает в отношениях и обществе."},
+	{"id":"willpower", "name":"Сила воли", "icon":"🧘", "action":"Медитация / дисциплина", "desc":"Дисциплина: форма и стиль уходят медленнее."},
+]
+var skills: Dictionary = {"intellect": 30.0, "charisma": 30.0, "willpower": 30.0}
+var _last_dev_day: int = -99
+const DEV_BASE_COST: int = 3000
+
 var gm: Node
 
 func _ready() -> void:
@@ -68,7 +78,34 @@ func happiness_baseline() -> float:
 	b += (gm.health - 50.0) * 0.2              # здоровье ±
 	b += (fitness - 50.0) * 0.10               # спорт радует
 	b += (appearance() - 50.0) * 0.06          # хорошо выглядеть приятно
+	b += (skill("charisma") - 50.0) * 0.05     # социальная уверенность
 	return clampf(b, 5.0, 100.0)
+
+# ── Личные навыки ─────────────────────────────────────────────────────────────
+func skill(id: String) -> float:
+	return float(skills.get(id, 0.0))
+
+func dev_cost() -> int:
+	return gm.shop_price(DEV_BASE_COST)
+
+func can_train() -> bool:
+	return gm.day > _last_dev_day and gm.money >= float(dev_cost())
+
+func train_skill(id: String) -> bool:
+	if not can_train() or not skills.has(id): return false
+	if not gm.spend_money(dev_cost()): return false
+	var cur: float = skill(id)
+	var gain: float = (100.0 - cur) * 0.08 + 1.0   # медленнее у потолка
+	skills[id] = clampf(cur + gain, 0.0, 100.0)
+	add_happiness(0.5)
+	_last_dev_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+# Дисциплина (сила воли) замедляет деградацию формы и стиля.
+func discipline_mult() -> float:
+	return 1.0 - skill("willpower") / 100.0 * 0.5
 
 # ── Тело, форма и внешность ───────────────────────────────────────────────────
 # Внешность складывается из формы, стиля и возраста (молодость — плюс).
@@ -124,15 +161,18 @@ func mood_color() -> Color:
 	if happiness >= 40.0: return Color(0.9, 0.85, 0.5)
 	return Color(0.95, 0.55, 0.5)
 
-# Счастье влияет на продуктивность работы (мотивация): 0.85..1.15.
+# Продуктивность работы: счастье (мотивация) × интеллект (компетентность).
 func productivity_mult() -> float:
-	return 0.85 + (happiness / 100.0) * 0.30
+	var mood: float = 0.85 + (happiness / 100.0) * 0.30      # 0.85..1.15
+	var smarts: float = 0.90 + (skill("intellect") / 100.0) * 0.20  # 0.90..1.10
+	return mood * smarts
 
 # ── Ежедневный ход жизни ──────────────────────────────────────────────────────
 func process_day() -> void:
 	happiness = clampf(happiness + (happiness_baseline() - happiness) * HAPPINESS_DRIFT, 0.0, 100.0)
-	fitness = clampf(fitness - FITNESS_DECAY, 0.0, 100.0)
-	style = clampf(style - STYLE_DECAY, 0.0, 100.0)
+	var disc: float = discipline_mult()
+	fitness = clampf(fitness - FITNESS_DECAY * disc, 0.0, 100.0)
+	style = clampf(style - STYLE_DECAY * disc, 0.0, 100.0)
 	# День рождения
 	if gm.day > 1 and days_into_year() == 0:
 		var es := get_node_or_null("/root/EventSystem")
@@ -149,6 +189,8 @@ func reset() -> void:
 	style = 50.0
 	_last_workout_day = -99
 	_last_groom_day = -99
+	skills = {"intellect": 30.0, "charisma": 30.0, "willpower": 30.0}
+	_last_dev_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -157,6 +199,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "style", style)
 	cfg.set_value("life", "last_workout_day", _last_workout_day)
 	cfg.set_value("life", "last_groom_day", _last_groom_day)
+	cfg.set_value("life", "skills", skills)
+	cfg.set_value("life", "last_dev_day", _last_dev_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -165,3 +209,5 @@ func load_data(cfg: ConfigFile) -> void:
 	style = cfg.get_value("life", "style", 50.0)
 	_last_workout_day = cfg.get_value("life", "last_workout_day", -99)
 	_last_groom_day = cfg.get_value("life", "last_groom_day", -99)
+	skills = cfg.get_value("life", "skills", {"intellect": 30.0, "charisma": 30.0, "willpower": 30.0})
+	_last_dev_day = cfg.get_value("life", "last_dev_day", -99)

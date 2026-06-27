@@ -96,6 +96,16 @@ func _rebuild() -> void:
 	_vb.add_child(_bar(life.appearance() / 100.0, Color(0.9, 0.7, 0.4)))
 	_vb.add_child(_action_card("workout"))
 	_vb.add_child(_action_card("groom"))
+	_sep()
+
+	# Личные навыки
+	_header("🧠 Личные навыки")
+	if gm.day <= life._last_dev_day:
+		_lbl(_vb, "Сегодня вы уже занимались саморазвитием.", Color(0.64, 0.62, 0.72), 11)
+	else:
+		_lbl(_vb, "Одно занятие в день · %s" % gm.format_money(life.dev_cost()), Color(0.64, 0.62, 0.72), 11)
+	for sk in life.SKILLS:
+		_vb.add_child(_skill_card(sk))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -106,6 +116,35 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _skill_card(sk: Dictionary) -> PanelContainer:
+	var sid: String = sk.id
+	var val: float = life.skill(sid)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.09, 0.13, 0.92)
+	cs.border_color = Color(0.42, 0.42, 0.55, 0.65)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = sk.get("icon", "🧠")
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "%s — %d%%" % [sk.get("name", "?"), int(round(val))], Color(0.86, 0.86, 0.94), 14)
+	col.add_child(_bar(val / 100.0, Color(0.55, 0.6, 0.85)))
+	_lbl(col, sk.get("desc", ""), Color(0.64, 0.62, 0.74), 11)
+	var btn := Button.new()
+	btn.text = sk.get("action", "Развивать")
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.can_train():
+		_style(btn, Color(0.16, 0.13, 0.22), Color(0.5, 0.42, 0.68))
+		btn.pressed.connect(func(): life.train_skill(sid))
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 func _action_card(kind: String) -> PanelContainer:
 	var titles := {"workout":"🏋 Тренировка", "groom":"💇 Уход за собой"}
