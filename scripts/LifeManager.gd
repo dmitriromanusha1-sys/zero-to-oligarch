@@ -70,6 +70,15 @@ const PRENUP_BASE: int = 200_000
 const MARRY_REL_BONUS: float = 10.0
 const DIVORCE_FRAC: float = 0.30        # раздел без брачного договора
 const DIVORCE_FRAC_PRENUP: float = 0.05
+
+# ── Дети (Фаза 7) ─────────────────────────────────────────────────────────────
+var children: Array = []   # {name, born_day, gender}
+const MAX_CHILDREN: int = 5
+const CHILD_INIT_COST: int = 100_000     # подготовка к рождению
+const CHILD_COST_DAY: int = 800          # ежедневное содержание (база)
+const CHILD_JOY: float = 4.0
+const CHILD_NAMES_M: Array = ["Артём", "Максим", "Лев", "Марк", "Тимур", "Глеб", "Илья", "Роман"]
+const CHILD_NAMES_F: Array = ["Алиса", "Вера", "Майя", "София", "Ника", "Ева", "Рита", "Лана"]
 const DATING_NAMES: Array = [
 	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
 	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
@@ -112,7 +121,42 @@ func happiness_baseline() -> float:
 	if not partner.is_empty():
 		var f: float = 25.0 if is_married() else 18.0
 		b += relationship() / 100.0 * f        # крепкие отношения/брак делают счастливее
+	b += minf(child_count() * CHILD_JOY, 16.0) # дети приносят радость
 	return clampf(b, 5.0, 100.0)
+
+# ── Дети ──────────────────────────────────────────────────────────────────────
+func child_count() -> int:
+	return children.size()
+
+func child_age(index: int) -> int:
+	if index < 0 or index >= children.size(): return 0
+	return int((gm.day - int(children[index].get("born_day", gm.day))) / 365.0)
+
+func child_init_cost() -> int:
+	return gm.shop_price(CHILD_INIT_COST)
+
+func children_upkeep() -> float:
+	return child_count() * float(gm.shop_price(CHILD_COST_DAY))
+
+func can_have_child() -> bool:
+	return not partner.is_empty() and child_count() < MAX_CHILDREN and gm.money >= float(child_init_cost())
+
+func have_child() -> bool:
+	if not can_have_child(): return false
+	if not gm.spend_money(child_init_cost()): return false
+	var girl: bool = randf() < 0.5
+	var pool: Array = CHILD_NAMES_F if girl else CHILD_NAMES_M
+	var nm: String = pool[randi() % pool.size()]
+	children.append({"name": nm, "born_day": gm.day, "gender": ("f" if girl else "m")})
+	add_happiness(8.0)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "👶 У вас родился%s %s!" % [("ась дочь" if girl else "ся сын"), nm],
+			"money": 0, "health": 0})
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
 
 # ── Личные навыки ─────────────────────────────────────────────────────────────
 func skill(id: String) -> float:
@@ -396,6 +440,9 @@ func process_day() -> void:
 	fitness = clampf(fitness - FITNESS_DECAY * disc, 0.0, 100.0)
 	style = clampf(style - STYLE_DECAY * disc, 0.0, 100.0)
 	_relationship_tick()
+	var upkeep: float = children_upkeep()
+	if upkeep > 0.0:
+		gm.add_money(-upkeep)
 	# День рождения
 	if gm.day > 1 and days_into_year() == 0:
 		var es := get_node_or_null("/root/EventSystem")
@@ -419,6 +466,7 @@ func reset() -> void:
 	_last_date_day = -99
 	_last_pdate_day = -99
 	_last_gift_day = -99
+	children = []
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -434,6 +482,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_date_day", _last_date_day)
 	cfg.set_value("life", "last_pdate_day", _last_pdate_day)
 	cfg.set_value("life", "last_gift_day", _last_gift_day)
+	cfg.set_value("life", "children", children)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -449,3 +498,4 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_date_day = cfg.get_value("life", "last_date_day", -99)
 	_last_pdate_day = cfg.get_value("life", "last_pdate_day", -99)
 	_last_gift_day = cfg.get_value("life", "last_gift_day", -99)
+	children = cfg.get_value("life", "children", [])

@@ -142,6 +142,22 @@ func _rebuild() -> void:
 	else:
 		_lbl(_vb, "Вы одиноки. Привлекательность: %d%%" % int(round(life.dating_appeal())), Color(0.8, 0.74, 0.82), 12)
 		_vb.add_child(_love_card("meet"))
+	_sep()
+
+	# Семья
+	_header("👨‍👩‍👧 Семья")
+	if life.child_count() > 0:
+		_lbl(_vb, "Детей: %d · содержание %s/день" % [life.child_count(), gm.format_money(life.children_upkeep())], Color(0.8, 0.85, 0.78), 12)
+		for i in range(life.children.size()):
+			var ch = life.children[i]
+			var gi: String = "👧" if String(ch.get("gender","m")) == "f" else "👦"
+			_lbl(_vb, "%s %s · %d лет" % [gi, ch.get("name","?"), life.child_age(i)], Color(0.82, 0.86, 0.9), 12)
+	if life.is_single():
+		_lbl(_vb, "Для детей нужен партнёр.", Color(0.64, 0.62, 0.7), 11)
+	elif life.child_count() >= life.MAX_CHILDREN:
+		_lbl(_vb, "Большая семья — больше детей некуда.", Color(0.64, 0.62, 0.7), 11)
+	else:
+		_vb.add_child(_family_card())
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -152,6 +168,29 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _family_card() -> PanelContainer:
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.08, 0.11, 0.10, 0.92)
+	cs.border_color = Color(0.4, 0.55, 0.45, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "👶 Завести ребёнка", Color(0.85, 0.92, 0.85), 14)
+	_lbl(col, "Радость в семье, но и расходы · %s" % gm.format_money(life.child_init_cost()), Color(0.66, 0.74, 0.68), 11)
+	var btn := Button.new()
+	btn.text = "Завести"
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.can_have_child():
+		_style(btn, Color(0.12, 0.18, 0.13), Color(0.35, 0.55, 0.4))
+		btn.pressed.connect(func(): life.have_child())
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 func _love_card(kind: String) -> PanelContainer:
 	var titles := {"meet":"Найти пару", "date":"Сходить на свидание", "couple":"Начать отношения", "stop":"Перестать встречаться",
