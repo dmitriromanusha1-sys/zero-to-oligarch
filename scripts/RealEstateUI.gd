@@ -87,6 +87,12 @@ func _rebuild() -> void:
 	var arrow: String = "📈 рост" if tr > 0 else ("📉 спад" if tr < 0 else "➡ стабильно")
 	var tcol: Color = Color(0.55, 0.9, 0.6) if tr > 0 else (Color(0.95, 0.55, 0.5) if tr < 0 else Color(0.7, 0.72, 0.78))
 	_lbl(_vb, "Индекс рынка: %.2f  (%s)" % [rem.market_index, arrow], tcol, 12)
+	var cb = get_node_or_null("/root/CentralBankManager")
+	if cb and cb.has_method("phase_label"):
+		var boom: bool = cb.has_method("is_boom") and cb.is_boom()
+		var rec: bool = cb.has_method("is_recession") and cb.is_recession()
+		var pcol: Color = Color(0.55, 0.9, 0.6) if boom else (Color(0.95, 0.55, 0.5) if rec else Color(0.7, 0.72, 0.78))
+		_lbl(_vb, "Фаза экономики: %s  (влияет на коммерцию)" % cb.phase_label(), pcol, 11)
 	_sep()
 
 	# Управляющий
@@ -185,6 +191,12 @@ func _owned_card(i: int) -> PanelContainer:
 	_lbl(col, "%s  %s   %s" % [t.get("name", "?"), stars, status], scol, 14)
 	var rent_str: String = "—" if vacant else "+%s/день" % gm.format_money(rem.property_rent(i))
 	_lbl(col, "Аренда %s · оценка %s" % [rent_str, gm.format_money(rem.property_value(i))], Color(0.62, 0.85, 0.66), 11)
+	var tid_o: String = String(p.get("type_id", ""))
+	if rem.is_commercial(tid_o):
+		var cm: float = rem.cycle_mult(tid_o)
+		if absf(cm - 1.0) > 0.01:
+			var ccol: Color = Color(0.55, 0.9, 0.6) if cm > 1.0 else Color(0.95, 0.55, 0.5)
+			_lbl(col, "📊 Аренда ×%.2f от экономического цикла" % cm, ccol, 11)
 	var mort: float = float(p.get("mortgage", 0.0))
 	if mort > 0.0:
 		_lbl(col, "🏦 Ипотека: остаток %s" % gm.format_money(mort), Color(0.85, 0.70, 0.55), 11)
@@ -293,6 +305,14 @@ func _project_card(i: int) -> PanelContainer:
 	var pct: int = int(round((1.0 - float(left) / float(total)) * 100.0))
 	_lbl(col, "%s — строится" % t.get("name", "?"), Color(0.95, 0.88, 0.70), 14)
 	_lbl(col, "Готовность %d%% · осталось %d дн. · вложено %s" % [pct, left, gm.format_money(float(p.get("invested", 0.0)))], Color(0.80, 0.74, 0.58), 11)
+	var idx: int = i
+	var refund: float = float(p.get("invested", 0.0)) * rem.PROJECT_CANCEL_REFUND
+	var cb := Button.new(); cb.text = "Отменить (%s)" % gm.format_money(refund)
+	cb.add_theme_font_size_override("font_size", 11)
+	cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_style(cb, Color(0.18, 0.12, 0.10), Color(0.6, 0.4, 0.3))
+	cb.pressed.connect(func(): rem.cancel_project(idx))
+	row.add_child(cb)
 	return card
 
 # ── helpers ───────────────────────────────────────────────────────────────────
