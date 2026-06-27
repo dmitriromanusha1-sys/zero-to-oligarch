@@ -125,6 +125,8 @@ const MEDICAL_TIERS: Array = [
 # ── Завещание и наследство (Фаза 19) ──────────────────────────────────────────
 var heir_index: int = -1       # выбранный наследник среди детей (-1 = авто)
 var estate_planning: int = 0   # уровень планирования наследства
+var generation: int = 1        # поколение династии (Фаза 20)
+const MAX_AGE: int = 110
 const ESTATE_PLANS: Array = [
 	{"name":"Без завещания",      "install":0,           "tax":0.40},
 	{"name":"Завещание",          "install":1_000_000,   "tax":0.30},
@@ -475,6 +477,60 @@ func upgrade_estate() -> bool:
 	emit_signal("life_changed")
 	gm.save_game()
 	return true
+
+# ── Смертность и смена поколения (Фаза 20) ────────────────────────────────────
+# Риск смерти растёт у предела жизни; при пике возраста — гарантированно.
+func mortality_risk() -> float:
+	if age() >= MAX_AGE: return 1.0
+	var over: float = float(age()) - life_expectancy()
+	var r: float = 0.0
+	if over > -6.0:
+		r = clampf((over + 6.0) * 0.012, 0.0, 0.6)
+	if gm.health <= 8.0 and age() > 50:
+		r += 0.05
+	return clampf(r, 0.0, 1.0)
+
+# Наследник перенимает эстафету: молодой, со стартовыми качествами от воспитания.
+func _become_heir(quality: float, heir_name: String) -> void:
+	var young: int = 20
+	birth_age = young - int(gm.day / 365.0)   # чтобы age() == young
+	happiness = 60.0
+	stress = 20.0
+	fitness = 55.0
+	style = 55.0
+	social_rep = clampf(30.0 + quality * 0.20, 0.0, 100.0)
+	skills = {
+		"intellect": maxf(20.0, quality * 0.6),
+		"charisma":  maxf(20.0, quality * 0.5),
+		"willpower": maxf(20.0, quality * 0.5),
+	}
+	# Личная жизнь наследника — с чистого листа (империя и активы остаются)
+	partner = {}; prospect = {}; children = []; friends = []
+	vices = {}; illnesses = []; hobbies = []
+	heir_index = -1
+	_last_workout_day = -99; _last_groom_day = -99; _last_dev_day = -99
+	_last_date_day = -99; _last_pdate_day = -99; _last_gift_day = -99
+	_last_hangout_day = -99; _last_social_day = -99
+	_last_family_day = -99; _last_develop_day = -99; _last_therapy_day = -99
+
+func die() -> void:
+	var heir_i: int = effective_heir_index()
+	var heir_name: String = String(children[heir_i].get("name", "?")) if heir_i >= 0 else "дальний родственник"
+	var hq: float = heir_quality(heir_i) if heir_i >= 0 else 20.0
+	# Налог на наследство списывается с наличных (структуры снижают его)
+	gm.money = gm.money * (1.0 - inheritance_tax_rate())
+	gm.emit_signal("money_changed", gm.money)
+	generation += 1
+	_become_heir(hq, heir_name)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "☠ Глава династии ушёл из жизни. Эстафету принимает %s — поколение %d. Империя продолжается." % [heir_name, generation],
+			"money": 0, "health": 0})
+	gm.health = 100.0
+	gm.emit_signal("health_changed", gm.health)
+	emit_signal("life_changed")
+	gm.save_game()
 
 # ── Пороки и зависимости ──────────────────────────────────────────────────────
 func _vice(id: String) -> Dictionary:
@@ -1204,6 +1260,9 @@ func process_day() -> void:
 		var med: float = medical_monthly()
 		if med > 0.0:
 			gm.add_money(-med)
+	# Смертность: при срабатывании — смена поколения
+	if randf() < mortality_risk():
+		die()
 	# День рождения
 	if gm.day > 1 and days_into_year() == 0:
 		var es := get_node_or_null("/root/EventSystem")
@@ -1243,6 +1302,7 @@ func reset() -> void:
 	medical_tier = 0
 	heir_index = -1
 	estate_planning = 0
+	generation = 1
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -1274,6 +1334,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "medical_tier", medical_tier)
 	cfg.set_value("life", "heir_index", heir_index)
 	cfg.set_value("life", "estate_planning", estate_planning)
+	cfg.set_value("life", "generation", generation)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -1305,3 +1366,4 @@ func load_data(cfg: ConfigFile) -> void:
 	medical_tier = cfg.get_value("life", "medical_tier", 0)
 	heir_index = cfg.get_value("life", "heir_index", -1)
 	estate_planning = cfg.get_value("life", "estate_planning", 0)
+	generation = cfg.get_value("life", "generation", 1)

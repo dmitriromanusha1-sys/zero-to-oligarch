@@ -71,7 +71,8 @@ func _rebuild() -> void:
 	_title("👤 Жизнь")
 
 	var st: Dictionary = life.life_stage()
-	_lbl(_vb, "%s  %d лет  ·  %s" % [st.get("icon", "🌱"), life.age(), st.get("name", "")],
+	_lbl(_vb, "%s  %d лет  ·  %s%s" % [st.get("icon", "🌱"), life.age(), st.get("name", ""),
+		("   ·   👑 Поколение %d" % life.generation) if life.generation > 1 else ""],
 		Color(0.86, 0.82, 0.96), 16)
 	var yl: int = life.years_left()
 	var ycol: Color = Color(0.95, 0.55, 0.5) if yl <= 5 else (Color(0.9, 0.8, 0.5) if yl <= 15 else Color(0.66, 0.7, 0.78))
