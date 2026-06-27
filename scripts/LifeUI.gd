@@ -84,6 +84,18 @@ func _rebuild() -> void:
 	var pm: float = life.productivity_mult()
 	var pcol: Color = Color(0.55, 0.9, 0.6) if pm >= 1.0 else Color(0.95, 0.55, 0.5)
 	_lbl(_vb, "Продуктивность работы: ×%.2f" % pm, pcol, 12)
+	_sep()
+
+	# Тело и форма
+	_header("💪 Тело и форма")
+	_lbl(_vb, "Физическая форма: %d%%" % int(round(life.fitness)), Color(0.7, 0.85, 0.95), 12)
+	_vb.add_child(_bar(life.fitness / 100.0, Color(0.45, 0.7, 0.95)))
+	_lbl(_vb, "Стиль / уход: %d%%" % int(round(life.style)), Color(0.9, 0.8, 0.95), 12)
+	_vb.add_child(_bar(life.style / 100.0, Color(0.75, 0.55, 0.9)))
+	_lbl(_vb, "Внешность: %d%%" % int(round(life.appearance())), Color(0.95, 0.82, 0.62), 12)
+	_vb.add_child(_bar(life.appearance() / 100.0, Color(0.9, 0.7, 0.4)))
+	_vb.add_child(_action_card("workout"))
+	_vb.add_child(_action_card("groom"))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -94,6 +106,40 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _action_card(kind: String) -> PanelContainer:
+	var titles := {"workout":"🏋 Тренировка", "groom":"💇 Уход за собой"}
+	var descs := {
+		"workout":"+форма, +здоровье, +настроение · %s" % gm.format_money(life.workout_cost()),
+		"groom":"+стиль и внешность · %s" % gm.format_money(life.groom_cost())}
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.10, 0.09, 0.13, 0.92)
+	cs.border_color = Color(0.45, 0.40, 0.58, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, titles[kind], Color(0.88, 0.84, 0.96), 14)
+	_lbl(col, descs[kind], Color(0.66, 0.64, 0.76), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ok: bool = life.can_workout() if kind == "workout" else life.can_groom()
+	var done_today: bool = (gm.day <= life._last_workout_day) if kind == "workout" else (gm.day <= life._last_groom_day)
+	if done_today:
+		btn.text = "✅ Сегодня"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif ok:
+		btn.text = "Сделать"
+		_style(btn, Color(0.16, 0.13, 0.22), Color(0.5, 0.42, 0.68))
+		if kind == "workout": btn.pressed.connect(func(): life.workout())
+		else: btn.pressed.connect(func(): life.groom())
+	else:
+		btn.text = "Нет денег"
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 func _bar(frac: float, col: Color) -> Control:
