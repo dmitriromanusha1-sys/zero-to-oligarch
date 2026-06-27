@@ -173,6 +173,14 @@ func _rebuild() -> void:
 		_lbl(_vb, "У вас пока нет друзей.", Color(0.66, 0.64, 0.72), 11)
 	if life.friend_count() < life.MAX_FRIENDS:
 		_vb.add_child(_social_card("befriend"))
+	_sep()
+
+	# Положение в обществе
+	_header("🎩 Положение в обществе")
+	_lbl(_vb, "Статус: %d%% · %s" % [int(round(life.social_rep)), life.social_status_label()], Color(0.92, 0.85, 0.6), 12)
+	_vb.add_child(_bar(life.social_rep / 100.0, Color(0.85, 0.72, 0.4)))
+	_lbl(_vb, "Стремится к %d%% (внешность, харизма, друзья, статус, семья)" % int(round(life.social_baseline())), Color(0.66, 0.64, 0.7), 11)
+	_vb.add_child(_social_card("outing"))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -185,7 +193,6 @@ func _rebuild() -> void:
 	_vb.add_child(close_btn)
 
 func _social_card(kind: String) -> PanelContainer:
-	var is_hang: bool = kind == "hangout"
 	var card := PanelContainer.new()
 	var cs := StyleBoxFlat.new()
 	cs.bg_color = Color(0.08, 0.10, 0.13, 0.92)
@@ -194,25 +201,36 @@ func _social_card(kind: String) -> PanelContainer:
 	card.add_theme_stylebox_override("panel", cs)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
 	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
-	if is_hang:
+	if kind == "hangout":
 		_lbl(col, "🍻 Встретиться с друзьями", Color(0.85, 0.88, 0.95), 14)
 		_lbl(col, "Укрепляет дружбу и настроение · %s" % gm.format_money(life.hangout_cost()), Color(0.66, 0.68, 0.78), 11)
-	else:
+	elif kind == "befriend":
 		_lbl(col, "🤝 Завести друга", Color(0.85, 0.88, 0.95), 14)
 		_lbl(col, "Новое знакомство (харизма помогает) · %s" % gm.format_money(life.friend_meet_cost()), Color(0.66, 0.68, 0.78), 11)
+	else:
+		_lbl(col, "🥂 Светский выход", Color(0.92, 0.85, 0.6), 14)
+		_lbl(col, "Поднять положение в обществе · %s" % gm.format_money(life.social_outing_cost()), Color(0.78, 0.72, 0.6), 11)
 	var btn := Button.new()
 	btn.add_theme_font_size_override("font_size", 12)
 	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var ok: bool = life.can_hangout() if is_hang else life.can_make_friend()
-	var done: bool = is_hang and gm.day <= life._last_hangout_day
+	var ok: bool
+	var done: bool = false
+	if kind == "hangout":
+		ok = life.can_hangout(); done = gm.day <= life._last_hangout_day
+	elif kind == "befriend":
+		ok = life.can_make_friend()
+	else:
+		ok = life.can_social_outing(); done = gm.day <= life._last_social_day
 	if done:
 		btn.text = "✅ Сегодня"
 		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
 	elif ok:
-		btn.text = "Встретиться" if is_hang else "Познакомиться"
+		btn.text = {"hangout":"Встретиться", "befriend":"Познакомиться", "outing":"Выйти в свет"}[kind]
 		_style(btn, Color(0.12, 0.15, 0.22), Color(0.35, 0.45, 0.62))
-		if is_hang: btn.pressed.connect(func(): life.hangout())
-		else: btn.pressed.connect(func(): life.make_friend())
+		match kind:
+			"hangout": btn.pressed.connect(func(): life.hangout())
+			"befriend": btn.pressed.connect(func(): life.make_friend())
+			"outing": btn.pressed.connect(func(): life.social_outing())
 	else:
 		btn.text = "Нет денег"
 		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true

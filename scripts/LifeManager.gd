@@ -49,6 +49,14 @@ const FRIEND_NAMES: Array = [
 	"Слава", "Гена", "Инна", "Жора", "Лера", "Стас", "Аня", "Витя",
 ]
 
+# ── Личная репутация и статус (Фаза 12) ───────────────────────────────────────
+# Положение в обществе как личности (не путать с деловой/криминальной репутацией).
+var social_rep: float = 40.0
+var _last_social_day: int = -99
+const SOCIAL_DRIFT: float = 0.05
+const SOCIAL_OUTING_COST: int = 50000
+const SOCIAL_OUTING_REP: float = 6.0
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -172,7 +180,46 @@ func happiness_baseline() -> float:
 		joy += float(ch.get("bond", 50.0)) / 100.0 * CHILD_JOY
 	b += minf(joy, 18.0)
 	b += minf(friend_count() * 1.0 + close_friends() * 2.0, 14.0)  # круг общения
+	b += (social_rep - 40.0) * 0.08                                # уважение в обществе
 	return clampf(b, 5.0, 100.0)
+
+# ── Личная репутация и статус ─────────────────────────────────────────────────
+func social_baseline() -> float:
+	var b: float = 20.0
+	b += appearance() * 0.15
+	b += skill("charisma") * 0.15
+	b += close_friends() * 4.0
+	b += gm.current_title_index * 2.5
+	if is_married(): b += 5.0
+	b += minf(child_count() * 2.0, 8.0)
+	return clampf(b, 0.0, 100.0)
+
+func social_status_label() -> String:
+	if social_rep >= 85.0: return "Звезда общества"
+	if social_rep >= 65.0: return "Уважаемая персона"
+	if social_rep >= 45.0: return "Известный человек"
+	if social_rep >= 25.0: return "В узких кругах"
+	return "Незаметный"
+
+func social_outing_cost() -> int:
+	return gm.shop_price(SOCIAL_OUTING_COST)
+
+func can_social_outing() -> bool:
+	return gm.day > _last_social_day and gm.money >= float(social_outing_cost())
+
+# Светский выход: поднимает положение в обществе и настроение.
+func social_outing() -> bool:
+	if not can_social_outing(): return false
+	if not gm.spend_money(social_outing_cost()): return false
+	social_rep = clampf(social_rep + SOCIAL_OUTING_REP, 0.0, 100.0)
+	add_happiness(2.5)
+	_last_social_day = gm.day
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func _social_rep_tick() -> void:
+	social_rep = clampf(social_rep + (social_baseline() - social_rep) * SOCIAL_DRIFT, 0.0, 100.0)
 
 # ── Друзья и круг общения ─────────────────────────────────────────────────────
 func friend_count() -> int:
@@ -442,7 +489,7 @@ func has_prospect() -> bool:
 # Привлекательность как партнёра: внешность + харизма + статус.
 func dating_appeal() -> float:
 	var status: float = minf(20.0, gm.current_title_index * 2.0)
-	return clampf(appearance() * 0.40 + skill("charisma") * 0.40 + status, 0.0, 100.0)
+	return clampf(appearance() * 0.35 + skill("charisma") * 0.35 + status + minf(social_rep * 0.15, 15.0), 0.0, 100.0)
 
 func can_meet() -> bool:
 	return is_single() and not has_prospect() and gm.money >= float(gm.shop_price(MEET_COST))
@@ -691,6 +738,7 @@ func process_day() -> void:
 	_parenting_tick()
 	_family_events_tick()
 	_social_tick()
+	_social_rep_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
@@ -722,6 +770,8 @@ func reset() -> void:
 	_last_develop_day = -99
 	friends = []
 	_last_hangout_day = -99
+	social_rep = 40.0
+	_last_social_day = -99
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -742,6 +792,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_develop_day", _last_develop_day)
 	cfg.set_value("life", "friends", friends)
 	cfg.set_value("life", "last_hangout_day", _last_hangout_day)
+	cfg.set_value("life", "social_rep", social_rep)
+	cfg.set_value("life", "last_social_day", _last_social_day)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -762,3 +814,5 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_develop_day = cfg.get_value("life", "last_develop_day", -99)
 	friends = cfg.get_value("life", "friends", [])
 	_last_hangout_day = cfg.get_value("life", "last_hangout_day", -99)
+	social_rep = cfg.get_value("life", "social_rep", 40.0)
+	_last_social_day = cfg.get_value("life", "last_social_day", -99)
