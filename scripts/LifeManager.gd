@@ -88,6 +88,14 @@ const FAMILY_TIME_HAPPY: float = 2.0
 const DEVELOP_COST: int = 20000
 const DEVELOP_UPBRINGING: float = 8.0
 const BOND_DECAY: float = 0.5
+
+# ── Образование детей (Фаза 9) ────────────────────────────────────────────────
+# Ступени обучения по возрасту: каждая стоит денег и повышает образование ребёнка.
+const EDU_STAGES: Array = [
+	{"name":"Частная школа",        "min_age":7,  "cost":500_000,    "edu":25},
+	{"name":"Престижный вуз",       "min_age":17, "cost":3_000_000,  "edu":35},
+	{"name":"Зарубежная стажировка","min_age":20, "cost":10_000_000, "edu":40},
+]
 const DATING_NAMES: Array = [
 	"Алиса", "Марк", "София", "Артём", "Ника", "Даниил", "Вера", "Кирилл",
 	"Лана", "Егор", "Майя", "Тимур", "Ева", "Лёва", "Рита", "Глеб",
@@ -227,6 +235,48 @@ func develop_children() -> bool:
 func _parenting_tick() -> void:
 	for ch in children:
 		ch["bond"] = clampf(float(ch.get("bond", 50.0)) - BOND_DECAY, 0.0, 100.0)
+
+# ── Образование детей ─────────────────────────────────────────────────────────
+func child_edu_stage(index: int) -> int:
+	if index < 0 or index >= children.size(): return 0
+	return int(children[index].get("edu_stage", 0))
+
+func child_education(index: int) -> float:
+	var total: float = 0.0
+	var done: int = child_edu_stage(index)
+	for s in range(mini(done, EDU_STAGES.size())):
+		total += float(EDU_STAGES[s].edu)
+	return total
+
+func next_edu_stage(index: int) -> Dictionary:
+	var st: int = child_edu_stage(index)
+	if st < EDU_STAGES.size(): return EDU_STAGES[st]
+	return {}
+
+func edu_stage_cost(index: int) -> int:
+	var ns := next_edu_stage(index)
+	if ns.is_empty(): return 0
+	return gm.shop_price(int(ns.cost))
+
+func can_enroll_child(index: int) -> bool:
+	var ns := next_edu_stage(index)
+	if ns.is_empty(): return false
+	return child_age(index) >= int(ns.min_age) and gm.money >= float(edu_stage_cost(index))
+
+func enroll_child(index: int) -> bool:
+	if not can_enroll_child(index): return false
+	var ns := next_edu_stage(index)
+	if not gm.spend_money(edu_stage_cost(index)): return false
+	children[index]["edu_stage"] = child_edu_stage(index) + 1
+	add_happiness(3.0)
+	var es := get_node_or_null("/root/EventSystem")
+	if es:
+		es.event_triggered.emit({
+			"text": "🎓 %s — ваш ребёнок поступил: «%s»." % [children[index].get("name", "?"), ns.get("name", "")],
+			"money": 0, "health": 0})
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
 
 # ── Личные навыки ─────────────────────────────────────────────────────────────
 func skill(id: String) -> float:

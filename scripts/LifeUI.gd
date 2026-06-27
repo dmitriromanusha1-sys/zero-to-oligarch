@@ -149,11 +149,7 @@ func _rebuild() -> void:
 	if life.child_count() > 0:
 		_lbl(_vb, "Детей: %d · содержание %s/день" % [life.child_count(), gm.format_money(life.children_upkeep())], Color(0.8, 0.85, 0.78), 12)
 		for i in range(life.children.size()):
-			var ch = life.children[i]
-			var gi: String = "👧" if String(ch.get("gender","m")) == "f" else "👦"
-			_lbl(_vb, "%s %s · %d лет · связь %d%% · воспитание %d%%" % [
-				gi, ch.get("name","?"), life.child_age(i),
-				int(round(life.child_bond(i))), int(round(life.child_upbringing(i)))], Color(0.82, 0.86, 0.9), 11)
+			_vb.add_child(_child_card(i))
 		_vb.add_child(_parenting_card("family"))
 		_vb.add_child(_parenting_card("develop"))
 	if life.is_single() and life.child_count() == 0:
@@ -172,6 +168,42 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _child_card(i: int) -> PanelContainer:
+	var ch = life.children[i]
+	var gi: String = "👧" if String(ch.get("gender","m")) == "f" else "👦"
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.07, 0.10, 0.12, 0.92)
+	cs.border_color = Color(0.38, 0.5, 0.55, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "%s %s · %d лет" % [gi, ch.get("name","?"), life.child_age(i)], Color(0.86, 0.9, 0.94), 14)
+	_lbl(col, "Связь %d%% · воспитание %d%% · образование %d%%" % [
+		int(round(life.child_bond(i))), int(round(life.child_upbringing(i))), int(round(life.child_education(i)))],
+		Color(0.68, 0.74, 0.8), 11)
+	var ns = life.next_edu_stage(i)
+	var idx: int = i
+	if not ns.is_empty():
+		var btn := Button.new()
+		btn.add_theme_font_size_override("font_size", 11)
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if life.can_enroll_child(i):
+			btn.text = "%s (%s)" % [ns.get("name",""), gm.format_money(life.edu_stage_cost(i))]
+			_style(btn, Color(0.12, 0.16, 0.20), Color(0.35, 0.5, 0.6))
+			btn.pressed.connect(func(): life.enroll_child(idx))
+		elif life.child_age(i) < int(ns.min_age):
+			btn.text = "🔒 с %d лет" % int(ns.min_age)
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+		else:
+			btn.text = "%s (%s)" % [ns.get("name",""), gm.format_money(life.edu_stage_cost(i))]
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+		row.add_child(btn)
+	else:
+		_lbl(col, "🎓 Образование завершено", Color(0.6, 0.82, 0.66), 11)
+	return card
 
 func _parenting_card(kind: String) -> PanelContainer:
 	var is_fam: bool = kind == "family"
