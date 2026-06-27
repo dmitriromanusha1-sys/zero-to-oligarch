@@ -50,6 +50,8 @@ const MANAGER_FEE_RATE: float = 0.12      # управляющий берёт 12
 const MGR_VACANCY_MULT: float = 0.40      # ×0.40 к шансу простоя
 const MGR_FILL_MULT: float = 1.35         # ×1.35 к шансу заселения
 const MGR_BAD_MULT: float = 0.30          # ×0.30 к шансу плохого жильца
+const NEW_GRACE_MONTHS: int = 2           # новый объект не простаивает первые месяцы
+const LEVEL_OCCUPANCY: float = 0.12       # каждый уровень ремонта улучшает заселяемость
 
 var has_manager: bool = false
 
@@ -170,7 +172,7 @@ func buy_property(type_id: String) -> bool:
 	if t.is_empty(): return false
 	if gm.current_title_index < int(t.min_title): return false
 	if not gm.spend_money(current_price(type_id)): return false
-	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0, "level": 0, "vacant": false})
+	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0, "level": 0, "vacant": false, "grace": NEW_GRACE_MONTHS})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
@@ -196,7 +198,7 @@ func buy_property_mortgage(type_id: String) -> bool:
 	var down: int = int(price * MORTGAGE_DOWN)
 	if not gm.spend_money(down): return false
 	var principal: float = float(price - down)
-	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0, "level": 0, "vacant": false})
+	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0, "level": 0, "vacant": false, "grace": NEW_GRACE_MONTHS})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
@@ -257,12 +259,18 @@ func _update_occupancy() -> void:
 	for i in range(properties.size()):
 		var p = properties[i]
 		var t := _get_type(String(p.get("type_id", "")))
+		var class_bonus: float = 1.0 + property_level(i) * LEVEL_OCCUPANCY
 		if bool(p.get("vacant", false)):
-			var fill: float = FILL_MONTHLY * (MGR_FILL_MULT if has_manager else 1.0)
+			var fill: float = FILL_MONTHLY * (MGR_FILL_MULT if has_manager else 1.0) * class_bonus
 			if randf() < fill:
 				p["vacant"] = false
 				changed = true
 		else:
+			# Новый объект первые месяцы гарантированно сдан
+			var grace: int = int(p.get("grace", 0))
+			if grace > 0:
+				p["grace"] = grace - 1
+				continue
 			var bad: float = BAD_TENANT_MONTHLY * (MGR_BAD_MULT if has_manager else 1.0)
 			if randf() < bad:
 				var dmg: float = property_value(i) * randf_range(0.01, 0.03)
@@ -275,7 +283,7 @@ func _update_occupancy() -> void:
 							t.get("name", "объект"), gm.format_money(dmg)],
 						"money": 0, "health": 0})
 			else:
-				var vac: float = VACANCY_MONTHLY * (MGR_VACANCY_MULT if has_manager else 1.0)
+				var vac: float = VACANCY_MONTHLY * (MGR_VACANCY_MULT if has_manager else 1.0) / class_bonus
 				if randf() < vac:
 					p["vacant"] = true
 					changed = true

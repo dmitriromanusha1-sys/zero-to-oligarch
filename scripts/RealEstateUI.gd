@@ -163,7 +163,8 @@ func _owned_card(i: int) -> PanelContainer:
 	for s in range(rem.MAX_RENO_LEVEL):
 		stars += "⭐" if s < lvl else "☆"
 	var vacant: bool = rem.is_vacant(i)
-	var status: String = "🔴 Простой" if vacant else "🟢 Сдан"
+	var grace: int = int(p.get("grace", 0))
+	var status: String = "🔴 Простой" if vacant else ("🟢 Сдан · новый" if grace > 0 else "🟢 Сдан")
 	var scol: Color = Color(0.95, 0.55, 0.5) if vacant else Color(0.55, 0.9, 0.6)
 	_lbl(col, "%s  %s   %s" % [t.get("name", "?"), stars, status], scol, 14)
 	var rent_str: String = "—" if vacant else "+%s/день" % gm.format_money(rem.property_rent(i))
