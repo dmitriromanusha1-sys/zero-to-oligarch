@@ -843,6 +843,11 @@ func get_net_worth() -> float:
 					nw += vt.price * 0.6
 					break
 
+	# Коллекции и предметы роскоши — по оценочной стоимости
+	var life: Node = get_node_or_null("/root/LifeManager")
+	if life and life.has_method("collectibles_value"):
+		nw += life.collectibles_value()
+
 	# Вычитаем долги по кредитам
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm:
@@ -886,6 +891,9 @@ func get_net_worth_breakdown() -> Dictionary:
 	var rem: Node = get_node_or_null("/root/RealEstateManager")
 	if rem and rem.has_method("portfolio_value"):
 		d.realestate = rem.portfolio_value()
+	var life: Node = get_node_or_null("/root/LifeManager")
+	if life and life.has_method("collectibles_value"):
+		d["luxury"] = life.collectibles_value()
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm:
 		d.debt = lm.get_total_debt()

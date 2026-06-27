@@ -191,6 +191,15 @@ func _rebuild() -> void:
 		Color(0.8, 0.82, 0.7), 12)
 	for h in life.HOBBIES:
 		_vb.add_child(_hobby_card(h))
+	_sep()
+
+	# Роскошь и коллекции
+	_header("💎 Роскошь и коллекции")
+	_lbl(_vb, "В капитале: %s · статус +%d · настроение +%d" % [
+		gm.format_money(life.collectibles_value()), int(life.luxury_prestige()), int(round(min(life.luxury_happiness(), 12.0)))],
+		Color(0.92, 0.82, 0.6), 12)
+	for l in life.LUXURIES:
+		_vb.add_child(_luxury_card(l))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -201,6 +210,42 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _luxury_card(l: Dictionary) -> PanelContainer:
+	var lid: String = l.id
+	var owned: bool = life.owns_luxury(lid)
+	var locked: bool = gm.current_title_index < int(l.min_title)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.12, 0.10, 0.07, 0.92) if owned else Color(0.09, 0.08, 0.07, 0.9)
+	cs.border_color = Color(0.7, 0.58, 0.32, 0.85) if owned else Color(0.4, 0.36, 0.28, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = l.get("icon", "💎")
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "%s%s" % [l.get("name","?"), ("  ✅" if owned else "")], Color(0.95, 0.88, 0.7), 14)
+	_lbl(col, "%s · статус +%d · настроение +%d" % [l.get("desc",""), int(l.prestige), int(l.happy)], Color(0.74, 0.68, 0.56), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if owned:
+		btn.text = "В коллекции"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif locked:
+		btn.text = "🔒 Титул %d" % int(l.min_title)
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	elif life.can_buy_luxury(lid):
+		btn.text = "Купить (%s)" % gm.format_money(int(l.cost))
+		_style(btn, Color(0.18, 0.14, 0.08), Color(0.6, 0.48, 0.26))
+		btn.pressed.connect(func(): life.buy_luxury(lid))
+	else:
+		btn.text = "Купить (%s)" % gm.format_money(int(l.cost))
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 func _hobby_card(h: Dictionary) -> PanelContainer:
 	var hid: String = h.id

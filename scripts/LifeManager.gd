@@ -69,6 +69,19 @@ const HOBBIES: Array = [
 	{"id":"travel",  "name":"Путешествия","icon":"✈", "cost":500_000, "happy":7.0, "stat":"",          "gain":0.0,  "upkeep":5000, "desc":"Новые страны — новые впечатления."},
 ]
 
+# ── Образ жизни, роскошь и коллекции (Фаза 14) ────────────────────────────────
+# Предметы статуса: поднимают положение в обществе и счастье, входят в капитал.
+var luxuries: Array = []   # список id купленных предметов роскоши
+const LUXURIES: Array = [
+	{"id":"watch",   "name":"Швейцарские часы",     "icon":"⌚", "cost":2_000_000,   "prestige":5.0,  "happy":3.0,  "value":1_500_000,   "min_title":4, "desc":"Часы, которые говорят за вас."},
+	{"id":"jewelry", "name":"Ювелирные украшения",  "icon":"💍", "cost":5_000_000,   "prestige":6.0,  "happy":3.0,  "value":3_500_000,   "min_title":4, "desc":"Блеск, заметный издалека."},
+	{"id":"wine",    "name":"Винная коллекция",     "icon":"🍷", "cost":10_000_000,  "prestige":7.0,  "happy":4.0,  "value":7_000_000,   "min_title":5, "desc":"Погреб редких вин."},
+	{"id":"art",     "name":"Коллекция искусства",  "icon":"🖼", "cost":20_000_000,  "prestige":10.0, "happy":5.0,  "value":16_000_000,  "min_title":5, "desc":"Полотна мастеров."},
+	{"id":"cars",    "name":"Гараж суперкаров",     "icon":"🏎", "cost":50_000_000,  "prestige":12.0, "happy":6.0,  "value":35_000_000,  "min_title":6, "desc":"Коллекция редких авто."},
+	{"id":"yacht",   "name":"Яхта",                 "icon":"⛵", "cost":200_000_000, "prestige":18.0, "happy":8.0,  "value":140_000_000, "min_title":7, "desc":"Личная яхта — символ свободы."},
+	{"id":"jet",     "name":"Частный джет",         "icon":"🛩", "cost":500_000_000, "prestige":25.0, "happy":10.0, "value":350_000_000, "min_title":8, "desc":"Весь мир за несколько часов."},
+]
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -194,6 +207,7 @@ func happiness_baseline() -> float:
 	b += minf(friend_count() * 1.0 + close_friends() * 2.0, 14.0)  # круг общения
 	b += (social_rep - 40.0) * 0.08                                # уважение в обществе
 	b += minf(hobby_happiness(), 16.0)                             # любимые занятия
+	b += minf(luxury_happiness(), 12.0)                            # роскошь и комфорт
 	return clampf(b, 5.0, 100.0)
 
 # ── Хобби ─────────────────────────────────────────────────────────────────────
@@ -245,6 +259,50 @@ func _hobby_tick() -> void:
 	if up > 0.0:
 		gm.add_money(-up)
 
+# ── Роскошь и коллекции ───────────────────────────────────────────────────────
+func _luxury(id: String) -> Dictionary:
+	for l in LUXURIES:
+		if l.id == id: return l
+	return {}
+
+func owns_luxury(id: String) -> bool:
+	return id in luxuries
+
+func can_buy_luxury(id: String) -> bool:
+	var l := _luxury(id)
+	if l.is_empty() or owns_luxury(id): return false
+	return gm.current_title_index >= int(l.min_title) and gm.money >= float(l.cost)
+
+func buy_luxury(id: String) -> bool:
+	var l := _luxury(id)
+	if l.is_empty() or owns_luxury(id): return false
+	if gm.current_title_index < int(l.min_title): return false
+	if not gm.spend_money(int(l.cost)): return false
+	luxuries.append(id)
+	add_happiness(4.0)
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func luxury_prestige() -> float:
+	var t: float = 0.0
+	for id in luxuries:
+		t += float(_luxury(id).get("prestige", 0.0))
+	return t
+
+func luxury_happiness() -> float:
+	var t: float = 0.0
+	for id in luxuries:
+		t += float(_luxury(id).get("happy", 0.0))
+	return t
+
+# Стоимость коллекций — входит в чистый капитал (net worth).
+func collectibles_value() -> float:
+	var t: float = 0.0
+	for id in luxuries:
+		t += float(_luxury(id).get("value", 0.0))
+	return t
+
 # ── Личная репутация и статус ─────────────────────────────────────────────────
 func social_baseline() -> float:
 	var b: float = 20.0
@@ -254,6 +312,7 @@ func social_baseline() -> float:
 	b += gm.current_title_index * 2.5
 	if is_married(): b += 5.0
 	b += minf(child_count() * 2.0, 8.0)
+	b += luxury_prestige()                  # предметы статуса
 	return clampf(b, 0.0, 100.0)
 
 func social_status_label() -> String:
@@ -836,6 +895,7 @@ func reset() -> void:
 	social_rep = 40.0
 	_last_social_day = -99
 	hobbies = []
+	luxuries = []
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -859,6 +919,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "social_rep", social_rep)
 	cfg.set_value("life", "last_social_day", _last_social_day)
 	cfg.set_value("life", "hobbies", hobbies)
+	cfg.set_value("life", "luxuries", luxuries)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -882,3 +943,4 @@ func load_data(cfg: ConfigFile) -> void:
 	social_rep = cfg.get_value("life", "social_rep", 40.0)
 	_last_social_day = cfg.get_value("life", "last_social_day", -99)
 	hobbies = cfg.get_value("life", "hobbies", [])
+	luxuries = cfg.get_value("life", "luxuries", [])
