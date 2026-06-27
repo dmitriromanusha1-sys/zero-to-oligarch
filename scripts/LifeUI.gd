@@ -160,7 +160,10 @@ func _rebuild() -> void:
 	# Семья
 	_header("👨‍👩‍👧 Семья")
 	if life.child_count() > 0:
-		_lbl(_vb, "Детей: %d · содержание %s/день" % [life.child_count(), gm.format_money(life.children_upkeep())], Color(0.8, 0.85, 0.78), 12)
+		_lbl(_vb, "Детей: %d (несовершеннолетних %d) · содержание %s/день" % [
+			life.child_count(), life.minor_count(), gm.format_money(life.children_upkeep())], Color(0.8, 0.85, 0.78), 12)
+		if life.working_adults() > 0:
+			_lbl(_vb, "👔 В семейном деле: %d · доход бизнеса ×%.2f" % [life.working_adults(), life.clan_income_mult()], Color(0.7, 0.85, 0.72), 12)
 		for i in range(life.children.size()):
 			_vb.add_child(_child_card(i))
 		_vb.add_child(_parenting_card("family"))
@@ -646,16 +649,21 @@ func _child_card(i: int) -> PanelContainer:
 	card.add_theme_stylebox_override("panel", cs)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
 	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
-	_lbl(col, "%s %s · %d лет" % [gi, ch.get("name","?"), life.child_age(i)], Color(0.86, 0.9, 0.94), 14)
+	var adult_tag: String = ""
+	if life.child_is_adult(i):
+		adult_tag = "  · 👔 в семейном деле" if life.child_working(i) else "  · взрослый"
+	_lbl(col, "%s %s · %d лет%s" % [gi, ch.get("name","?"), life.child_age(i), adult_tag], Color(0.86, 0.9, 0.94), 14)
 	_lbl(col, "Связь %d%% · воспитание %d%% · образование %d%%" % [
 		int(round(life.child_bond(i))), int(round(life.child_upbringing(i))), int(round(life.child_education(i)))],
 		Color(0.68, 0.74, 0.8), 11)
-	var ns = life.next_edu_stage(i)
 	var idx: int = i
+	var btns := VBoxContainer.new(); btns.add_theme_constant_override("separation", 4)
+	btns.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# Образование (доступно и взрослым 18-20 для вуза/стажировки)
+	var ns = life.next_edu_stage(i)
 	if not ns.is_empty():
 		var btn := Button.new()
 		btn.add_theme_font_size_override("font_size", 11)
-		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		if life.can_enroll_child(i):
 			btn.text = "%s (%s)" % [ns.get("name",""), gm.format_money(life.edu_stage_cost(i))]
 			_style(btn, Color(0.12, 0.16, 0.20), Color(0.35, 0.5, 0.6))
@@ -666,9 +674,24 @@ func _child_card(i: int) -> PanelContainer:
 		else:
 			btn.text = "%s (%s)" % [ns.get("name",""), gm.format_money(life.edu_stage_cost(i))]
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
-		row.add_child(btn)
-	else:
+		btns.add_child(btn)
+	elif not life.child_is_adult(i):
 		_lbl(col, "🎓 Образование завершено", Color(0.6, 0.82, 0.66), 11)
+	# Взрослый ребёнок: привлечь/отпустить из семейного дела
+	if life.child_is_adult(i):
+		var wb := Button.new()
+		wb.add_theme_font_size_override("font_size", 11)
+		if life.child_working(i):
+			wb.text = "Отпустить"
+			_style(wb, Color(0.18, 0.12, 0.10), Color(0.6, 0.4, 0.3))
+			wb.pressed.connect(func(): life.set_child_working(idx, false))
+		else:
+			wb.text = "В семейное дело"
+			_style(wb, Color(0.10, 0.16, 0.12), Color(0.3, 0.55, 0.4))
+			wb.pressed.connect(func(): life.set_child_working(idx, true))
+		btns.add_child(wb)
+	if btns.get_child_count() > 0:
+		row.add_child(btns)
 	return card
 
 func _parenting_card(kind: String) -> PanelContainer:

@@ -445,10 +445,14 @@ func get_daily_income() -> float:
 	elif inf and inf.has_method("law_business_mult"):
 		pol_mult = inf.law_business_mult()
 	var wb: float = 1.0
+	var clan: float = 1.0
 	var life := get_node_or_null("/root/LifeManager")
-	if life and life.has_method("wellbeing_mult"):
-		wb = life.wellbeing_mult()               # личное благополучие владельца
-	return get_gross_income() * owner_fraction * pol_mult * wb
+	if life:
+		if life.has_method("wellbeing_mult"):
+			wb = life.wellbeing_mult()           # личное благополучие владельца
+		if life.has_method("clan_income_mult"):
+			clan = life.clan_income_mult()       # взрослые дети в семейном деле
+	return get_gross_income() * owner_fraction * pol_mult * wb * clan
 
 # Суммарная стоимость всех бизнесов империи.
 func get_empire_value() -> float:

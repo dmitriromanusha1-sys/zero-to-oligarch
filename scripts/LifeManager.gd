@@ -191,6 +191,9 @@ const MAX_CHILDREN: int = 5
 const CHILD_INIT_COST: int = 100_000     # подготовка к рождению
 const CHILD_COST_DAY: int = 800          # ежедневное содержание (база)
 const CHILD_JOY: float = 4.0
+const ADULT_AGE: int = 18                # совершеннолетие (Фаза 23)
+const CLAN_CONTRIB_PER: float = 0.05     # вклад взрослого ребёнка в семейном деле
+const CLAN_CONTRIB_MAX: float = 0.25
 const CHILD_NAMES_M: Array = ["Артём", "Максим", "Лев", "Марк", "Тимур", "Глеб", "Илья", "Роман"]
 const CHILD_NAMES_F: Array = ["Алиса", "Вера", "Майя", "София", "Ника", "Ева", "Рита", "Лана"]
 
@@ -889,8 +892,47 @@ func child_age(index: int) -> int:
 func child_init_cost() -> int:
 	return gm.shop_price(CHILD_INIT_COST)
 
+func child_is_adult(index: int) -> bool:
+	return child_age(index) >= ADULT_AGE
+
+func minor_count() -> int:
+	var n: int = 0
+	for i in range(children.size()):
+		if child_age(i) < ADULT_AGE: n += 1
+	return n
+
+# Содержат только несовершеннолетних детей — взрослые на своих ногах.
 func children_upkeep() -> float:
-	return child_count() * float(gm.shop_price(CHILD_COST_DAY))
+	return minor_count() * float(gm.shop_price(CHILD_COST_DAY))
+
+# ── Взрослые дети и семейный клан (Фаза 23) ───────────────────────────────────
+func child_working(index: int) -> bool:
+	if index < 0 or index >= children.size(): return false
+	return bool(children[index].get("working", false))
+
+func can_set_working(index: int) -> bool:
+	return index >= 0 and index < children.size() and child_is_adult(index)
+
+func set_child_working(index: int, on: bool) -> bool:
+	if not can_set_working(index): return false
+	children[index]["working"] = on
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func working_adults() -> int:
+	var n: int = 0
+	for i in range(children.size()):
+		if child_is_adult(i) and child_working(i): n += 1
+	return n
+
+# Множитель к доходу бизнеса от взрослых детей в семейном деле (по их качеству).
+func clan_income_mult() -> float:
+	var b: float = 0.0
+	for i in range(children.size()):
+		if child_is_adult(i) and child_working(i):
+			b += heir_quality(i) / 100.0 * CLAN_CONTRIB_PER
+	return 1.0 + minf(b, CLAN_CONTRIB_MAX)
 
 func can_have_child() -> bool:
 	return not partner.is_empty() and child_count() < MAX_CHILDREN and gm.money >= float(child_init_cost())
