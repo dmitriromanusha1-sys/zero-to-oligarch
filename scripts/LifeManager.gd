@@ -122,6 +122,16 @@ const MEDICAL_TIERS: Array = [
 	{"name":"Программа долголетия",   "install":100_000_000,"upkeep":2_000_000, "longevity":10, "illness_mult":0.3},
 ]
 
+# ── Завещание и наследство (Фаза 19) ──────────────────────────────────────────
+var heir_index: int = -1       # выбранный наследник среди детей (-1 = авто)
+var estate_planning: int = 0   # уровень планирования наследства
+const ESTATE_PLANS: Array = [
+	{"name":"Без завещания",      "install":0,           "tax":0.40},
+	{"name":"Завещание",          "install":1_000_000,   "tax":0.30},
+	{"name":"Семейный траст",     "install":20_000_000,  "tax":0.15},
+	{"name":"Офшорная структура", "install":100_000_000, "tax":0.05},
+]
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -410,6 +420,61 @@ func _illness_tick() -> void:
 				es.event_triggered.emit({
 					"text": "🤒 У вас обнаружили: %s. Нужно лечение." % d.get("name", "болезнь"),
 					"money": 0, "health": 0})
+
+# ── Завещание и наследство ────────────────────────────────────────────────────
+# Качество наследника: воспитание + образование + связь (плюс капля навыков семьи).
+func heir_quality(index: int) -> float:
+	if index < 0 or index >= children.size(): return 0.0
+	var q: float = child_upbringing(index) * 0.35 + child_education(index) * 0.45 + child_bond(index) * 0.20
+	return clampf(q, 0.0, 100.0)
+
+func best_heir_index() -> int:
+	var best: int = -1
+	var bq: float = -1.0
+	for i in range(children.size()):
+		var q: float = heir_quality(i)
+		if q > bq:
+			bq = q; best = i
+	return best
+
+# Действующий наследник: выбранный вручную либо лучший по качеству.
+func effective_heir_index() -> int:
+	if heir_index >= 0 and heir_index < children.size(): return heir_index
+	return best_heir_index()
+
+func has_heir() -> bool:
+	return effective_heir_index() >= 0
+
+func set_heir(index: int) -> bool:
+	if index < 0 or index >= children.size(): return false
+	heir_index = index
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func inheritance_tax_rate() -> float:
+	return float(ESTATE_PLANS[estate_planning].get("tax", 0.40))
+
+func estate_value() -> float:
+	return gm.get_net_worth()
+
+func heir_inheritance() -> float:
+	return estate_value() * (1.0 - inheritance_tax_rate())
+
+func estate_next_cost() -> int:
+	if estate_planning + 1 >= ESTATE_PLANS.size(): return 0
+	return int(ESTATE_PLANS[estate_planning + 1].install)
+
+func can_upgrade_estate() -> bool:
+	return estate_planning + 1 < ESTATE_PLANS.size() and gm.money >= float(estate_next_cost())
+
+func upgrade_estate() -> bool:
+	if not can_upgrade_estate(): return false
+	if not gm.spend_money(estate_next_cost()): return false
+	estate_planning += 1
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
 
 # ── Пороки и зависимости ──────────────────────────────────────────────────────
 func _vice(id: String) -> Dictionary:
@@ -1176,6 +1241,8 @@ func reset() -> void:
 	_last_therapy_day = -99
 	illnesses = []
 	medical_tier = 0
+	heir_index = -1
+	estate_planning = 0
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -1205,6 +1272,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_therapy_day", _last_therapy_day)
 	cfg.set_value("life", "illnesses", illnesses)
 	cfg.set_value("life", "medical_tier", medical_tier)
+	cfg.set_value("life", "heir_index", heir_index)
+	cfg.set_value("life", "estate_planning", estate_planning)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -1234,3 +1303,5 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_therapy_day = cfg.get_value("life", "last_therapy_day", -99)
 	illnesses = cfg.get_value("life", "illnesses", [])
 	medical_tier = cfg.get_value("life", "medical_tier", 0)
+	heir_index = cfg.get_value("life", "heir_index", -1)
+	estate_planning = cfg.get_value("life", "estate_planning", 0)

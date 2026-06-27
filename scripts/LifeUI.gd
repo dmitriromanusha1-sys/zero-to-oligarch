@@ -236,6 +236,25 @@ func _rebuild() -> void:
 			_vb.add_child(_illness_card(id))
 	if life.medical_tier + 1 < life.MEDICAL_TIERS.size():
 		_vb.add_child(_medical_card())
+	_sep()
+
+	# Завещание и наследство
+	_header("📜 Завещание и наследство")
+	var plan = life.ESTATE_PLANS[life.estate_planning]
+	_lbl(_vb, "Состояние: %s · налог на наследство %d%%" % [
+		gm.format_money(life.estate_value()), int(life.inheritance_tax_rate() * 100.0)], Color(0.9, 0.85, 0.65), 12)
+	if life.child_count() == 0:
+		_lbl(_vb, "Наследство передаётся детям. Заведите наследника.", Color(0.66, 0.64, 0.7), 11)
+	else:
+		var hi: int = life.effective_heir_index()
+		var hn: String = String(life.children[hi].get("name","?")) if hi >= 0 else "—"
+		var auto: String = "" if life.heir_index >= 0 else " (авто — лучший)"
+		_lbl(_vb, "Наследник: %s%s · качество %d%% · получит %s" % [
+			hn, auto, int(round(life.heir_quality(hi))), gm.format_money(life.heir_inheritance())], Color(0.8, 0.86, 0.78), 12)
+		for i in range(life.children.size()):
+			_vb.add_child(_heir_card(i))
+	if life.estate_planning + 1 < life.ESTATE_PLANS.size():
+		_vb.add_child(_estate_card())
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -246,6 +265,57 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _heir_card(i: int) -> PanelContainer:
+	var ch = life.children[i]
+	var is_heir: bool = life.effective_heir_index() == i
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.10, 0.10, 0.06, 0.92) if is_heir else Color(0.08, 0.08, 0.07, 0.9)
+	cs.border_color = Color(0.7, 0.6, 0.32, 0.85) if is_heir else Color(0.4, 0.38, 0.3, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var gi: String = "👧" if String(ch.get("gender","m")) == "f" else "👦"
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "%s %s · качество наследника %d%%%s" % [gi, ch.get("name","?"), int(round(life.heir_quality(i))), ("  👑" if is_heir else "")], Color(0.92, 0.86, 0.7), 13)
+	var idx: int = i
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.heir_index == i:
+		btn.text = "✅ Наследник"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	else:
+		btn.text = "Назначить"
+		_style(btn, Color(0.16, 0.14, 0.08), Color(0.55, 0.46, 0.26))
+		btn.pressed.connect(func(): life.set_heir(idx))
+	row.add_child(btn)
+	return card
+
+func _estate_card() -> PanelContainer:
+	var nxt = life.ESTATE_PLANS[life.estate_planning + 1]
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.10, 0.09, 0.06, 0.92)
+	cs.border_color = Color(0.6, 0.52, 0.3, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "⬆ %s" % nxt.get("name",""), Color(0.92, 0.86, 0.68), 14)
+	_lbl(col, "Снизить налог на наследство до %d%%" % int(float(nxt.get("tax",0)) * 100.0), Color(0.74, 0.7, 0.58), 11)
+	var btn := Button.new()
+	btn.text = "Оформить (%s)" % gm.format_money(life.estate_next_cost())
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if life.can_upgrade_estate():
+		_style(btn, Color(0.18, 0.14, 0.08), Color(0.6, 0.48, 0.26))
+		btn.pressed.connect(func(): life.upgrade_estate())
+	else:
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
 
 func _illness_card(id: String) -> PanelContainer:
 	var d = life._illness(id)
