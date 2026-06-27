@@ -181,6 +181,16 @@ func _rebuild() -> void:
 	_vb.add_child(_bar(life.social_rep / 100.0, Color(0.85, 0.72, 0.4)))
 	_lbl(_vb, "Стремится к %d%% (внешность, харизма, друзья, статус, семья)" % int(round(life.social_baseline())), Color(0.66, 0.64, 0.7), 11)
 	_vb.add_child(_social_card("outing"))
+	_sep()
+
+	# Хобби
+	_header("🎯 Хобби и увлечения")
+	_lbl(_vb, "Дают +%d%% к настроению%s" % [
+		int(round(min(life.hobby_happiness(), 16.0))),
+		(" · содержание %s/день" % gm.format_money(life.hobby_upkeep())) if life.hobby_upkeep() > 0 else ""],
+		Color(0.8, 0.82, 0.7), 12)
+	for h in life.HOBBIES:
+		_vb.add_child(_hobby_card(h))
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -191,6 +201,49 @@ func _rebuild() -> void:
 	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
+
+func _hobby_card(h: Dictionary) -> PanelContainer:
+	var hid: String = h.id
+	var owned: bool = life.has_hobby(hid)
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.08, 0.11, 0.09, 0.92)
+	cs.border_color = Color(0.4, 0.55, 0.42, 0.8) if owned else Color(0.34, 0.4, 0.35, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = h.get("icon", "🎯")
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	var extra: String = ""
+	if String(h.get("stat","")) != "": extra = " · растит %s" % _stat_ru(String(h.stat))
+	if int(h.get("upkeep",0)) > 0: extra += " · содержание"
+	_lbl(col, "%s  (+%d наст.%s)" % [h.get("name","?"), int(h.happy), extra], Color(0.85, 0.9, 0.84), 14)
+	_lbl(col, h.get("desc",""), Color(0.64, 0.72, 0.66), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if owned:
+		btn.text = "✅ Увлечение"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	elif life.can_take_hobby(hid):
+		btn.text = "Заняться (%s)" % gm.format_money(gm.shop_price(int(h.cost)))
+		_style(btn, Color(0.12, 0.18, 0.13), Color(0.35, 0.55, 0.4))
+		btn.pressed.connect(func(): life.take_hobby(hid))
+	else:
+		btn.text = "Заняться (%s)" % gm.format_money(gm.shop_price(int(h.cost)))
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _stat_ru(st: String) -> String:
+	match st:
+		"intellect": return "интеллект"
+		"charisma": return "харизму"
+		"willpower": return "силу воли"
+		"fitness": return "форму"
+	return st
 
 func _social_card(kind: String) -> PanelContainer:
 	var card := PanelContainer.new()

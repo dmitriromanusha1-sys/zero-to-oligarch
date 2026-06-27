@@ -57,6 +57,18 @@ const SOCIAL_DRIFT: float = 0.05
 const SOCIAL_OUTING_COST: int = 50000
 const SOCIAL_OUTING_REP: float = 6.0
 
+# ── Хобби и увлечения (Фаза 13) ───────────────────────────────────────────────
+# Хобби берутся один раз и дают пассивное счастье, а некоторые — рост навыка.
+var hobbies: Array = []   # список id освоенных хобби
+const HOBBIES: Array = [
+	{"id":"reading", "name":"Чтение",     "icon":"📚", "cost":50_000,  "happy":3.0, "stat":"intellect", "gain":0.05, "upkeep":0,    "desc":"Книги расширяют кругозор."},
+	{"id":"music",   "name":"Музыка",     "icon":"🎸", "cost":200_000, "happy":4.0, "stat":"charisma",  "gain":0.05, "upkeep":0,    "desc":"Игра на инструменте."},
+	{"id":"sport",   "name":"Спорт",      "icon":"🏃", "cost":80_000,  "happy":3.0, "stat":"fitness",   "gain":0.15, "upkeep":0,    "desc":"Любительский спорт поддерживает форму."},
+	{"id":"cooking", "name":"Кулинария",  "icon":"🍳", "cost":60_000,  "happy":3.0, "stat":"",          "gain":0.0,  "upkeep":0,    "desc":"Готовить — это медитация."},
+	{"id":"art",     "name":"Живопись",   "icon":"🎨", "cost":150_000, "happy":4.0, "stat":"",          "gain":0.0,  "upkeep":0,    "desc":"Творчество успокаивает."},
+	{"id":"travel",  "name":"Путешествия","icon":"✈", "cost":500_000, "happy":7.0, "stat":"",          "gain":0.0,  "upkeep":5000, "desc":"Новые страны — новые впечатления."},
+]
+
 # ── Личные навыки (Фаза 3) ────────────────────────────────────────────────────
 const SKILLS: Array = [
 	{"id":"intellect", "name":"Интеллект", "icon":"🧠", "action":"Учиться / читать",       "desc":"Выше доход от работы."},
@@ -181,7 +193,57 @@ func happiness_baseline() -> float:
 	b += minf(joy, 18.0)
 	b += minf(friend_count() * 1.0 + close_friends() * 2.0, 14.0)  # круг общения
 	b += (social_rep - 40.0) * 0.08                                # уважение в обществе
+	b += minf(hobby_happiness(), 16.0)                             # любимые занятия
 	return clampf(b, 5.0, 100.0)
+
+# ── Хобби ─────────────────────────────────────────────────────────────────────
+func _hobby(id: String) -> Dictionary:
+	for h in HOBBIES:
+		if h.id == id: return h
+	return {}
+
+func has_hobby(id: String) -> bool:
+	return id in hobbies
+
+func can_take_hobby(id: String) -> bool:
+	var h := _hobby(id)
+	return not h.is_empty() and not has_hobby(id) and gm.money >= float(gm.shop_price(int(h.cost)))
+
+func take_hobby(id: String) -> bool:
+	var h := _hobby(id)
+	if h.is_empty() or has_hobby(id): return false
+	if not gm.spend_money(gm.shop_price(int(h.cost))): return false
+	hobbies.append(id)
+	add_happiness(3.0)
+	emit_signal("life_changed")
+	gm.save_game()
+	return true
+
+func hobby_happiness() -> float:
+	var t: float = 0.0
+	for id in hobbies:
+		t += float(_hobby(id).get("happy", 0.0))
+	return t
+
+func hobby_upkeep() -> float:
+	var t: float = 0.0
+	for id in hobbies:
+		t += float(gm.shop_price(int(_hobby(id).get("upkeep", 0))))
+	return t
+
+func _hobby_tick() -> void:
+	for id in hobbies:
+		var h := _hobby(id)
+		var st: String = String(h.get("stat", ""))
+		var gain: float = float(h.get("gain", 0.0))
+		if gain <= 0.0: continue
+		if skills.has(st):
+			skills[st] = clampf(float(skills[st]) + gain, 0.0, 100.0)
+		elif st == "fitness":
+			fitness = clampf(fitness + gain, 0.0, 100.0)
+	var up: float = hobby_upkeep()
+	if up > 0.0:
+		gm.add_money(-up)
 
 # ── Личная репутация и статус ─────────────────────────────────────────────────
 func social_baseline() -> float:
@@ -739,6 +801,7 @@ func process_day() -> void:
 	_family_events_tick()
 	_social_tick()
 	_social_rep_tick()
+	_hobby_tick()
 	var upkeep: float = children_upkeep()
 	if upkeep > 0.0:
 		gm.add_money(-upkeep)
@@ -772,6 +835,7 @@ func reset() -> void:
 	_last_hangout_day = -99
 	social_rep = 40.0
 	_last_social_day = -99
+	hobbies = []
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "birth_age", birth_age)
@@ -794,6 +858,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("life", "last_hangout_day", _last_hangout_day)
 	cfg.set_value("life", "social_rep", social_rep)
 	cfg.set_value("life", "last_social_day", _last_social_day)
+	cfg.set_value("life", "hobbies", hobbies)
 
 func load_data(cfg: ConfigFile) -> void:
 	birth_age = cfg.get_value("life", "birth_age", 18)
@@ -816,3 +881,4 @@ func load_data(cfg: ConfigFile) -> void:
 	_last_hangout_day = cfg.get_value("life", "last_hangout_day", -99)
 	social_rep = cfg.get_value("life", "social_rep", 40.0)
 	_last_social_day = cfg.get_value("life", "last_social_day", -99)
+	hobbies = cfg.get_value("life", "hobbies", [])
