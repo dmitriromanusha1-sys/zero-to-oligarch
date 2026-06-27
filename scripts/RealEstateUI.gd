@@ -116,7 +116,10 @@ func _owned_card(i: int) -> PanelContainer:
 	var tid: String = String(p.get("type_id", ""))
 	_lbl(col, t.get("name", "?"), Color(0.80, 1.0, 0.80), 14)
 	_lbl(col, "Аренда +%s/день · оценка %s" % [gm.format_money(rem.current_rent(tid)), gm.format_money(rem.current_value(tid))], Color(0.62, 0.85, 0.66), 11)
-	var sval: float = rem.current_value(tid) * rem.SELL_RATIO
+	var mort: float = float(p.get("mortgage", 0.0))
+	if mort > 0.0:
+		_lbl(col, "🏦 Ипотека: остаток %s" % gm.format_money(mort), Color(0.85, 0.70, 0.55), 11)
+	var sval: float = maxf(0.0, rem.current_value(tid) * rem.SELL_RATIO - mort)
 	var sb := Button.new(); sb.text = "Продать (%s)" % gm.format_money(sval)
 	sb.add_theme_font_size_override("font_size", 12)
 	_style(sb, Color(0.18, 0.12, 0.10), Color(0.6, 0.4, 0.3))
@@ -145,20 +148,35 @@ func _buy_card(t: Dictionary) -> PanelContainer:
 	var cprice: int = rem.current_price(t.id)
 	_lbl(col, name_str, Color(0.85, 0.88, 0.95), 14)
 	_lbl(col, "%s · аренда +%s/день" % [t.get("desc", ""), gm.format_money(rem.current_rent(t.id))], Color(0.62, 0.68, 0.62), 11)
-	var btn := Button.new()
+	var btns := VBoxContainer.new()
+	btns.add_theme_constant_override("separation", 4)
 	if locked:
-		btn.text = "🔒 Титул %d" % int(t.min_title)
-		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+		var lb := Button.new(); lb.text = "🔒 Титул %d" % int(t.min_title)
+		lb.add_theme_font_size_override("font_size", 12)
+		_style(lb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); lb.disabled = true
+		btns.add_child(lb)
 	else:
-		btn.text = "🏠 Купить (%s)" % gm.format_money(cprice)
+		var tid: String = t.id
+		# Покупка целиком
+		var btn := Button.new(); btn.text = "🏠 Купить (%s)" % gm.format_money(cprice)
+		btn.add_theme_font_size_override("font_size", 12)
 		if gm.money >= float(cprice):
 			_style(btn, Color(0.10, 0.18, 0.12), Color(0.30, 0.60, 0.35))
-			var tid: String = t.id
-			btn.pressed.connect(func(): if not rem.buy_property(tid): pass)
+			btn.pressed.connect(func(): rem.buy_property(tid))
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
-	btn.add_theme_font_size_override("font_size", 12)
-	row.add_child(btn)
+		btns.add_child(btn)
+		# Покупка в ипотеку (первый взнос)
+		var down: int = rem.mortgage_down_payment(t.id)
+		var mb := Button.new(); mb.text = "🏦 В ипотеку (взнос %s)" % gm.format_money(down)
+		mb.add_theme_font_size_override("font_size", 11)
+		if rem.can_buy_mortgage(t.id):
+			_style(mb, Color(0.10, 0.14, 0.22), Color(0.30, 0.45, 0.7))
+			mb.pressed.connect(func(): rem.buy_property_mortgage(tid))
+		else:
+			_style(mb, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); mb.disabled = true
+		btns.add_child(mb)
+	row.add_child(btns)
 	return card
 
 # ── helpers ───────────────────────────────────────────────────────────────────

@@ -27,6 +27,12 @@ const RE_INDEX_MAX: float = 3.00
 const RE_INFL_TRACK: float = 0.80   # недвижимость отслеживает ~80% инфляции
 const RE_VOLATILITY: float = 0.04   # случайное колебание/мес
 
+# ── Ипотека ───────────────────────────────────────────────────────────────────
+const MORTGAGE_DOWN: float = 0.30    # первый взнос 30%
+const MORTGAGE_MONTHS: int = 60      # срок 5 лет
+const MORTGAGE_SPREAD: float = 0.03  # спред ипотеки над ключевой ставкой
+const MORTGAGE_MISS_LIMIT: int = 3   # просрочек до взыскания
+
 # Портфель: массив словарей {type_id}
 var properties: Array = []
 
@@ -74,20 +80,59 @@ func buy_property(type_id: String) -> bool:
 	if t.is_empty(): return false
 	if gm.current_title_index < int(t.min_title): return false
 	if not gm.spend_money(current_price(type_id)): return false
-	properties.append({"type_id": type_id})
+	properties.append({"type_id": type_id, "mortgage": 0.0, "mort_orig": 0.0, "missed": 0})
 	emit_signal("portfolio_changed")
 	gm.save_game()
 	return true
+
+# ── Ипотека ───────────────────────────────────────────────────────────────────
+func mortgage_monthly_rate() -> float:
+	var cb := get_node_or_null("/root/CentralBankManager")
+	var kr: float = cb.key_rate if cb else 0.16
+	return (kr + MORTGAGE_SPREAD) / 12.0
+
+func mortgage_down_payment(type_id: String) -> int:
+	return int(current_price(type_id) * MORTGAGE_DOWN)
+
+func can_buy_mortgage(type_id: String) -> bool:
+	var t := _get_type(type_id)
+	return not t.is_empty() and gm.current_title_index >= int(t.min_title) and gm.money >= float(mortgage_down_payment(type_id))
+
+func buy_property_mortgage(type_id: String) -> bool:
+	var t := _get_type(type_id)
+	if t.is_empty(): return false
+	if gm.current_title_index < int(t.min_title): return false
+	var price: int = current_price(type_id)
+	var down: int = int(price * MORTGAGE_DOWN)
+	if not gm.spend_money(down): return false
+	var principal: float = float(price - down)
+	properties.append({"type_id": type_id, "mortgage": principal, "mort_orig": principal, "missed": 0})
+	emit_signal("portfolio_changed")
+	gm.save_game()
+	return true
+
+func mortgage_debt() -> float:
+	var total: float = 0.0
+	for p in properties:
+		total += float(p.get("mortgage", 0.0))
+	return total
+
+# Капитал в недвижимости = рыночная стоимость минус долг по ипотеке.
+func equity_value() -> float:
+	return maxf(0.0, portfolio_value() - mortgage_debt())
 
 func sell_property(index: int) -> float:
 	if index < 0 or index >= properties.size(): return 0.0
 	var tid := String(properties[index].get("type_id", ""))
 	var value: float = current_value(tid) * SELL_RATIO
-	gm.add_money(value)
+	# Гасим остаток ипотеки из выручки
+	var mort: float = float(properties[index].get("mortgage", 0.0))
+	var net: float = maxf(0.0, value - mort)
+	gm.add_money(net)
 	properties.remove_at(index)
 	emit_signal("portfolio_changed")
 	gm.save_game()
-	return value
+	return net
 
 # Суммарная аренда в день (по текущему индексу рынка).
 func rental_income() -> float:
@@ -109,7 +154,39 @@ func process_day() -> void:
 	if inc > 0.0:
 		gm.add_money(inc)
 	if gm.day % 30 == 0:
+		_pay_mortgages()
 		_update_market()
+
+# Ежемесячные платежи по ипотеке; при просрочках — взыскание объекта.
+func _pay_mortgages() -> void:
+	var rate: float = mortgage_monthly_rate()
+	var foreclose: Array = []
+	for i in range(properties.size()):
+		var p = properties[i]
+		var rem_m: float = float(p.get("mortgage", 0.0))
+		if rem_m <= 0.0:
+			continue
+		var orig: float = float(p.get("mort_orig", rem_m))
+		var principal_pay: float = orig / float(MORTGAGE_MONTHS)
+		var payment: float = rem_m * rate + principal_pay
+		if gm.spend_money(payment):
+			p["mortgage"] = maxf(0.0, rem_m - principal_pay)
+			p["missed"] = 0
+		else:
+			p["missed"] = int(p.get("missed", 0)) + 1
+			if int(p["missed"]) >= MORTGAGE_MISS_LIMIT:
+				foreclose.append(i)
+	foreclose.reverse()
+	var es := get_node_or_null("/root/EventSystem")
+	for i in foreclose:
+		var t := _get_type(String(properties[i].get("type_id", "")))
+		properties.remove_at(i)
+		if es:
+			es.event_triggered.emit({
+				"text": "🏦 Банк изъял объект «%s» за неуплату ипотеки!" % t.get("name", "недвижимость"),
+				"money": 0, "health": 0})
+	if not foreclose.is_empty():
+		emit_signal("portfolio_changed")
 
 # Месячное движение рынка: инфляция + цикл + случайность.
 func _update_market() -> void:

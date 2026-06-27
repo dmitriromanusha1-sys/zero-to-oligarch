@@ -789,9 +789,11 @@ func get_net_worth() -> float:
 			nw += bm.get_empire_value() * 0.7
 		# Банковский депозит — 100%
 		nw += bm.bank_deposit
-	# Доходная недвижимость — по стоимости портфеля
+	# Доходная недвижимость — капитал (рыночная стоимость минус ипотека)
 	var rem: Node = get_node_or_null("/root/RealEstateManager")
-	if rem and rem.has_method("portfolio_value"):
+	if rem and rem.has_method("equity_value"):
+		nw += rem.equity_value()
+	elif rem and rem.has_method("portfolio_value"):
 		nw += rem.portfolio_value()
 
 	# Акции — текущая рыночная стоимость
@@ -867,6 +869,8 @@ func get_net_worth_breakdown() -> Dictionary:
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm:
 		d.debt = lm.get_total_debt()
+	if rem and rem.has_method("mortgage_debt"):
+		d.debt += rem.mortgage_debt()
 	d["total"] = get_net_worth()
 	return d
 
