@@ -71,7 +71,8 @@ func _rebuild() -> void:
 	if im == null or gm == null:
 		return
 	_title("🏛 Политический клуб")
-	_lbl(_vb, "Влияние: %d" % int(im.influence), Color(0.82, 0.72, 1.0), 16)
+	_lbl(_vb, "Влияние: %d   ·   Ранг: %s" % [int(im.influence), im.power_rank()],
+		Color(0.95, 0.85, 0.45) if im.grey_cardinal else Color(0.82, 0.72, 1.0), 16)
 
 	if not im.politics_unlocked():
 		_note("Большая политика открывается с титула «%s». Сначала станьте заметной фигурой." % gm.TITLES[im.CONN_MIN_TITLE].name)
@@ -117,6 +118,21 @@ func _rebuild() -> void:
 		Color(0.74, 0.70, 0.88), 12)
 	for i in range(im.district_count()):
 		_vb.add_child(_district_card(i))
+	_sep()
+
+	# Высшая власть и риски
+	_header("⚖️ Высшая власть и риски")
+	var heat_pct: int = int(round(im.scrutiny() / im.HEAT_MAX * 100.0))
+	var inv_pct: int = int(round(im.investigation_chance() * 100.0))
+	var hcol: Color = Color(0.95, 0.45, 0.4) if heat_pct >= 60 else (Color(0.95, 0.78, 0.4) if heat_pct >= 30 else Color(0.55, 0.85, 0.6))
+	_lbl(_vb, "Подозрение: %d%%  ·  риск расследования: %d%%/мес" % [heat_pct, inv_pct], hcol, 12)
+	if im.is_grey_cardinal():
+		_lbl(_vb, "👑 Вы — Серый кардинал. Город под вашей теневой властью.", Color(0.95, 0.85, 0.45), 12)
+	else:
+		_lbl(_vb, "Серый кардинал: %d/%d районов · связи %d/%d · нужен Новостной портал" % [
+			im.controlled_count(), im.GC_DISTRICTS, im.total_connection_levels(), im.max_connection_total()],
+			Color(0.66, 0.62, 0.76), 11)
+	_vb.add_child(_coverup_card())
 
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
@@ -345,6 +361,38 @@ func _district_card(i: int) -> PanelContainer:
 		if im.can_run_election(i):
 			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
 			btn.pressed.connect(func(): im.run_election(i))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _coverup_card() -> PanelContainer:
+	var cd: int = im.campaign_cd_left("coverup")
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.11, 0.08, 0.10, 0.92)
+	cs.border_color = Color(0.60, 0.45, 0.40, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "🧯"
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "Замять скандал", Color(1.0, 0.86, 0.82), 14)
+	_lbl(col, "−%d%% подозрения · %d влияния + %s" % [int(im.COVERUP_REDUCE * 100.0),
+		int(im.COVERUP_INF), gm.format_money(im.COVERUP_MONEY)], Color(0.85, 0.70, 0.68), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if cd > 0:
+		btn.text = "⏳ %d дн." % cd
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Замять"
+		if im.can_coverup():
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.coverup())
 		else:
 			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
