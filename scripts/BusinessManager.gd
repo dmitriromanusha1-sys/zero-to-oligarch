@@ -1110,7 +1110,9 @@ func process_day() -> void:
 				tax_mult = sm.get_diff().get("tax", 1.0)
 			var law_tax: float = 1.0
 			var inf_t := get_node_or_null("/root/InfluenceManager")
-			if inf_t and inf_t.has_method("law_tax_mult"):
+			if inf_t and inf_t.has_method("total_tax_mult"):
+				law_tax = inf_t.total_tax_mult()   # лобби-каникулы × скидки (связь + либералы)
+			elif inf_t and inf_t.has_method("law_tax_mult"):
 				law_tax = inf_t.law_tax_mult()
 			var tax: float = month_income * TAX_RATE * tax_mult * (1.0 - research_tax_reduction()) * law_tax
 			if tax > 0.0:

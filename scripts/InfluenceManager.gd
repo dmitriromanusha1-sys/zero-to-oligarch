@@ -126,6 +126,30 @@ const IMMUNITY_DOSSIERS: int = 2
 const IMMUNITY_DAYS: int = 60
 const SABOTAGE_POWER: float = 0.18           # саботаж сильнее обычного компромата
 
+# ── Своя партия (Фаза 7) ──────────────────────────────────────────────────────
+# Партия — легальная опора власти: члены растут со временем, идеология даёт бафф,
+# партийная машина повышает шанс на выборах и даёт пассивное влияние.
+var party_founded: bool = false
+var party_members: float = 0.0
+var party_ideology: String = ""              # "" пока не выбрана
+
+const PARTY_MIN_TITLE: int = 6
+const PARTY_FOUND_MONEY: int = 50_000_000
+const PARTY_FOUND_INF: float = 150.0
+const PARTY_RECRUIT_MONEY: int = 5_000_000
+const PARTY_RECRUIT_MEMBERS: float = 2000.0
+const PARTY_RECRUIT_COOLDOWN: int = 7
+const PARTY_MEMBERS_PER_DAY: float = 50.0
+const PARTY_STRENGTH_CAP: float = 100_000.0  # членов для максимальной силы
+const PARTY_SWITCH_INF: float = 100.0        # смена идеологии стоит влияния
+
+const IDEOLOGIES: Array = [
+	{"id":"siloviki",    "name":"Силовики",    "icon":"🪖", "desc":"−40% риска антикоррупционного скандала."},
+	{"id":"liberals",    "name":"Либералы",    "icon":"📈", "desc":"−15% налога на прибыль бизнеса."},
+	{"id":"populists",   "name":"Популисты",   "icon":"📣", "desc":"−30% стоимости выборов."},
+	{"id":"technocrats", "name":"Технократы",  "icon":"⚙", "desc":"+25% пассивного влияния."},
+]
+
 var gm: Node
 
 func _ready() -> void:
@@ -375,10 +399,10 @@ func power_level() -> int:
 	return controlled_count()
 
 func election_inf_cost(i: int) -> int:
-	return int(ELECTION_INF_BASE + i * ELECTION_INF_PER)
+	return int((ELECTION_INF_BASE + i * ELECTION_INF_PER) * ideology_election_cost_mult())
 
 func election_money_cost(i: int) -> int:
-	return ELECTION_MONEY_BASE * (i + 1)
+	return int(ELECTION_MONEY_BASE * (i + 1) * ideology_election_cost_mult())
 
 func election_cd_left(i: int) -> int:
 	return int(election_cd.get(i, 0))
@@ -391,7 +415,7 @@ func election_win_chance(i: int) -> float:
 	var rm := get_node_or_null("/root/ReputationManager")
 	var rep: float = (float(rm.reputation) / 100.0) if rm else 0.3
 	var power: float = 0.15 + media_reach() * 0.03 + rep * 0.25 \
-		+ connection_level("mayor") * 0.05 + controlled_count() * 0.03
+		+ connection_level("mayor") * 0.05 + controlled_count() * 0.03 + party_election_bonus()
 	return clampf(power - district_difficulty(i), 0.05, 0.95)
 
 func can_run_election(i: int) -> bool:
@@ -459,7 +483,7 @@ func media_shield() -> float:
 
 func investigation_chance() -> float:
 	if has_immunity(): return 0.0
-	return clampf(scrutiny() - media_shield(), 0.0, 0.90)
+	return clampf((scrutiny() - media_shield()) * ideology_risk_mult(), 0.0, 0.90)
 
 # Замять скандал: СМИ-машина хоронит историю, жар падает.
 func can_coverup() -> bool:
@@ -614,9 +638,94 @@ func _intel_tick() -> void:
 	if intel_immunity_days > 0:
 		intel_immunity_days -= 1
 
+# ── Своя партия ───────────────────────────────────────────────────────────────
+func can_found_party() -> bool:
+	if party_founded or not politics_unlocked(): return false
+	if gm.current_title_index < PARTY_MIN_TITLE: return false
+	return influence >= PARTY_FOUND_INF and gm.money >= float(PARTY_FOUND_MONEY)
+
+func found_party() -> bool:
+	if not can_found_party(): return false
+	if not gm.spend_money(PARTY_FOUND_MONEY): return false
+	add_influence(-PARTY_FOUND_INF)
+	party_founded = true
+	party_members = PARTY_RECRUIT_MEMBERS
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func party_strength() -> float:
+	return clampf(party_members / PARTY_STRENGTH_CAP, 0.0, 1.0)
+
+func party_election_bonus() -> float:
+	return party_strength() * 0.25 if party_founded else 0.0
+
+func party_influence_day() -> float:
+	return (party_members / 1000.0) * 0.5 if party_founded else 0.0
+
+func can_recruit() -> bool:
+	if not party_founded or campaign_cd_left("recruit") > 0: return false
+	return gm.money >= float(PARTY_RECRUIT_MONEY)
+
+func recruit() -> bool:
+	if not can_recruit(): return false
+	if not gm.spend_money(PARTY_RECRUIT_MONEY): return false
+	party_members += PARTY_RECRUIT_MEMBERS
+	campaign_cd["recruit"] = PARTY_RECRUIT_COOLDOWN
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+func _ideology(id: String) -> Dictionary:
+	for ig in IDEOLOGIES:
+		if ig.id == id: return ig
+	return {}
+
+func ideology_switch_cost() -> float:
+	return 0.0 if party_ideology == "" else PARTY_SWITCH_INF
+
+func can_set_ideology(id: String) -> bool:
+	if not party_founded or id == party_ideology: return false
+	if _ideology(id).is_empty(): return false
+	return influence >= ideology_switch_cost()
+
+func set_ideology(id: String) -> bool:
+	if not can_set_ideology(id): return false
+	add_influence(-ideology_switch_cost())
+	party_ideology = id
+	emit_signal("connections_changed")
+	gm.save_game()
+	return true
+
+# Баффы идеологии (читаются другими системами)
+func ideology_risk_mult() -> float:
+	return 0.6 if party_ideology == "siloviki" else 1.0
+
+func ideology_tax_bonus() -> float:
+	return 0.15 if party_ideology == "liberals" else 0.0
+
+func ideology_election_cost_mult() -> float:
+	return 0.70 if party_ideology == "populists" else 1.0
+
+func ideology_influence_mult() -> float:
+	return 1.25 if party_ideology == "technocrats" else 1.0
+
+# Совокупный налоговый множитель: лобби-каникулы × скидки (связь + либералы).
+func total_tax_mult() -> float:
+	var disc: float = clampf(tax_discount() + ideology_tax_bonus(), 0.0, 0.6)
+	return law_tax_mult() * (1.0 - disc)
+
+func _party_tick() -> void:
+	if not party_founded: return
+	var rm := get_node_or_null("/root/ReputationManager")
+	var rep_f: float = (0.5 + float(rm.reputation) / 100.0) if rm else 1.0
+	var growth: float = (PARTY_MEMBERS_PER_DAY + media_reach() * 20.0 + controlled_count() * 30.0) * rep_f
+	party_members += growth
+
 # ── Ранг власти / эндгейм ─────────────────────────────────────────────────────
 func power_score() -> int:
-	return controlled_count() * 10 + total_connection_levels() * 4 + media_reach() * 2 + active_laws.size() * 2 + intel_level * 5
+	return controlled_count() * 10 + total_connection_levels() * 4 + media_reach() * 2 \
+		+ active_laws.size() * 2 + intel_level * 5 + int(party_strength() * 20.0)
 
 func power_rank() -> String:
 	var s: int = power_score()
@@ -671,13 +780,16 @@ func process_day() -> void:
 	_tick_campaigns()
 	_tick_elections()
 	_intel_tick()
+	_party_tick()
 	if gm.day % 30 == 0:
 		_maybe_lose_districts()
 		_corruption_tick()
 	var passive: float = media_influence_day()        # СМИ работают всегда
 	passive += controlled_count() * DISTRICT_INF_DAY  # контроль районов
+	passive += party_influence_day()                  # партийная машина
 	if politics_unlocked():
 		passive += total_connection_levels() * 0.2 + connection_level("mayor") * 0.5
+	passive *= ideology_influence_mult()              # бафф технократов
 	if passive > 0.0:
 		add_influence(passive)
 	_check_grey_cardinal()
@@ -697,6 +809,9 @@ func reset() -> void:
 	dossiers = 0
 	surveillance = 0.0
 	intel_immunity_days = 0
+	party_founded = false
+	party_members = 0.0
+	party_ideology = ""
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "value", influence)
@@ -713,6 +828,9 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("influence", "dossiers", dossiers)
 	cfg.set_value("influence", "surveillance", surveillance)
 	cfg.set_value("influence", "intel_immunity_days", intel_immunity_days)
+	cfg.set_value("influence", "party_founded", party_founded)
+	cfg.set_value("influence", "party_members", party_members)
+	cfg.set_value("influence", "party_ideology", party_ideology)
 
 func load_data(cfg: ConfigFile) -> void:
 	influence = cfg.get_value("influence", "value", 0.0)
@@ -729,3 +847,6 @@ func load_data(cfg: ConfigFile) -> void:
 	dossiers = cfg.get_value("influence", "dossiers", 0)
 	surveillance = cfg.get_value("influence", "surveillance", 0.0)
 	intel_immunity_days = cfg.get_value("influence", "intel_immunity_days", 0)
+	party_founded = cfg.get_value("influence", "party_founded", false)
+	party_members = cfg.get_value("influence", "party_members", 0.0)
+	party_ideology = cfg.get_value("influence", "party_ideology", "")

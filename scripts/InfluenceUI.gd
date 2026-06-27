@@ -120,6 +120,21 @@ func _rebuild() -> void:
 		_vb.add_child(_district_card(i))
 	_sep()
 
+	# Своя партия
+	_header("🎌 Своя партия")
+	if not im.party_founded:
+		_vb.add_child(_party_found_card())
+	else:
+		_lbl(_vb, "Членов: %d  ·  сила %d%%  ·  +%d%% к выборам  ·  +%d влияния/день" % [
+			int(im.party_members), int(round(im.party_strength() * 100.0)),
+			int(round(im.party_election_bonus() * 100.0)), int(im.party_influence_day())],
+			Color(0.74, 0.70, 0.88), 12)
+		_vb.add_child(_party_recruit_card())
+		_lbl(_vb, "Идеология:", Color(0.66, 0.62, 0.76), 11)
+		for ig in im.IDEOLOGIES:
+			_vb.add_child(_ideology_card(ig))
+	_sep()
+
 	# Высшая власть и риски
 	_header("⚖️ Высшая власть и риски")
 	var heat_pct: int = int(round(im.scrutiny() / im.HEAT_MAX * 100.0))
@@ -496,6 +511,100 @@ func _intel_action_card(kind: String) -> PanelContainer:
 			"immunity": btn.pressed.connect(func(): im.buy_immunity())
 	else:
 		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _party_found_card() -> PanelContainer:
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.07, 0.13, 0.92)
+	cs.border_color = Color(0.45, 0.40, 0.60, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "🎌"
+	icon.add_theme_font_size_override("font_size", 24); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "Основать партию", Color(0.88, 0.84, 0.96), 14)
+	_lbl(col, "Легальная опора власти: члены, идеология, бонус к выборам.", Color(0.66, 0.62, 0.76), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if gm.current_title_index < im.PARTY_MIN_TITLE:
+		btn.text = "🔒 Титул %d" % im.PARTY_MIN_TITLE
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Основать (%d вл. + %s)" % [int(im.PARTY_FOUND_INF), gm.format_money(im.PARTY_FOUND_MONEY)]
+		if im.can_found_party():
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.found_party())
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _party_recruit_card() -> PanelContainer:
+	var cd: int = im.campaign_cd_left("recruit")
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.09, 0.07, 0.11, 0.92)
+	cs.border_color = Color(0.45, 0.40, 0.52, 0.7)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = "📋"
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, "Кампания по набору", Color(0.88, 0.84, 0.96), 14)
+	_lbl(col, "+%d членов · %s" % [int(im.PARTY_RECRUIT_MEMBERS), gm.format_money(im.PARTY_RECRUIT_MONEY)], Color(0.66, 0.62, 0.76), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if cd > 0:
+		btn.text = "⏳ %d дн." % cd
+		_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	else:
+		btn.text = "Набор"
+		if im.can_recruit():
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.recruit())
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
+	row.add_child(btn)
+	return card
+
+func _ideology_card(ig: Dictionary) -> PanelContainer:
+	var iid: String = ig.id
+	var chosen: bool = im.party_ideology == iid
+	var card := PanelContainer.new()
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.07, 0.10, 0.08, 0.92) if chosen else Color(0.09, 0.07, 0.11, 0.92)
+	cs.border_color = Color(0.40, 0.65, 0.42, 0.85) if chosen else Color(0.34, 0.30, 0.42, 0.6)
+	cs.set_border_width_all(1); cs.set_corner_radius_all(8); cs.set_content_margin_all(10)
+	card.add_theme_stylebox_override("panel", cs)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); card.add_child(row)
+	var icon := Label.new(); icon.text = ig.get("icon", "🎌")
+	icon.add_theme_font_size_override("font_size", 22); icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(icon)
+	var col := VBoxContainer.new(); col.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(col)
+	_lbl(col, ig.get("name", "?") + ("  ✅" if chosen else ""), Color(0.88, 0.84, 0.96), 14)
+	_lbl(col, ig.get("desc", ""), Color(0.66, 0.62, 0.76), 11)
+	var btn := Button.new()
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if chosen:
+		btn.text = "Выбрана"
+		_style(btn, Color(0.12, 0.16, 0.10), Color(0.4, 0.55, 0.3)); btn.disabled = true
+	else:
+		var cost: int = int(im.ideology_switch_cost())
+		btn.text = "Выбрать" if cost == 0 else "Сменить (%d вл.)" % cost
+		if im.can_set_ideology(iid):
+			_style(btn, Color(0.16, 0.13, 0.24), Color(0.5, 0.42, 0.72))
+			btn.pressed.connect(func(): im.set_ideology(iid))
+		else:
+			_style(btn, Color(0.09, 0.09, 0.13), Color(0.26, 0.26, 0.36, 0.55)); btn.disabled = true
 	row.add_child(btn)
 	return card
 
