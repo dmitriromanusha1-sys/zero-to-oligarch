@@ -1154,6 +1154,8 @@ func save_game() -> void:
 	if cb: cb.save(cfg)
 	var em = get_node_or_null("/root/EducationManager")
 	if em: em.save(cfg)
+	var pm = get_node_or_null("/root/ProfessionManager")
+	if pm: pm.save(cfg)
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.save(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
@@ -1291,6 +1293,8 @@ func load_game() -> void:
 	if cb: cb.load_data(cfg)
 	var em = get_node_or_null("/root/EducationManager")
 	if em: em.load_data(cfg)
+	var pm = get_node_or_null("/root/ProfessionManager")
+	if pm: pm.load_data(cfg)
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.load_data(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
@@ -1339,6 +1343,8 @@ func _reset_state() -> void:
 	if rm: rm.reputation = 30
 	var em = get_node_or_null("/root/EducationManager")
 	if em: em.level = 0
+	var pm = get_node_or_null("/root/ProfessionManager")
+	if pm: pm.reset()
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.current_zone = 0; zm.max_zone_reached = 0
 	var qm = get_node_or_null("/root/QuestManager")
