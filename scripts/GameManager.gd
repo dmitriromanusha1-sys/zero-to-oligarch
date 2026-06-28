@@ -721,6 +721,10 @@ func next_day() -> void:
 			var util: int = effective_utilities()
 			if util > 0:
 				spend_money(util)
+		# Выплата месячного оклада по контракту (до налога — зарплата облагается НДФЛ)
+		var jm_pay = get_node_or_null("/root/EmploymentManager")
+		if jm_pay and jm_pay.has_method("process_payday"):
+			jm_pay.process_payday()
 		# Подоходный налог (НДФЛ) с дохода от работы сверх необлагаемого минимума.
 		# Минимум индексируется ценами, поэтому ранний этап практически не страдает.
 		var idx: float = cb.price_index if cb else 1.0
@@ -757,6 +761,10 @@ func next_day() -> void:
 			meal_drain_bonus = 0.0
 	# Качество рациона: суточная прибавка/убыль здоровья + дрейф к нейтральному
 	_process_nutrition_day()
+	# Если есть контракт — отрабатываем рабочий день (энергия + накопление оклада)
+	var jm_work = get_node_or_null("/root/EmploymentManager")
+	if jm_work and jm_work.has_method("process_workday"):
+		jm_work.process_workday()
 	# Штраф истощения: считаем дни и снимаем ограничение максимума по истечении
 	if max_stat_days > 0:
 		max_stat_days -= 1
@@ -1156,6 +1164,8 @@ func save_game() -> void:
 	if em: em.save(cfg)
 	var pm = get_node_or_null("/root/ProfessionManager")
 	if pm: pm.save(cfg)
+	var jm = get_node_or_null("/root/EmploymentManager")
+	if jm: jm.save(cfg)
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.save(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
@@ -1295,6 +1305,8 @@ func load_game() -> void:
 	if em: em.load_data(cfg)
 	var pm = get_node_or_null("/root/ProfessionManager")
 	if pm: pm.load_data(cfg)
+	var jm = get_node_or_null("/root/EmploymentManager")
+	if jm: jm.load_data(cfg)
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.load_data(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
@@ -1345,6 +1357,8 @@ func _reset_state() -> void:
 	if em: em.level = 0
 	var pm = get_node_or_null("/root/ProfessionManager")
 	if pm: pm.reset()
+	var jm = get_node_or_null("/root/EmploymentManager")
+	if jm: jm.reset()
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.current_zone = 0; zm.max_zone_reached = 0
 	var qm = get_node_or_null("/root/QuestManager")

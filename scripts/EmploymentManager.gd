@@ -39,6 +39,18 @@ const EMPLOYERS := {
 	},
 }
 
+signal employment_changed
+
+# ── Текущее трудоустройство (контракт) ────────────────────────────────────────
+var employer_id: String = ""    # где работаю ("" — безработный)
+var pos_index: int = -1         # индекс должности у работодателя
+var occupancy: String = "full"  # "full" (полный день) | "half" (полдня)
+var accrued: float = 0.0        # накопленный за месяц оклад (выплата раз в 30 дней)
+var days_worked: int = 0        # отработано дней в текущем месяце
+
+const WORK_ENERGY_FULL := 16.0  # энергия за полный рабочий день (полдня — вдвое меньше)
+const OCCUPANCY := {"full": 1.0, "half": 0.5}
+
 func employer(id: String) -> Dictionary:
 	return EMPLOYERS.get(id, {})
 
@@ -93,3 +105,109 @@ func employers_in_zone(zone: int) -> Array:
 		if int(EMPLOYERS[eid].get("zone", -1)) == zone:
 			out.append(eid)
 	return out
+
+# ── Контракт: устройство, отработка, оклад, увольнение ────────────────────────
+func is_employed() -> bool:
+	return employer_id != "" and pos_index >= 0
+
+func current_position() -> Dictionary:
+	if not is_employed():
+		return {}
+	var ps: Array = positions(employer_id)
+	if pos_index < ps.size():
+		return ps[pos_index]
+	return {}
+
+func current_employer_name() -> String:
+	return String(employer(employer_id).get("name", ""))
+
+func occupancy_fraction() -> float:
+	return float(OCCUPANCY.get(occupancy, 1.0))
+
+# Устроиться на должность (сменив текущую, если была). Нужно подходить и иметь место.
+func take_job(eid: String, idx: int, occ: String = "full") -> bool:
+	var ps: Array = positions(eid)
+	if idx < 0 or idx >= ps.size():
+		return false
+	var pos: Dictionary = ps[idx]
+	if not qualifies(pos) or not is_open(pos):
+		return false
+	employer_id = eid
+	pos_index = idx
+	occupancy = occ if OCCUPANCY.has(occ) else "full"
+	accrued = 0.0
+	days_worked = 0
+	emit_signal("employment_changed")
+	var qm := get_node_or_null("/root/QuestManager")
+	if qm: qm.add_diary_entry("📄 Устроился: %s, %s" % [current_employer_name(), pos.get("title", "")])
+	return true
+
+func set_occupancy(occ: String) -> void:
+	if OCCUPANCY.has(occ):
+		occupancy = occ
+		emit_signal("employment_changed")
+
+func quit_job() -> void:
+	if not is_employed():
+		return
+	# При увольнении невыплаченный накопленный оклад выдаётся (расчёт при уходе)
+	var gm := get_node_or_null("/root/GameManager")
+	if gm and accrued > 0.0 and gm.has_method("add_work_income"):
+		gm.add_work_income(accrued)
+	employer_id = ""
+	pos_index = -1
+	accrued = 0.0
+	days_worked = 0
+	emit_signal("employment_changed")
+
+# Один рабочий день: тратит энергию и копит дневной оклад. Возвращает true, если
+# день отработан (хватило энергии). Вызывается из GameManager.next_day.
+func process_workday() -> void:
+	if not is_employed():
+		return
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null:
+		return
+	var frac: float = occupancy_fraction()
+	var relief: float = gm.get_housing_energy_drain_bonus() if gm.has_method("get_housing_energy_drain_bonus") else 0.0
+	var e_cost: float = WORK_ENERGY_FULL * frac * (1.0 - relief)
+	if gm.energy < e_cost:
+		return   # прогул: слишком устал — день пропущен, без оклада
+	gm.energy = clamp(gm.energy - e_cost, 0.0, gm.stat_max())
+	gm.emit_signal("energy_changed", gm.energy)
+	var daily: float = float(monthly_salary(current_position())) * frac / 30.0
+	accrued += daily
+	days_worked += 1
+	if gm.has_method("add_work_xp"):
+		gm.add_work_xp(8.0 * frac)   # выслуга растёт и на контракте
+
+# Выплата месячного оклада (вызывается в месячном блоке next_day).
+func process_payday() -> void:
+	if not is_employed() or accrued <= 0.0:
+		return
+	var gm := get_node_or_null("/root/GameManager")
+	if gm and gm.has_method("add_work_income"):
+		gm.add_work_income(accrued)   # деньги + продуктивность + база НДФЛ
+	accrued = 0.0
+	days_worked = 0
+
+func save(cfg: ConfigFile) -> void:
+	cfg.set_value("employment", "employer_id", employer_id)
+	cfg.set_value("employment", "pos_index", pos_index)
+	cfg.set_value("employment", "occupancy", occupancy)
+	cfg.set_value("employment", "accrued", accrued)
+	cfg.set_value("employment", "days_worked", days_worked)
+
+func load_data(cfg: ConfigFile) -> void:
+	employer_id = cfg.get_value("employment", "employer_id", "")
+	pos_index = cfg.get_value("employment", "pos_index", -1)
+	occupancy = cfg.get_value("employment", "occupancy", "full")
+	accrued = cfg.get_value("employment", "accrued", 0.0)
+	days_worked = cfg.get_value("employment", "days_worked", 0)
+
+func reset() -> void:
+	employer_id = ""
+	pos_index = -1
+	occupancy = "full"
+	accrued = 0.0
+	days_worked = 0

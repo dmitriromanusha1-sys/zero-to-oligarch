@@ -17,6 +17,8 @@ func _ready() -> void:
 	add_to_group("jobboard_ui")
 	_resolve()
 	_build_shell()
+	if jm and jm.has_signal("employment_changed"):
+		jm.employment_changed.connect(func(): if visible: _rebuild())
 
 func _resolve() -> void:
 	gm = get_node_or_null("/root/GameManager")
@@ -97,14 +99,20 @@ func _rebuild() -> void:
 	_lbl(_vb, "Подбери вакансию под себя — или выучи профессию, чтобы открыть новые.", Color(0.62, 0.64, 0.72), 11)
 	_sep()
 
+	# Текущая работа
+	if jm.is_employed():
+		_current_job_card()
+		_sep()
+
 	# Работодатели по возрастанию зоны
 	var ids: Array = jm.employer_ids()
 	ids.sort_custom(func(a, b): return int(jm.employer(a).get("zone", 0)) < int(jm.employer(b).get("zone", 0)))
 	for eid in ids:
 		var emp: Dictionary = jm.employer(eid)
 		_header("%s %s" % [emp.get("icon", "🏢"), emp.get("name", eid)], _zone_name(int(emp.get("zone", 0))))
-		for pos in jm.positions(eid):
-			_position_row(pos)
+		var ps: Array = jm.positions(eid)
+		for i in ps.size():
+			_position_row(eid, i, ps[i])
 		_sep()
 
 	# Кнопка закрытия
@@ -115,7 +123,37 @@ func _rebuild() -> void:
 	close_btn.pressed.connect(close)
 	_vb.add_child(close_btn)
 
-func _position_row(pos: Dictionary) -> void:
+func _current_job_card() -> void:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", UITheme.card_box(true))
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 3)
+	card.add_child(box)
+
+	var pos: Dictionary = jm.current_position()
+	_lbl(box, "💼 Сейчас работаешь: %s — %s" % [jm.current_employer_name(), pos.get("title", "")], Color(0.92, 0.90, 0.78), 14)
+	var occ_txt: String = "полный день" if jm.occupancy == "full" else "полдня"
+	_lbl(box, "Занятость: %s · накоплено за месяц: %s ₽ · отработано: %d дн." % [
+		occ_txt, gm.format_money(jm.accrued), jm.days_worked], Color(0.66, 0.7, 0.78), 11)
+
+	var btns := HBoxContainer.new()
+	btns.add_theme_constant_override("separation", 8)
+	var occ_btn := Button.new()
+	occ_btn.text = "Перейти на полдня" if jm.occupancy == "full" else "Перейти на полный день"
+	occ_btn.add_theme_font_size_override("font_size", 12)
+	UITheme.style_button(occ_btn, "ghost")
+	occ_btn.pressed.connect(func(): jm.set_occupancy("half" if jm.occupancy == "full" else "full"))
+	btns.add_child(occ_btn)
+	var quit_btn := Button.new()
+	quit_btn.text = "Уволиться"
+	quit_btn.add_theme_font_size_override("font_size", 12)
+	UITheme.style_button(quit_btn, "danger")
+	quit_btn.pressed.connect(func(): jm.quit_job())
+	btns.add_child(quit_btn)
+	box.add_child(btns)
+	_vb.add_child(card)
+
+func _position_row(eid: String, idx: int, pos: Dictionary) -> void:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UITheme.card_box(true))
 	var box := VBoxContainer.new()
@@ -125,6 +163,7 @@ func _position_row(pos: Dictionary) -> void:
 	var qualifies: bool = jm.qualifies(pos)
 	var open_slot: bool = jm.is_open(pos)
 	var free: int = jm.free_slots(pos)
+	var here: bool = jm.is_employed() and jm.employer_id == eid and jm.pos_index == idx
 
 	# Заголовок: должность + оклад
 	var top := HBoxContainer.new()
@@ -158,7 +197,10 @@ func _position_row(pos: Dictionary) -> void:
 	slots_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status.add_child(slots_lbl)
 	var st_lbl := Label.new()
-	if qualifies and open_slot:
+	if here:
+		st_lbl.text = "💼 ты здесь работаешь"
+		st_lbl.add_theme_color_override("font_color", UITheme.GOLD)
+	elif qualifies and open_slot:
 		st_lbl.text = "✓ Подходишь"
 		st_lbl.add_theme_color_override("font_color", UITheme.GREEN)
 	elif not qualifies:
@@ -170,6 +212,15 @@ func _position_row(pos: Dictionary) -> void:
 	st_lbl.add_theme_font_size_override("font_size", 11)
 	status.add_child(st_lbl)
 	box.add_child(status)
+
+	# Кнопка «Устроиться» — если подходишь, есть место и это не текущая работа
+	if qualifies and open_slot and not here:
+		var apply := Button.new()
+		apply.text = "📄 Устроиться"
+		apply.add_theme_font_size_override("font_size", 12)
+		UITheme.style_button(apply, "primary")
+		apply.pressed.connect(func(): jm.take_job(eid, idx, "full"))
+		box.add_child(apply)
 
 	_vb.add_child(card)
 
