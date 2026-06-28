@@ -135,6 +135,8 @@ func _current_job_card() -> void:
 	var occ_txt: String = "полный день" if jm.occupancy == "full" else "полдня"
 	_lbl(box, "Занятость: %s · накоплено за месяц: %s ₽ · отработано: %d дн." % [
 		occ_txt, gm.format_money(jm.accrued), jm.days_worked], Color(0.66, 0.7, 0.78), 11)
+	var mode_txt: String = "🎲 Авто (случайный 0.5–2.5)" if jm.work_mode == "auto" else "🎯 Активный (мини-игра)"
+	_lbl(box, "Режим: %s · эффективность: ×%.2f" % [mode_txt, jm.coefficient], Color(0.7, 0.78, 0.9), 11)
 
 	var btns := HBoxContainer.new()
 	btns.add_theme_constant_override("separation", 8)
@@ -144,6 +146,12 @@ func _current_job_card() -> void:
 	UITheme.style_button(occ_btn, "ghost")
 	occ_btn.pressed.connect(func(): jm.set_occupancy("half" if jm.occupancy == "full" else "full"))
 	btns.add_child(occ_btn)
+	var mode_btn := Button.new()
+	mode_btn.text = "Режим: 🎯 Активный" if jm.work_mode == "auto" else "Режим: 🎲 Авто"
+	mode_btn.add_theme_font_size_override("font_size", 12)
+	UITheme.style_button(mode_btn, "ghost")
+	mode_btn.pressed.connect(func(): jm.set_work_mode("active" if jm.work_mode == "auto" else "auto"))
+	btns.add_child(mode_btn)
 	var quit_btn := Button.new()
 	quit_btn.text = "Уволиться"
 	quit_btn.add_theme_font_size_override("font_size", 12)
@@ -151,7 +159,34 @@ func _current_job_card() -> void:
 	quit_btn.pressed.connect(func(): jm.quit_job())
 	btns.add_child(quit_btn)
 	box.add_child(btns)
+
+	# В активном режиме — выйти на смену и показать себя в мини-игре
+	if jm.work_mode == "active":
+		var perform := Button.new()
+		perform.text = "🎯 Отработать смену (мини-игра)"
+		perform.add_theme_font_size_override("font_size", 12)
+		UITheme.style_button(perform, "primary")
+		perform.pressed.connect(_perform_shift)
+		box.add_child(perform)
+
 	_vb.add_child(card)
+
+func _perform_shift() -> void:
+	var mg = get_tree().get_first_node_in_group("minigame")
+	if mg == null or not mg.has_method("start"):
+		# Резерв без мини-игры — средний результат
+		jm.perform_shift(1.0)
+		return
+	var title_idx: int = gm.current_title_index if gm else 0
+	if mg.finished.is_connected(_on_shift_minigame):
+		mg.finished.disconnect(_on_shift_minigame)
+	mg.finished.connect(_on_shift_minigame, CONNECT_ONE_SHOT)
+	mg.start(jm.current_position().get("title", "Смена"), minf(1.0 + title_idx * 0.08, 1.60))
+
+func _on_shift_minigame(mult: float) -> void:
+	jm.perform_shift(mult)
+	if visible:
+		_rebuild()
 
 func _position_row(eid: String, idx: int, pos: Dictionary) -> void:
 	var card := PanelContainer.new()
