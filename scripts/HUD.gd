@@ -94,6 +94,12 @@ func _ready() -> void:
 	bm.bank_changed.connect(func(_v): _refresh_income())
 	qm.quest_completed.connect(_on_quest_completed)
 	qm.quest_added.connect(func(_q): _refresh_quest_tracker())
+	var pm_hud := get_node_or_null("/root/ProfessionManager")
+	if pm_hud and pm_hud.has_signal("profession_changed"):
+		pm_hud.profession_changed.connect(func(_id): if _profession_lbl: _refresh_meal_buff())
+	var jm_hud := get_node_or_null("/root/EmploymentManager")
+	if jm_hud and jm_hud.has_signal("employment_changed"):
+		jm_hud.employment_changed.connect(func(): if _profession_lbl: _refresh_meal_buff())
 
 	_setup_quest_tracker()
 	_style_hud()
@@ -1541,9 +1547,23 @@ func _refresh_meal_buff() -> void:
 			_career_lbl.visible = true
 		else:
 			_career_lbl.visible = false
+	# Профессия и текущая работа
+	var pmn := get_node_or_null("/root/ProfessionManager")
+	if _profession_lbl == null and pmn:
+		_profession_lbl = Label.new()
+		_profession_lbl.add_theme_font_size_override("font_size", 11)
+		_profession_lbl.add_theme_color_override("font_color", Color(0.80, 0.82, 0.60))
+		$TopBar/Row/StatusCol/StatusRow3.add_child(_profession_lbl)
+	if _profession_lbl and pmn:
+		var t: String = "🧑‍🏭 " + (pmn.current_name() if pmn.has_profession() else "Без профессии")
+		var jmn := get_node_or_null("/root/EmploymentManager")
+		if jmn and jmn.is_employed():
+			t += " · 💼 %s (%s)" % [jmn.current_employer_name(), jmn.grade_name()]
+		_profession_lbl.text = t
 
 var _nutrition_lbl: Label = null
 var _career_lbl: Label = null
+var _profession_lbl: Label = null
 
 func _on_event(event: Dictionary) -> void:
 	var sm := get_node_or_null("/root/SettingsManager")
