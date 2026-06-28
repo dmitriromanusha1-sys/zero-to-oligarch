@@ -92,6 +92,54 @@ func bm_fluctuate() -> void:
 		bm_prices[g.id] = clampf(p, 0.5, 2.0)
 	emit_signal("crime_changed")
 
+# ── Братва / ОПГ ──────────────────────────────────────────────────────────────
+# Набираешь бойцов: они усиливают дела и расширяют зону влияния, но требуют
+# содержания. Не платишь — лояльность падает, дойдёт до нуля — дезертируют.
+var gang_size: int = 0
+var gang_loyalty: float = 100.0
+const GANG_HIRE_COST := 200000.0   # вербовка одного бойца
+const GANG_UPKEEP := 5000.0        # содержание бойца в день
+
+func max_gang() -> int:
+	return int(criminal_rep / 10.0)   # авторитет определяет размер банды
+
+func gang_power() -> float:
+	return float(gang_size) * (gang_loyalty / 100.0)
+
+func gang_scheme_bonus() -> float:
+	return clampf(gang_power() * 0.01, 0.0, 0.20)   # до +0.20 к шансу дел
+
+func gang_upkeep_daily() -> float:
+	return float(gang_size) * GANG_UPKEEP
+
+func recruit_gang(n: int) -> bool:
+	if n <= 0 or gang_size + n > max_gang():
+		return false
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.spend_money(GANG_HIRE_COST * n):
+		return false
+	gang_size += n
+	emit_signal("crime_changed")
+	return true
+
+func disband_gang(n: int) -> void:
+	gang_size = maxi(0, gang_size - n)
+	emit_signal("crime_changed")
+
+# Содержание банды (вызывается раз в день): платишь — лояльны, нет — недовольство.
+func _process_gang_day() -> void:
+	if gang_size <= 0:
+		return
+	var gm := get_node_or_null("/root/GameManager")
+	if gm and gm.spend_money(gang_upkeep_daily()):
+		gang_loyalty = clampf(gang_loyalty + 1.0, 0.0, 100.0)
+	else:
+		gang_loyalty = clampf(gang_loyalty - 12.0, 0.0, 100.0)
+		if gang_loyalty <= 0.0:
+			gang_size = maxi(0, gang_size - 1)   # дезертирство
+			gang_loyalty = 30.0
+	emit_signal("crime_changed")
+
 # ── Коррупция и иммунитет ─────────────────────────────────────────────────────
 # Взятки ментам сбивают розыск (дороже при высоком heat, дешевле со связями в
 # полиции из ветки «Влияние»). «Крыша сверху» — оплаченный иммунитет на срок:
@@ -163,7 +211,8 @@ func is_racket_held(id: String) -> bool:
 	return rackets.has(id)
 
 func max_rackets() -> int:
-	return 1 + int(criminal_rep / 18.0)   # авторитет расширяет «зону влияния»
+	# авторитет + сила банды расширяют «зону влияния»
+	return 1 + int(criminal_rep / 18.0) + int(gang_power() / 4.0)
 
 func racket_claim_chance(id: String) -> float:
 	return clampf(0.50 + criminal_rep / 200.0, 0.30, 0.90)
@@ -264,8 +313,8 @@ func scheme_chance(id: String) -> float:
 	var s := scheme(id)
 	if s.is_empty():
 		return 0.0
-	# Авторитет повышает шанс (до +0.33)
-	return clampf(float(s.chance) + criminal_rep / 300.0, 0.05, 0.95)
+	# Авторитет повышает шанс (до +0.33), банда — ещё (до +0.20)
+	return clampf(float(s.chance) + criminal_rep / 300.0 + gang_scheme_bonus(), 0.05, 0.95)
 
 func can_attempt(id: String) -> bool:
 	var s := scheme(id)
@@ -335,6 +384,7 @@ func heat_label() -> Dictionary:
 
 # Суточная обработка: розыск медленно спадает (связи/взятки усилят спад позже).
 func process_day() -> void:
+	_process_gang_day()   # содержание банды и лояльность
 	# Доход с точек под крышей (грязным) + постоянный розыск от теневой активности
 	if not rackets.is_empty():
 		add_dirty_money(racket_income_total())
@@ -359,6 +409,8 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "laundered_today", laundered_today)
 	cfg.set_value("crime", "rackets", rackets)
 	cfg.set_value("crime", "protection_days", protection_days)
+	cfg.set_value("crime", "gang_size", gang_size)
+	cfg.set_value("crime", "gang_loyalty", gang_loyalty)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -369,6 +421,8 @@ func load_data(cfg: ConfigFile) -> void:
 	laundered_today = cfg.get_value("crime", "laundered_today", 0.0)
 	rackets = cfg.get_value("crime", "rackets", [])
 	protection_days = cfg.get_value("crime", "protection_days", 0)
+	gang_size = cfg.get_value("crime", "gang_size", 0)
+	gang_loyalty = cfg.get_value("crime", "gang_loyalty", 100.0)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -380,4 +434,6 @@ func reset() -> void:
 	laundered_today = 0.0
 	rackets = []
 	protection_days = 0
+	gang_size = 0
+	gang_loyalty = 100.0
 	_init_bm_prices()
