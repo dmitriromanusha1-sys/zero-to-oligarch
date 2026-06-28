@@ -276,7 +276,7 @@ func quit_job() -> void:
 	# При увольнении невыплаченный накопленный оклад выдаётся (расчёт при уходе)
 	var gm := get_node_or_null("/root/GameManager")
 	if gm and accrued > 0.0 and gm.has_method("add_work_income"):
-		gm.add_work_income(accrued)
+		gm.add_work_income(accrued, false)
 	employer_id = ""
 	pos_index = -1
 	accrued = 0.0
@@ -376,7 +376,7 @@ func process_payday() -> void:
 		return
 	var gm := get_node_or_null("/root/GameManager")
 	if gm and gm.has_method("add_work_income"):
-		gm.add_work_income(accrued)   # деньги + продуктивность + база НДФЛ
+		gm.add_work_income(accrued, false)   # деньги + база НДФЛ (без продуктивности — она уже в коэффициенте)
 	accrued = 0.0
 	days_worked = 0
 
