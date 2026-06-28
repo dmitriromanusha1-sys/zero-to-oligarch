@@ -189,7 +189,7 @@ func _refresh() -> void:
 				limit_lbl.add_theme_color_override("font_color", Color(0.6, 0.4, 0.4))
 				row.add_child(limit_lbl)
 			else:
-				var price: int = _gm.shop_price(lvl.price)
+				var price: int = _em.next_price()   # с учётом скидки за интеллект
 				var can_afford: bool = _gm.money >= price
 				var buy_btn := Button.new()
 				buy_btn.text = "📝 Сдать экзамен\n%s" % _gm.format_money(price)
@@ -227,7 +227,7 @@ func _buy() -> void:
 	if next_i >= _em.LEVELS.size() or next_i > _max_level:
 		if am: am.play_negative()
 		return
-	var price: int = _gm.shop_price(_em.LEVELS[next_i].price)
+	var price: int = _em.next_price()   # с учётом скидки за интеллект
 	if _gm.money < price:
 		if am: am.play_negative()
 		return

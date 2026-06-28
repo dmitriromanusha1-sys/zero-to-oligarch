@@ -45,16 +45,39 @@ func can_work_at(edu_req: int) -> bool:
 func get_zone_weights() -> Array:
 	return ZONE_WEIGHTS[level]
 
+# Скидка на обучение от интеллекта: умным проще учиться (до -20%, до +10% «тяжело»).
+func tuition_mult() -> float:
+	var life := get_node_or_null("/root/LifeManager")
+	if life and life.has_method("skill"):
+		return clampf(1.0 - (life.skill("intellect") - 50.0) / 50.0 * 0.20, 0.80, 1.10)
+	return 1.0
+
+# Итоговая цена уровня с учётом инфляции и скидки за интеллект.
+func price_for(next_i: int) -> int:
+	if next_i <= 0 or next_i >= LEVELS.size():
+		return 0
+	var gm: Node = get_node("/root/GameManager")
+	var base: float = float(LEVELS[next_i].price) * tuition_mult()
+	return gm.shop_price(int(base)) if gm.has_method("shop_price") else int(base)
+
+func next_price() -> int:
+	return price_for(level + 1)
+
 func buy_next() -> bool:
 	if level >= LEVELS.size() - 1:
 		return false
 	var gm: Node = get_node("/root/GameManager")
-	# Цена обучения индексируется инфляцией (как и прочие услуги)
-	var price: int = gm.shop_price(LEVELS[level + 1].price) if gm.has_method("shop_price") else int(LEVELS[level + 1].price)
+	var price: int = next_price()
 	if not gm.spend_money(price):
 		return false
 	level += 1
 	emit_signal("education_changed", level)
+	# Диплом развивает личные навыки: учёба делает умнее, высшее — ещё и общительнее.
+	var life := get_node_or_null("/root/LifeManager")
+	if life and life.has_method("gain_skill"):
+		life.gain_skill("intellect", 4.0)
+		if level >= 6:
+			life.gain_skill("charisma", 2.0)
 	var qm: Node = get_node_or_null("/root/QuestManager")
 	if qm: qm.add_diary_entry("🎓 Получено: " + LEVELS[level].name)
 	return true

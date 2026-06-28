@@ -1098,6 +1098,14 @@ func enroll_child(index: int) -> bool:
 func skill(id: String) -> float:
 	return float(skills.get(id, 0.0))
 
+# Прямое начисление навыка/формы (используется образованием и др. системами).
+func gain_skill(id: String, amount: float) -> void:
+	if id == "fitness":
+		fitness = clampf(fitness + amount, 0.0, 100.0)
+	elif skills.has(id):
+		skills[id] = clampf(float(skills[id]) + amount, 0.0, 100.0)
+	emit_signal("life_changed")
+
 func dev_cost() -> int:
 	return gm.shop_price(DEV_BASE_COST)
 
