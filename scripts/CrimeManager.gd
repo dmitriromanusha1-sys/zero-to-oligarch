@@ -92,6 +92,62 @@ func bm_fluctuate() -> void:
 		bm_prices[g.id] = clampf(p, 0.5, 2.0)
 	emit_signal("crime_changed")
 
+# ── Тёмные дела (схемы) ───────────────────────────────────────────────────────
+# Операции с риском: успех даёт грязный нал и авторитет, провал шумит (лишний
+# розыск). Каждое дело тратит энергию и требует определённого авторитета. Шанс
+# успеха растёт с авторитетом.
+const SCHEMES := [
+	{"id":"pickpocket","name":"Карманная кража",       "icon":"👛", "min_rep":0,  "payout":8000,    "heat":4.0,  "chance":0.80, "energy":8.0},
+	{"id":"scam",      "name":"Развод на деньги",       "icon":"🎭", "min_rep":5,  "payout":25000,   "heat":6.0,  "chance":0.70, "energy":10.0},
+	{"id":"robbery",   "name":"Уличный грабёж",         "icon":"🦹", "min_rep":15, "payout":60000,   "heat":10.0, "chance":0.62, "energy":14.0},
+	{"id":"carjack",   "name":"Угон авто",              "icon":"🚗", "min_rep":25, "payout":150000,  "heat":14.0, "chance":0.55, "energy":16.0},
+	{"id":"burglary",  "name":"Квартирная кража",       "icon":"🏚", "min_rep":35, "payout":350000,  "heat":18.0, "chance":0.50, "energy":18.0},
+	{"id":"heist",     "name":"Налёт на инкассатора",   "icon":"💰", "min_rep":55, "payout":1500000, "heat":30.0, "chance":0.40, "energy":25.0},
+]
+
+func scheme(id: String) -> Dictionary:
+	for s in SCHEMES:
+		if s.id == id:
+			return s
+	return {}
+
+func scheme_chance(id: String) -> float:
+	var s := scheme(id)
+	if s.is_empty():
+		return 0.0
+	# Авторитет повышает шанс (до +0.33)
+	return clampf(float(s.chance) + criminal_rep / 300.0, 0.05, 0.95)
+
+func can_attempt(id: String) -> bool:
+	var s := scheme(id)
+	if s.is_empty() or criminal_rep < float(s.min_rep):
+		return false
+	var gm := get_node_or_null("/root/GameManager")
+	return gm != null and gm.energy >= float(s.energy)
+
+# Провернуть дело. Возвращает {ok, success, amount, reason}.
+func attempt_scheme(id: String) -> Dictionary:
+	var s := scheme(id)
+	if s.is_empty():
+		return {"ok": false, "reason": "нет такого дела"}
+	if criminal_rep < float(s.min_rep):
+		return {"ok": false, "reason": "мало авторитета"}
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or gm.energy < float(s.energy):
+		return {"ok": false, "reason": "нет сил"}
+	gm.energy = clampf(gm.energy - float(s.energy), 0.0, gm.stat_max())
+	gm.emit_signal("energy_changed", gm.energy)
+	var win: bool = randf() < scheme_chance(id)
+	# Провал шумит сильнее — внимание полиции
+	add_heat(float(s.heat) * (1.0 if win else 1.6))
+	if win:
+		add_dirty_money(float(s.payout))
+		add_criminal_rep(clampf(float(s.min_rep) * 0.1 + 2.0, 2.0, 8.0))
+		return {"ok": true, "success": true, "amount": int(s.payout)}
+	else:
+		add_criminal_rep(0.5)   # опыт даже при провале
+		return {"ok": true, "success": false, "amount": 0}
+
 func add_heat(amount: float) -> void:
 	heat = clampf(heat + amount, 0.0, 100.0)
 	emit_signal("heat_changed", heat)
