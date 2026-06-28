@@ -57,6 +57,10 @@ var _life_btn: Button = null
 var _system_btn: Button = null
 var _system_popup: PanelContainer = null
 
+# Компактная верхняя панель (Фаза 1 «капремонта»)
+var _info_btn: Button = null
+var _info_popover: PanelContainer = null
+
 var _minimap_root: Control = null
 var _minimap_player_dot: ColorRect = null
 var _minimap_zone_cells: Array = []
@@ -166,6 +170,12 @@ func _ready() -> void:
 		gm_warn.survival_warning.connect(_on_survival_warning)
 
 	_refresh()
+
+	# Разгрузка верхней панели: иконки на полосках + поповер «Подробности».
+	# Вызываем в конце — к этому моменту все динамические чипы (сезон, цикл,
+	# бафф еды, истощение) уже созданы и попадут в поповер вместе со своими рядами.
+	_setup_labeled_bars()
+	_setup_compact_topbar()
 
 const _MODAL_GROUPS := ["shift_ui", "sleep_ui", "food_shop", "business_shop",
 	"education_shop", "transport_shop", "radio_shop", "casino_ui", "stock_ui",
@@ -731,6 +741,94 @@ func _style_hud() -> void:
 	title_popup.add_theme_font_size_override("font_size", 15)
 	title_popup.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_popup.custom_minimum_size.x = 320
+
+# ── Полоски потребностей с иконкой-подписью ───────────────────────────────────
+func _setup_labeled_bars() -> void:
+	var bars_col: VBoxContainer = $TopBar/Row/BarsCol
+	bars_col.add_theme_constant_override("separation", 3)
+	var defs: Array = [
+		[health_bar, "❤"],
+		[hunger_bar, "🍖"],
+		[thirst_bar, "💧"],
+		[energy_bar, "⚡"],
+	]
+	for d in defs:
+		var bar: ProgressBar = d[0]
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var ic := Label.new()
+		ic.text = d[1]
+		ic.add_theme_font_size_override("font_size", 13)
+		ic.custom_minimum_size = Vector2(20, 0)
+		ic.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bars_col.remove_child(bar)
+		hb.add_child(ic)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hb.add_child(bar)
+		bars_col.add_child(hb)
+
+# ── Компактная верхняя панель: «Титул · День · Время · ⓘ» + поповер ──────────
+func _setup_compact_topbar() -> void:
+	var status_col: VBoxContainer = $TopBar/Row/StatusCol
+	var row1: HBoxContainer = $TopBar/Row/StatusCol/StatusRow1
+	var row2: HBoxContainer = $TopBar/Row/StatusCol/StatusRow2
+	var row3: HBoxContainer = $TopBar/Row/StatusCol/StatusRow3
+
+	# Видимый компактный ряд: Титул · День · Время · кнопка «Подробнее»
+	var primary := HBoxContainer.new()
+	primary.name = "PrimaryRow"
+	primary.add_theme_constant_override("separation", 14)
+	for lbl in [title_label, day_label, time_label]:
+		lbl.get_parent().remove_child(lbl)
+		primary.add_child(lbl)
+
+	_info_btn = Button.new()
+	_info_btn.text = "ⓘ Подробнее"
+	_info_btn.tooltip_text = "Жильё, транспорт, репутация, образование, сезон, экономика и баффы"
+	_style_btn(_info_btn)
+	_info_btn.custom_minimum_size = Vector2(0, 22)
+	_info_btn.add_theme_font_size_override("font_size", 12)
+	_info_btn.focus_mode = Control.FOCUS_NONE
+	_info_btn.pressed.connect(_toggle_info_popover)
+	primary.add_child(_info_btn)
+
+	status_col.remove_child(row1)
+	status_col.remove_child(row2)
+	status_col.remove_child(row3)
+	status_col.add_child(primary)
+
+	# Поповер с второстепенными чипами
+	_info_popover = PanelContainer.new()
+	_info_popover.add_theme_stylebox_override("panel", UITheme.panel_box())
+	_info_popover.z_index = 30
+	_info_popover.visible = false
+	_info_popover.custom_minimum_size = Vector2(270, 0)
+	add_child(_info_popover)
+	var pv := VBoxContainer.new()
+	pv.add_theme_constant_override("separation", 7)
+	_info_popover.add_child(pv)
+	var hdr := Label.new()
+	hdr.text = "ⓘ Подробности"
+	hdr.add_theme_font_size_override("font_size", 13)
+	hdr.add_theme_color_override("font_color", HUD_GOLD)
+	pv.add_child(hdr)
+	pv.add_child(UITheme.gold_rule())
+	for r in [row1, row2, row3]:
+		r.add_theme_constant_override("separation", 16)
+		pv.add_child(r)
+
+func _toggle_info_popover() -> void:
+	if _info_popover == null:
+		return
+	if _info_popover.visible:
+		_info_popover.visible = false
+		return
+	_info_popover.visible = true
+	_info_popover.reset_size()
+	var bp: Rect2 = _info_btn.get_global_rect()
+	_info_popover.position = Vector2(bp.position.x, bp.position.y + bp.size.y + 6)
 
 func _section_divider() -> Control:
 	var d := ColorRect.new()
