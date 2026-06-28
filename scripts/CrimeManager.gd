@@ -376,6 +376,84 @@ func racket_heat_total() -> float:
 		total += float(racket_target(id).get("heat", 0.0))
 	return total
 
+# ── Заказные дела (разовые контракты) ─────────────────────────────────────────
+# Периодически «всплывает» жирный заказ: большой куш и авторитет, но много розыска.
+# В отличие от обычных дел — одноразовый и появляется со временем (чаще у авторитетных).
+const CONTRACTS := [
+	{"id":"smuggle", "name":"Крупная партия",        "icon":"🚛", "min_rep":25, "payout":800000.0,  "heat":30.0, "chance":0.60, "energy":18.0},
+	{"id":"arson",   "name":"Поджог конкурента",     "icon":"🔥", "min_rep":20, "payout":500000.0,  "heat":25.0, "chance":0.62, "energy":16.0},
+	{"id":"kidnap",  "name":"Похищение",             "icon":"🕳", "min_rep":35, "payout":1500000.0, "heat":38.0, "chance":0.52, "energy":22.0},
+	{"id":"hit",     "name":"Заказное устранение",   "icon":"🎯", "min_rep":45, "payout":2500000.0, "heat":45.0, "chance":0.48, "energy":24.0},
+	{"id":"vault",   "name":"Налёт по наводке",      "icon":"💎", "min_rep":55, "payout":6000000.0, "heat":50.0, "chance":0.42, "energy":28.0},
+]
+var current_contract: String = ""   # id предложенного заказа ("" — нет)
+
+func contract(id: String) -> Dictionary:
+	for c in CONTRACTS:
+		if c.id == id:
+			return c
+	return {}
+
+func has_contract() -> bool:
+	return current_contract != "" and not contract(current_contract).is_empty()
+
+func contract_chance(id: String) -> float:
+	var c := contract(id)
+	if c.is_empty():
+		return 0.0
+	return clampf(float(c.chance) + criminal_rep / 300.0 + gang_scheme_bonus() + lieutenant_bonus("schemes"), 0.05, 0.95)
+
+# Шанс появления нового заказа за день (выше у авторитетных).
+func contract_offer_chance() -> float:
+	return clampf(0.12 + float(rank()) * 0.05, 0.0, 0.5)
+
+# Сгенерировать заказ из доступных по авторитету (вызывается в process_day).
+func _roll_contract() -> void:
+	if has_contract() or randf() >= contract_offer_chance():
+		return
+	var pool: Array = []
+	for c in CONTRACTS:
+		if criminal_rep >= float(c.min_rep):
+			pool.append(c.id)
+	if pool.is_empty():
+		return
+	current_contract = pool[randi() % pool.size()]
+	emit_signal("crime_changed")
+	var es := get_node_or_null("/root/EventSystem")
+	if es and es.has_signal("event_triggered"):
+		es.event_triggered.emit({"text": "🕶 Поступил заказ: %s. Загляни в «Теневые дела»." % contract(current_contract).name, "money": 0, "health": 0})
+
+func decline_contract() -> void:
+	current_contract = ""
+	emit_signal("crime_changed")
+
+# Взяться за заказ. {ok, success, amount, reason}
+func attempt_contract() -> Dictionary:
+	if is_imprisoned():
+		return {"ok": false, "reason": "ты в тюрьме"}
+	if not has_contract():
+		return {"ok": false, "reason": "нет заказа"}
+	var c := contract(current_contract)
+	if criminal_rep < float(c.min_rep):
+		return {"ok": false, "reason": "мало авторитета"}
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or gm.energy < float(c.energy):
+		return {"ok": false, "reason": "нет сил"}
+	gm.energy = clampf(gm.energy - float(c.energy), 0.0, gm.stat_max())
+	gm.emit_signal("energy_changed", gm.energy)
+	var win: bool = randf() < contract_chance(current_contract)
+	add_heat(float(c.heat) * (1.0 if win else 1.5))
+	var res: Dictionary
+	if win:
+		add_dirty_money(float(c.payout))
+		add_criminal_rep(clampf(float(c.min_rep) * 0.12 + 3.0, 3.0, 12.0))
+		res = {"ok": true, "success": true, "amount": int(c.payout)}
+	else:
+		res = {"ok": true, "success": false, "amount": 0}
+	current_contract = ""   # заказ одноразовый
+	emit_signal("crime_changed")
+	return res
+
 # ── Отмыв денег ───────────────────────────────────────────────────────────────
 # Грязный нал нельзя тратить открыто: прогоняешь через бизнесы-«прачечные» с
 # комиссией. Чем больше своих бизнесов — тем выше дневной лимит и ниже комиссия.
@@ -654,6 +732,7 @@ func process_day() -> void:
 	bm_fluctuate()        # цены чёрного рынка колеблются
 	laundered_today = 0.0 # дневной лимит отмыва обновляется
 	if not is_imprisoned():
+		_roll_contract()        # шанс получить разовый заказ
 		_process_police_day()   # риск облавы (не трогают того, кто уже сидит)
 
 func save(cfg: ConfigFile) -> void:
@@ -670,6 +749,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "lieutenants", lieutenants)
 	cfg.set_value("crime", "controlled_zones", controlled_zones)
 	cfg.set_value("crime", "prison_days", prison_days)
+	cfg.set_value("crime", "current_contract", current_contract)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -685,6 +765,7 @@ func load_data(cfg: ConfigFile) -> void:
 	lieutenants = cfg.get_value("crime", "lieutenants", [])
 	controlled_zones = cfg.get_value("crime", "controlled_zones", [])
 	prison_days = cfg.get_value("crime", "prison_days", 0)
+	current_contract = cfg.get_value("crime", "current_contract", "")
 	_init_bm_prices()
 
 func reset() -> void:
@@ -701,4 +782,5 @@ func reset() -> void:
 	lieutenants = []
 	controlled_zones = []
 	prison_days = 0
+	current_contract = ""
 	_init_bm_prices()
