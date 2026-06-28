@@ -1390,6 +1390,11 @@ func wellbeing_label() -> String:
 func wellbeing_mult() -> float:
 	return 0.90 + wellbeing() / 100.0 * 0.20
 
+# Снижение расхода энергии на работе за счёт формы и воли (до -18%).
+# Тренированный и волевой человек меньше выматывается на смене (энергия↔навык).
+func stamina_relief() -> float:
+	return clampf((fitness - 50.0) / 50.0 * 0.12 + (skill("willpower") - 50.0) / 50.0 * 0.06, 0.0, 0.18)
+
 # При низком благополучии — риск дорогой ошибки в делах.
 func _wellbeing_tick() -> void:
 	if wellbeing() >= 35.0: return

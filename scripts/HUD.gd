@@ -1520,8 +1520,22 @@ func _refresh_meal_buff() -> void:
 		var n: Dictionary = gm.nutrition_label()
 		_nutrition_lbl.text = "%s %s" % [n.icon, n.name]
 		_nutrition_lbl.add_theme_color_override("font_color", n.color)
+	# Карьера (выслуга): надбавка к ставке за отработанные смены
+	if _career_lbl == null and gm.has_method("career_label"):
+		_career_lbl = Label.new()
+		_career_lbl.add_theme_font_size_override("font_size", 11)
+		_career_lbl.add_theme_color_override("font_color", Color(0.62, 0.80, 1.0))
+		$TopBar/Row/StatusCol/StatusRow3.add_child(_career_lbl)
+	if _career_lbl:
+		var c: Dictionary = gm.career_label()
+		if c.mult > 1.001:
+			_career_lbl.text = "💼 %s (ур.%d, +%d%% к ставке)" % [c.name, c.level, int(round((c.mult - 1.0) * 100))]
+			_career_lbl.visible = true
+		else:
+			_career_lbl.visible = false
 
 var _nutrition_lbl: Label = null
+var _career_lbl: Label = null
 
 func _on_event(event: Dictionary) -> void:
 	var sm := get_node_or_null("/root/SettingsManager")

@@ -307,9 +307,11 @@ const HEALTH_PER_H_HEAVY := 1.0
 
 func _hourly_rate() -> float:
 	# Доход от работы индексируется зарплатами ЦБ (растут с инфляцией, отстают в рецессию)
+	# и надбавкой за выслугу (карьерный рост).
 	var gm := get_node_or_null("/root/GameManager")
 	var wf: float = gm.wage_factor() if gm and gm.has_method("wage_factor") else 1.0
-	return (money_reward / 8.0) * wf
+	var cm: float = gm.career_pay_mult() if gm and gm.has_method("career_pay_mult") else 1.0
+	return (money_reward / 8.0) * wf * cm
 
 # Любая оплачиваемая смена (включая подработку в магазинах еды), но не казино/лечение
 func _is_paid_work() -> bool:
@@ -349,6 +351,8 @@ func _begin_shift(hours: int, gm: Node, am) -> void:
 	var housing_bonus: float = gm.get_housing_energy_drain_bonus() if gm.has_method("get_housing_energy_drain_bonus") else 0.0
 	gm.energy = clamp(gm.energy - _energy_cost(hours, housing_bonus), 0.0, 100.0)
 	gm.emit_signal("energy_changed", gm.energy)
+	if gm.has_method("add_work_xp"):
+		gm.add_work_xp(hours)   # выслуга растёт с каждой отработанной сменой
 	if is_heavy_labor:
 		gm.health = clamp(gm.health - HEALTH_PER_H_HEAVY * hours, 0.0, 100.0)
 		gm.emit_signal("health_changed", gm.health)

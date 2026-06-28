@@ -390,6 +390,30 @@ func add_work_income(amount: float) -> void:
 	month_wage_income += amount
 	add_money(amount)
 
+# ── Карьера (выслуга на работе) ───────────────────────────────────────────────
+# Чем больше смен отработано, тем выше квалификация и ставка: за выслугу растёт
+# надбавка к оплате (до +50%). Опыт копится в часах отработанных смен.
+var work_xp: float = 0.0
+const CAREER_XP_MAX := 2400.0   # часов смен до максимального уровня
+const CAREER_NAMES := ["Новичок", "Стажёр", "Работник", "Опытный", "Профи",
+	"Мастер", "Эксперт", "Ас", "Гуру", "Легенда"]
+
+func add_work_xp(hours: float) -> void:
+	work_xp += maxf(0.0, hours)
+
+func career_progress() -> float:
+	return clampf(work_xp / CAREER_XP_MAX, 0.0, 1.0)
+
+func career_pay_mult() -> float:
+	return 1.0 + career_progress() * 0.5   # надбавка за выслугу: до +50% к ставке
+
+func career_level() -> int:
+	return 1 + int(career_progress() * 9.0 + 0.0001)   # 1..10
+
+func career_label() -> Dictionary:
+	var lvl: int = career_level()
+	return {"level": lvl, "name": CAREER_NAMES[clampi(lvl - 1, 0, 9)], "mult": career_pay_mult()}
+
 func spend_money(amount: float) -> bool:
 	if money < amount:
 		return false
@@ -991,10 +1015,16 @@ func get_title() -> String:
 func get_housing() -> String:
 	return HOUSINGS[current_housing_index].name
 
-# Бонус жилья к расходу энергии на работе: 0.0 (нет жилья) .. 0.40 (-40% на лучшем жильё)
+# Снижение расхода энергии на работе. Жильё даёт до -40%, а физическая форма и
+# воля (навыки из «Жизни») — ещё до -18%: тренированный человек меньше устаёт.
 func get_housing_energy_drain_bonus() -> float:
 	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
-	return lerpf(0.0, 0.40, clampf(tier / 10.0, 0.0, 1.0))
+	var housing: float = lerpf(0.0, 0.40, clampf(tier / 10.0, 0.0, 1.0))
+	var skill_relief: float = 0.0
+	var life := get_node_or_null("/root/LifeManager")
+	if life and life.has_method("stamina_relief"):
+		skill_relief = life.stamina_relief()
+	return clampf(housing + skill_relief, 0.0, 0.60)
 
 func get_monthly_income() -> float:
 	var bm: Node = get_node_or_null("/root/BusinessManager")
@@ -1101,6 +1131,7 @@ func save_game() -> void:
 	cfg.set_value("player", "tutorial_done", tutorial_done)
 	cfg.set_value("player", "month_wage_income", month_wage_income)
 	cfg.set_value("player", "total_wage_tax", total_wage_tax)
+	cfg.set_value("player", "work_xp", work_xp)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.save(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -1237,6 +1268,7 @@ func load_game() -> void:
 	tutorial_done = cfg.get_value("player", "tutorial_done", true)
 	month_wage_income = cfg.get_value("player", "month_wage_income", 0.0)
 	total_wage_tax = cfg.get_value("player", "total_wage_tax", 0.0)
+	work_xp = cfg.get_value("player", "work_xp", 0.0)
 	var bm = get_node_or_null("/root/BusinessManager")
 	if bm: bm.load(cfg)
 	var qm = get_node_or_null("/root/QuestManager")
@@ -1278,7 +1310,7 @@ func _reset_state() -> void:
 	meal_buff_days = 0; meal_drain_bonus = 0.0; nutrition_score = 60.0
 	max_stat = 100.0; max_stat_days = 0; _collapsing = false
 	tutorial_done = false   # новая игра — показать обучение
-	month_wage_income = 0.0; total_wage_tax = 0.0
+	month_wage_income = 0.0; total_wage_tax = 0.0; work_xp = 0.0
 	# Стартовый сезон по сложности: легко-весна, средне-лето, тяжело-осень, хардкор-зима
 	var sm_diff = get_node_or_null("/root/SettingsManager")
 	var diff: String = sm_diff.difficulty if sm_diff else "normal"
