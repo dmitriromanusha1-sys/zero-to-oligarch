@@ -1087,6 +1087,11 @@ func get_finance() -> Dictionary:
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm and lm.has_method("get_monthly_total"):
 		expense += (lm.get_monthly_total() as float) / 30.0
+	# Контракт: зарплата (ожидаемая дневная) и проезд
+	var jm_fin = get_node_or_null("/root/EmploymentManager")
+	if jm_fin and jm_fin.has_method("is_employed") and jm_fin.is_employed():
+		income += jm_fin.expected_daily_wage()
+		expense += jm_fin.daily_commute()
 	return {"income": income, "expense": expense, "networth": get_net_worth()}
 
 # ── Экономика: влияние инфляции на цены и доход ───────────────────────────────

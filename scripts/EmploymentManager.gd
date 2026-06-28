@@ -399,6 +399,22 @@ func process_payday() -> void:
 	accrued = 0.0
 	days_worked = 0
 
+# Ожидаемый дневной заработок по контракту (для экрана «Финансы»; без случайного
+# коэффициента — оценочно, с учётом занятости и грейда).
+func expected_daily_wage() -> float:
+	if not is_employed():
+		return 0.0
+	return float(monthly_salary(current_position())) * occupancy_fraction() * grade_mult() / 30.0
+
+# Дневные расходы на проезд до работы.
+func daily_commute() -> float:
+	if not is_employed():
+		return 0.0
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.has_method("shop_price"):
+		return 0.0
+	return float(gm.shop_price(150)) * occupancy_fraction()
+
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("employment", "employer_id", employer_id)
 	cfg.set_value("employment", "pos_index", pos_index)

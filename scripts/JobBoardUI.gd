@@ -99,6 +99,11 @@ func _rebuild() -> void:
 	if pm and pm.has_profession() and pm.perk_text(pm.profession) != "":
 		_lbl(_vb, "✨ Бонус профессии: " + pm.perk_text(pm.profession), Color(0.55, 0.80, 0.62), 11)
 	_lbl(_vb, "Подбери вакансию под себя — или выучи профессию, чтобы открыть новые.", Color(0.62, 0.64, 0.72), 11)
+	var avail_total: int = 0
+	for eid_c in jm.employer_ids():
+		avail_total += jm.available_for_player(eid_c).size()
+	var avail_col: Color = UITheme.GREEN if avail_total > 0 else Color(0.8, 0.6, 0.45)
+	_lbl(_vb, "Доступно тебе сейчас: %d вакансий" % avail_total, avail_col, 12)
 	_sep()
 
 	# Текущая работа
