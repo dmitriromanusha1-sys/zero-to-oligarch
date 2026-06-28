@@ -53,6 +53,7 @@ var _journal: CanvasLayer = null
 var _journal_btn: Button = null
 var _life_btn: Button = null
 var _work_btn: Button = null
+var _crime_btn: Button = null
 var _system_btn: Button = null
 
 # Компактная верхняя панель (Фаза 1 «капремонта»)
@@ -100,6 +101,9 @@ func _ready() -> void:
 	var jm_hud := get_node_or_null("/root/EmploymentManager")
 	if jm_hud and jm_hud.has_signal("employment_changed"):
 		jm_hud.employment_changed.connect(func(): if _profession_lbl: _refresh_meal_buff())
+	var cm_hud := get_node_or_null("/root/CrimeManager")
+	if cm_hud and cm_hud.has_signal("crime_changed"):
+		cm_hud.crime_changed.connect(func(): if _heat_lbl: _refresh_meal_buff())
 
 	_setup_quest_tracker()
 	_style_hud()
@@ -189,7 +193,7 @@ func _ready() -> void:
 const _MODAL_GROUPS := ["shift_ui", "sleep_ui", "food_shop", "business_shop",
 	"education_shop", "transport_shop", "radio_shop", "casino_ui", "stock_ui",
 	"travel_agency_ui", "loan_ui", "exam_ui", "quest_ui", "settings_ui",
-	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui", "life_ui", "jobboard_ui"]
+	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui", "life_ui", "jobboard_ui", "crime_ui"]
 
 func _is_blocking_ui_open() -> bool:
 	if _game_over_shown or pause_menu.visible:
@@ -627,6 +631,16 @@ func _setup_journal_and_system(am: Node) -> void:
 		var jb = get_tree().get_first_node_in_group("jobboard_ui")
 		if jb and jb.has_method("open"): jb.open())
 
+	# «Криминал»: теневые дела
+	_crime_btn = Button.new()
+	_crime_btn.tooltip_text = "Теневые дела: чёрный рынок, рэкет, банда, районы"
+	dock.add_child(_crime_btn)
+	_style_dock_btn(_crime_btn, "🕶")
+	_crime_btn.pressed.connect(func():
+		if am: am.play_click()
+		var cu = get_tree().get_first_node_in_group("crime_ui")
+		if cu and cu.has_method("open"): cu.open())
+
 	# «Система»: Настройки / Главное меню
 	_system_btn = Button.new()
 	_system_btn.tooltip_text = "Настройки и выход в главное меню"
@@ -640,8 +654,8 @@ func _setup_journal_and_system(am: Node) -> void:
 			 "cb": func(): _go_to_menu()},
 		], am))
 
-	# Порядок категорий: Следующий день · Быт · Финансы · Работа · Жизнь · Журнал · Система
-	var order := [sleep_btn, _household_btn, _invest_btn, _work_btn, _life_btn, _journal_btn, _system_btn]
+	# Порядок категорий: Следующий день · Быт · Финансы · Работа · Жизнь · Журнал · Криминал · Система
+	var order := [sleep_btn, _household_btn, _invest_btn, _work_btn, _life_btn, _journal_btn, _crime_btn, _system_btn]
 	for i in order.size():
 		if order[i] and is_instance_valid(order[i]):
 			dock.move_child(order[i], i)
@@ -1560,10 +1574,29 @@ func _refresh_meal_buff() -> void:
 		if jmn and jmn.is_employed():
 			t += " · 💼 %s (%s)" % [jmn.current_employer_name(), jmn.grade_name()]
 		_profession_lbl.text = t
+	# Розыск/криминал — показываем только когда замешан
+	var cmn := get_node_or_null("/root/CrimeManager")
+	if _heat_lbl == null and cmn:
+		_heat_lbl = Label.new()
+		_heat_lbl.add_theme_font_size_override("font_size", 11)
+		$TopBar/Row/StatusCol/StatusRow3.add_child(_heat_lbl)
+	if _heat_lbl and cmn:
+		if cmn.is_imprisoned():
+			_heat_lbl.text = "🚓 Тюрьма: %d дн." % cmn.prison_days
+			_heat_lbl.add_theme_color_override("font_color", Color(0.95, 0.5, 0.45))
+			_heat_lbl.visible = true
+		elif cmn.is_criminal():
+			var hl: Dictionary = cmn.heat_label()
+			_heat_lbl.text = "🚨 Розыск %d · %s (%s)" % [int(cmn.heat), cmn.rank_name(), hl.name]
+			_heat_lbl.add_theme_color_override("font_color", hl.color)
+			_heat_lbl.visible = true
+		else:
+			_heat_lbl.visible = false
 
 var _nutrition_lbl: Label = null
 var _career_lbl: Label = null
 var _profession_lbl: Label = null
+var _heat_lbl: Label = null
 
 func _on_event(event: Dictionary) -> void:
 	var sm := get_node_or_null("/root/SettingsManager")
