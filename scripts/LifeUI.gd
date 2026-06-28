@@ -6,6 +6,15 @@ var gm
 var life
 var _panel: PanelContainer
 var _vb: VBoxContainer
+var _active_tab: int = 0
+
+const TABS: Array = [
+	{"icon":"👤", "name":"Я"},
+	{"icon":"❤", "name":"Семья"},
+	{"icon":"🎭", "name":"Социум"},
+	{"icon":"🩺", "name":"Здоровье"},
+	{"icon":"🏛", "name":"Наследие"},
+]
 
 func _ready() -> void:
 	layer = 22
@@ -81,7 +90,48 @@ func _rebuild() -> void:
 	_lbl(_vb, "До дня рождения: %d дн." % life.days_to_birthday(), Color(0.66, 0.64, 0.76), 11)
 	_sep()
 
-	# Счастье
+	_vb.add_child(_tab_bar())
+	_sep()
+	match _active_tab:
+		0: _tab_me()
+		1: _tab_family()
+		2: _tab_society()
+		3: _tab_health()
+		4: _tab_legacy()
+
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 8)
+	_vb.add_child(spacer)
+	var close_btn := Button.new()
+	close_btn.text = "Закрыть"
+	close_btn.add_theme_font_size_override("font_size", 16)
+	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
+	close_btn.pressed.connect(close)
+	_vb.add_child(close_btn)
+
+func _tab_bar() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	for i in range(TABS.size()):
+		var t: Dictionary = TABS[i]
+		var b := Button.new()
+		b.text = "%s %s" % [t.icon, t.name]
+		b.add_theme_font_size_override("font_size", 11)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var active: bool = (i == _active_tab)
+		var bg: Color = Color(0.22, 0.18, 0.30) if active else Color(0.11, 0.10, 0.14)
+		var bd: Color = Color(0.65, 0.55, 0.85) if active else Color(0.30, 0.28, 0.38)
+		_style(b, bg, bd)
+		if not active:
+			var idx: int = i
+			b.pressed.connect(func():
+				_active_tab = idx
+				_rebuild())
+		row.add_child(b)
+	return row
+
+# ── Вкладка «Я»: настроение, благополучие, тело, навыки ───────────────────────
+func _tab_me() -> void:
 	_header("🙂 Настроение")
 	_lbl(_vb, "Счастье: %d%%  ·  %s" % [int(round(life.happiness)), life.mood_label()], life.mood_color(), 14)
 	_vb.add_child(_bar(life.happiness / 100.0, life.mood_color()))
@@ -89,7 +139,6 @@ func _rebuild() -> void:
 	var pm: float = life.productivity_mult()
 	var pcol: Color = Color(0.55, 0.9, 0.6) if pm >= 1.0 else Color(0.95, 0.55, 0.5)
 	_lbl(_vb, "Продуктивность работы: ×%.2f" % pm, pcol, 12)
-	# Благополучие — влияет на весь доход
 	var wb: float = life.wellbeing()
 	var wm: float = life.wellbeing_mult()
 	var wcol: Color = Color(0.55, 0.9, 0.6) if wb >= 60.0 else (Color(0.9, 0.8, 0.45) if wb >= 35.0 else Color(0.95, 0.55, 0.5))
@@ -99,7 +148,6 @@ func _rebuild() -> void:
 		_lbl(_vb, "⚠ Упадок сил грозит дорогими ошибками в делах.", Color(0.95, 0.55, 0.5), 11)
 	_sep()
 
-	# Тело и форма
 	_header("💪 Тело и форма")
 	_lbl(_vb, "Физическая форма: %d%%" % int(round(life.fitness)), Color(0.7, 0.85, 0.95), 12)
 	_vb.add_child(_bar(life.fitness / 100.0, Color(0.45, 0.7, 0.95)))
@@ -111,7 +159,6 @@ func _rebuild() -> void:
 	_vb.add_child(_action_card("groom"))
 	_sep()
 
-	# Личные навыки
 	_header("🧠 Личные навыки")
 	if gm.day <= life._last_dev_day:
 		_lbl(_vb, "Сегодня вы уже занимались саморазвитием.", Color(0.64, 0.62, 0.72), 11)
@@ -119,9 +166,9 @@ func _rebuild() -> void:
 		_lbl(_vb, "Одно занятие в день · %s" % gm.format_money(life.dev_cost()), Color(0.64, 0.62, 0.72), 11)
 	for sk in life.SKILLS:
 		_vb.add_child(_skill_card(sk))
-	_sep()
 
-	# Личная жизнь
+# ── Вкладка «Семья»: личная жизнь и дети ──────────────────────────────────────
+func _tab_family() -> void:
 	_header("❤ Личная жизнь")
 	if not life.is_single():
 		var nm: String = String(life.partner.get("name", "?"))
@@ -174,9 +221,9 @@ func _rebuild() -> void:
 		_lbl(_vb, "Большая семья — больше детей некуда.", Color(0.64, 0.62, 0.7), 11)
 	elif not life.is_single():
 		_vb.add_child(_family_card())
-	_sep()
 
-	# Друзья
+# ── Вкладка «Социум»: друзья, статус, хобби, роскошь ──────────────────────────
+func _tab_society() -> void:
 	_header("👥 Круг общения")
 	if life.friend_count() > 0:
 		_lbl(_vb, "Друзей: %d · близких: %d" % [life.friend_count(), life.close_friends()], Color(0.8, 0.82, 0.9), 12)
@@ -216,9 +263,9 @@ func _rebuild() -> void:
 		Color(0.92, 0.82, 0.6), 12)
 	for l in life.LUXURIES:
 		_vb.add_child(_luxury_card(l))
-	_sep()
 
-	# Пороки
+# ── Вкладка «Здоровье»: пороки, ментальное, медицина ──────────────────────────
+func _tab_health() -> void:
 	_header("🍷 Пороки и зависимости")
 	if life.avg_addiction() > 1.0:
 		_lbl(_vb, "⚠ Зависимости подтачивают счастье и здоровье.", Color(0.95, 0.55, 0.5), 11)
@@ -248,9 +295,9 @@ func _rebuild() -> void:
 			_vb.add_child(_illness_card(id))
 	if life.medical_tier + 1 < life.MEDICAL_TIERS.size():
 		_vb.add_child(_medical_card())
-	_sep()
 
-	# Завещание и наследство
+# ── Вкладка «Наследие»: завещание и память ────────────────────────────────────
+func _tab_legacy() -> void:
 	_header("📜 Завещание и наследство")
 	var plan = life.ESTATE_PLANS[life.estate_planning]
 	_lbl(_vb, "Состояние: %s · налог на наследство %d%%" % [
@@ -279,16 +326,6 @@ func _rebuild() -> void:
 	_lbl(_vb, "Монументы вашего имени:", Color(0.66, 0.7, 0.66), 11)
 	for p in life.LEGACY_PROJECTS:
 		_vb.add_child(_project_card(p))
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 8)
-	_vb.add_child(spacer)
-	var close_btn := Button.new()
-	close_btn.text = "Закрыть"
-	close_btn.add_theme_font_size_override("font_size", 16)
-	_style(close_btn, Color(0.14, 0.12, 0.18), Color(0.45, 0.4, 0.6))
-	close_btn.pressed.connect(close)
-	_vb.add_child(close_btn)
 
 func _charity_card(c: Dictionary) -> PanelContainer:
 	var cid: String = c.id
