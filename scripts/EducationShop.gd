@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	header.add_child(cls)
 
 	var hint := Label.new()
-	hint.text = "Чтобы получить уровень — сдай экзамен (мини-игра). Образование открывает новые работы и улучшает зоны мини-игры."
+	hint.text = "Уровень образования — через экзамен (мини-игра). Ниже можно выучить профессию (квалификацию): она открывает должности на бирже труда и даёт бонус на всю игру."
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -220,6 +220,104 @@ func _refresh() -> void:
 				locked_lbl.add_theme_color_override("font_color", Color(0.5, 0.2, 0.2))
 				locked_lbl.tooltip_text = "Недоступно в этом учреждении"
 			row.add_child(locked_lbl)
+
+	_build_professions()
+
+# ── Профессии (квалификация) ──────────────────────────────────────────────────
+func _build_professions() -> void:
+	var pm := get_node_or_null("/root/ProfessionManager")
+	if pm == null:
+		return
+	_content.add_child(HSeparator.new())
+	var hdr := Label.new()
+	hdr.text = "🧑‍🏭 Профессии (квалификация)"
+	hdr.add_theme_font_size_override("font_size", 17)
+	hdr.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	_content.add_child(hdr)
+
+	var cur := Label.new()
+	cur.text = ("Твоя профессия: %s %s" % [pm.current_icon(), pm.current_name()]) if pm.has_profession() else "Твоя профессия: 👤 не выбрана"
+	cur.add_theme_font_size_override("font_size", 13)
+	cur.add_theme_color_override("font_color", Color(0.7, 0.85, 0.95))
+	_content.add_child(cur)
+
+	var note := Label.new()
+	note.text = "Профессия открывает профильные должности на бирже труда и даёт бонус на всю игру. Можно переучиться в любой момент."
+	note.add_theme_font_size_override("font_size", 11)
+	note.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_content.add_child(note)
+
+	for prof in pm.PROFESSIONS:
+		_profession_row(pm, prof)
+
+func _profession_row(pm: Node, prof: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+
+	var icon := Label.new()
+	icon.text = String(prof.icon)
+	icon.add_theme_font_size_override("font_size", 20)
+	icon.custom_minimum_size = Vector2(30, 30)
+	row.add_child(icon)
+
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+	var name_l := Label.new()
+	name_l.text = String(prof.name)
+	name_l.add_theme_font_size_override("font_size", 14)
+	info.add_child(name_l)
+	var req_edu: String = String(_em.LEVELS[int(prof.min_edu)].name)
+	var sub := Label.new()
+	sub.text = "%s · нужно: 🎓 %s · цена: %s" % [prof.desc, req_edu, _gm.format_money(pm.learn_cost(prof.id))]
+	sub.add_theme_font_size_override("font_size", 10)
+	sub.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62))
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD
+	info.add_child(sub)
+
+	if pm.profession == prof.id:
+		var cur_b := Label.new()
+		cur_b.text = "✓ Текущая"
+		cur_b.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
+		cur_b.add_theme_font_size_override("font_size", 13)
+		row.add_child(cur_b)
+	elif pm.can_learn(prof.id):
+		var price: int = pm.learn_cost(prof.id)
+		var can_afford: bool = _gm.money >= price
+		var btn := Button.new()
+		btn.text = "Выучить" if can_afford else "Нет денег"
+		btn.custom_minimum_size = Vector2(110, 36)
+		btn.add_theme_font_size_override("font_size", 12)
+		var bs := StyleBoxFlat.new()
+		bs.bg_color = Color(0.06, 0.14, 0.10) if can_afford else Color(0.12, 0.10, 0.10)
+		bs.border_color = Color(0.25, 0.58, 0.30, 0.85) if can_afford else Color(0.4, 0.3, 0.3)
+		for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+			bs.set_border_width(s, 1)
+			bs.set_corner_radius(s, 6)
+		btn.add_theme_stylebox_override("normal", bs)
+		if can_afford:
+			btn.pressed.connect(_learn_profession.bind(prof.id))
+		else:
+			btn.disabled = true
+			btn.modulate = Color(0.6, 0.6, 0.6)
+		row.add_child(btn)
+	else:
+		var lock := Label.new()
+		lock.text = "🔒"
+		lock.add_theme_font_size_override("font_size", 18)
+		lock.tooltip_text = "Нужно образование: " + req_edu
+		row.add_child(lock)
+
+func _learn_profession(id: String) -> void:
+	var am: Node = get_node_or_null("/root/AudioManager")
+	var pm := get_node_or_null("/root/ProfessionManager")
+	if pm and pm.learn(id):
+		if am: am.play_level_up()
+		_refresh()
+	else:
+		if am: am.play_negative()
 
 func _buy() -> void:
 	var am: Node = get_node_or_null("/root/AudioManager")
