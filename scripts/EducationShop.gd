@@ -276,6 +276,11 @@ func _profession_row(pm: Node, prof: Dictionary) -> void:
 	sub.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62))
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD
 	info.add_child(sub)
+	var perk := Label.new()
+	perk.text = "✨ Бонус: " + pm.perk_text(prof.id)
+	perk.add_theme_font_size_override("font_size", 10)
+	perk.add_theme_color_override("font_color", Color(0.55, 0.80, 0.62))
+	info.add_child(perk)
 
 	if pm.profession == prof.id:
 		var cur_b := Label.new()

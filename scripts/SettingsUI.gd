@@ -88,8 +88,8 @@ func _ensure_built() -> void:
 func _apply_panel_style(hc: bool) -> void:
 	if hc:
 		var ps := StyleBoxFlat.new()
-		ps.bg_color = Color(0.0, 0.0, 0.0, 1.0)
-		ps.border_color = Color(1.0, 1.0, 0.0, 1.0)
+		ps.bg_color = UITheme.PANEL
+		ps.border_color = UITheme.GOLD_DIM
 		ps.set_border_width_all(3)
 		ps.set_corner_radius_all(14)
 		_panel.add_theme_stylebox_override("panel", ps)

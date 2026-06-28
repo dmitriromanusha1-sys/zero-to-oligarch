@@ -37,7 +37,7 @@ func _build_ui() -> void:
 	_panel.size     = Vector2(860, 700)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color     = Color(0.04, 0.05, 0.09, 0.98)
-	ps.border_color = Color(0.20, 0.55, 0.30, 0.90)
+	ps.border_color = UITheme.GOLD_DIM
 	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
 		ps.set_border_width(s, 2)
 		ps.set_corner_radius(s, 12)

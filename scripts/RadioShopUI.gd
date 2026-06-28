@@ -40,7 +40,7 @@ func _build_ui() -> void:
 	_panel.position = Vector2(-270, -220)
 	var ps = StyleBoxFlat.new()
 	ps.bg_color = Color(0.040, 0.047, 0.100, 0.98)
-	ps.border_color = Color(0.70, 0.30, 0.75, 0.90)
+	ps.border_color = UITheme.GOLD_DIM
 	ps.set_border_width_all(2)
 	ps.set_corner_radius_all(14)
 	_panel.add_theme_stylebox_override("panel", ps)

@@ -96,6 +96,8 @@ func _rebuild() -> void:
 	var prof_txt: String = (pm.current_icon() + " " + pm.current_name()) if (pm and pm.has_profession()) else "👤 Без профессии"
 	var edu_txt: String = (em.get_level_icon() + " " + em.get_level_name()) if em else ""
 	_lbl(_vb, "Твоя квалификация:  %s   ·   %s" % [prof_txt, edu_txt], Color(0.82, 0.84, 0.92), 13)
+	if pm and pm.has_profession() and pm.perk_text(pm.profession) != "":
+		_lbl(_vb, "✨ Бонус профессии: " + pm.perk_text(pm.profession), Color(0.55, 0.80, 0.62), 11)
 	_lbl(_vb, "Подбери вакансию под себя — или выучи профессию, чтобы открыть новые.", Color(0.62, 0.64, 0.72), 11)
 	_sep()
 

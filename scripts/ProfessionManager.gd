@@ -88,6 +88,25 @@ func work_pay_mult(job_profession: String) -> float:
 func matches(job_profession: String) -> bool:
 	return job_profession != "" and job_profession == profession
 
+# Короткое описание профильного бонуса (для UI).
+const PERK_TEXT := {
+	"worker": "−усталость на работе",
+	"driver": "−5% к расходам",
+	"mechanic": "−усталость на работе",
+	"cook": "+питательность рациона",
+	"service": "+25% к росту репутации",
+	"manager": "+6% к доходу бизнеса",
+	"accountant": "−8% к расходам",
+	"programmer": "+20% к прокачке навыков",
+	"lawyer": "−15% подоходного налога",
+	"doctor": "−20% на медицину",
+	"financier": "+2% к ставке вклада",
+	"scientist": "−15% на обучение",
+}
+
+func perk_text(id: String) -> String:
+	return PERK_TEXT.get(id, "")
+
 # ── Профильные баффы: профессия влияет на всю игру (не только на работе) ───────
 func wage_tax_mult() -> float:        # ⚖️ юрист — меньше подоходного налога
 	return 0.85 if profession == "lawyer" else 1.0
