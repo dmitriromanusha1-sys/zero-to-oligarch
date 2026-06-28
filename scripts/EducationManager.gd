@@ -47,10 +47,15 @@ func get_zone_weights() -> Array:
 
 # Скидка на обучение от интеллекта: умным проще учиться (до -20%, до +10% «тяжело»).
 func tuition_mult() -> float:
+	var m: float = 1.0
 	var life := get_node_or_null("/root/LifeManager")
 	if life and life.has_method("skill"):
-		return clampf(1.0 - (life.skill("intellect") - 50.0) / 50.0 * 0.20, 0.80, 1.10)
-	return 1.0
+		m = clampf(1.0 - (life.skill("intellect") - 50.0) / 50.0 * 0.20, 0.80, 1.10)
+	# 🔬 учёный — дополнительная скидка на обучение
+	var prof := get_node_or_null("/root/ProfessionManager")
+	if prof and prof.has_method("tuition_perk_mult"):
+		m *= prof.tuition_perk_mult()
+	return m
 
 # Итоговая цена уровня с учётом инфляции и скидки за интеллект.
 func price_for(next_i: int) -> int:

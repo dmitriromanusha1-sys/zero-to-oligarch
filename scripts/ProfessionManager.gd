@@ -88,6 +88,39 @@ func work_pay_mult(job_profession: String) -> float:
 func matches(job_profession: String) -> bool:
 	return job_profession != "" and job_profession == profession
 
+# ── Профильные баффы: профессия влияет на всю игру (не только на работе) ───────
+func wage_tax_mult() -> float:        # ⚖️ юрист — меньше подоходного налога
+	return 0.85 if profession == "lawyer" else 1.0
+
+func deposit_rate_bonus() -> float:   # 📈 финансист — выше ставка по вкладу
+	return 0.02 if profession == "financier" else 0.0
+
+func medical_cost_mult() -> float:    # 🩺 врач — дешевле медицина
+	return 0.80 if profession == "doctor" else 1.0
+
+func nutrition_quality_bonus() -> float:  # 🍳 повар — питательнее рацион
+	return 8.0 if profession == "cook" else 0.0
+
+func business_income_mult() -> float:     # 💼 менеджер — выше доход бизнеса
+	return 1.06 if profession == "manager" else 1.0
+
+func tuition_perk_mult() -> float:        # 🔬 учёный — дешевле обучение
+	return 0.85 if profession == "scientist" else 1.0
+
+func reputation_gain_mult() -> float:     # 💇 сфера услуг — быстрее репутация
+	return 1.25 if profession == "service" else 1.0
+
+func skill_gain_mult() -> float:          # 💻 программист — быстрее прокачка навыков
+	return 1.20 if profession == "programmer" else 1.0
+
+func expense_mult() -> float:             # 🧮 бухгалтер / 🚚 водитель — ниже расходы
+	if profession == "accountant": return 0.92
+	if profession == "driver": return 0.95
+	return 1.0
+
+func work_energy_perk() -> float:         # 🧹 разнорабочий / 🔧 механик — меньше устаёшь
+	return 0.06 if (profession == "worker" or profession == "mechanic") else 0.0
+
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("profession", "id", profession)
 

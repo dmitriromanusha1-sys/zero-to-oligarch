@@ -426,7 +426,12 @@ func upgrade_medical() -> bool:
 	return true
 
 func medical_monthly() -> float:
-	return float(gm.shop_price(int(MEDICAL_TIERS[medical_tier].get("upkeep", 0))))
+	var base: float = float(gm.shop_price(int(MEDICAL_TIERS[medical_tier].get("upkeep", 0))))
+	# Врач — дешевле медицина (профильный бафф)
+	var prof := get_node_or_null("/root/ProfessionManager")
+	if prof and prof.has_method("medical_cost_mult"):
+		base *= prof.medical_cost_mult()
+	return base
 
 func _illness_tick() -> void:
 	# Урон от активных болезней
@@ -1100,6 +1105,10 @@ func skill(id: String) -> float:
 
 # Прямое начисление навыка/формы (используется образованием и др. системами).
 func gain_skill(id: String, amount: float) -> void:
+	# Программист прокачивается быстрее (профильный бафф)
+	var prof := get_node_or_null("/root/ProfessionManager")
+	if prof and prof.has_method("skill_gain_mult"):
+		amount *= prof.skill_gain_mult()
 	if id == "fitness":
 		fitness = clampf(fitness + amount, 0.0, 100.0)
 	elif skills.has(id):
@@ -1117,6 +1126,9 @@ func train_skill(id: String) -> bool:
 	if not gm.spend_money(dev_cost()): return false
 	var cur: float = skill(id)
 	var gain: float = (100.0 - cur) * 0.08 + 1.0   # медленнее у потолка
+	var prof_t := get_node_or_null("/root/ProfessionManager")
+	if prof_t and prof_t.has_method("skill_gain_mult"):
+		gain *= prof_t.skill_gain_mult()
 	skills[id] = clampf(cur + gain, 0.0, 100.0)
 	add_happiness(0.5)
 	_last_dev_day = gm.day

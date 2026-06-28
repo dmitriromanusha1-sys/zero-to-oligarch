@@ -14,6 +14,11 @@ const LEVELS := [
 ]
 
 func add(amount: int) -> void:
+	# 💇 сфера услуг — быстрее растёт репутация (только прирост, не штрафы)
+	if amount > 0:
+		var prof := get_node_or_null("/root/ProfessionManager")
+		if prof and prof.has_method("reputation_gain_mult"):
+			amount = int(round(amount * prof.reputation_gain_mult()))
 	reputation = clampi(reputation + amount, 0, 100)
 	reputation_changed.emit(reputation)
 

@@ -236,6 +236,10 @@ func get_tiered_rate() -> float:
 	# Крупные вкладчики получают лучший множитель — как в реальном банке.
 	var cb: Node = get_node_or_null("/root/CentralBankManager")
 	var base: float = cb.get_deposit_rate() if cb else 0.0425
+	# 📈 финансист — прибавка к ставке вклада
+	var prof := get_node_or_null("/root/ProfessionManager")
+	if prof and prof.has_method("deposit_rate_bonus"):
+		base += prof.deposit_rate_bonus()
 	if bank_deposit >= 10_000_000: return base * 2.40
 	if bank_deposit >= 1_000_000:  return base * 1.80
 	if bank_deposit >= 100_000:    return base * 1.20
@@ -452,7 +456,11 @@ func get_daily_income() -> float:
 			wb = life.wellbeing_mult()           # личное благополучие владельца
 		if life.has_method("clan_income_mult"):
 			clan = life.clan_income_mult()       # взрослые дети в семейном деле
-	return get_gross_income() * owner_fraction * pol_mult * wb * clan
+	var prof_mult: float = 1.0
+	var prof := get_node_or_null("/root/ProfessionManager")
+	if prof and prof.has_method("business_income_mult"):
+		prof_mult = prof.business_income_mult()   # 💼 менеджер — выше доход бизнеса
+	return get_gross_income() * owner_fraction * pol_mult * wb * clan * prof_mult
 
 # Суммарная стоимость всех бизнесов империи.
 func get_empire_value() -> float:
