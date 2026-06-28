@@ -92,6 +92,53 @@ func bm_fluctuate() -> void:
 		bm_prices[g.id] = clampf(p, 0.5, 2.0)
 	emit_signal("crime_changed")
 
+# ── Коррупция и иммунитет ─────────────────────────────────────────────────────
+# Взятки ментам сбивают розыск (дороже при высоком heat, дешевле со связями в
+# полиции из ветки «Влияние»). «Крыша сверху» — оплаченный иммунитет на срок:
+# розыск спадает быстрее.
+var protection_days: int = 0
+const BRIBE_COST_PER_HEAT := 25000.0
+const PROTECTION_DAYS := 30
+
+func police_connection() -> int:
+	var inf := get_node_or_null("/root/InfluenceManager")
+	return inf.connection_level("police") if inf and inf.has_method("connection_level") else 0
+
+func bribe_cost_per_heat() -> float:
+	var disc: float = maxf(0.40, 1.0 - 0.15 * float(police_connection()))   # связи — до −60%
+	return BRIBE_COST_PER_HEAT * (1.0 + heat / 50.0) * disc
+
+# Дать взятку: тратит чистые деньги, сбивает розыск. {ok, cooled, spent}
+func bribe_police(amount: float) -> Dictionary:
+	if amount <= 0.0 or heat <= 0.0:
+		return {"ok": false, "reason": "нечего сбивать"}
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null:
+		return {"ok": false, "reason": "нет денег"}
+	var cph: float = bribe_cost_per_heat()
+	var cooled: float = minf(heat, minf(amount, gm.money) / cph)
+	var cost: float = cooled * cph
+	if cooled <= 0.0 or not gm.spend_money(cost):
+		return {"ok": false, "reason": "нет денег"}
+	cool_heat(cooled)
+	emit_signal("crime_changed")
+	return {"ok": true, "cooled": cooled, "spent": cost}
+
+func protection_cost() -> int:
+	return int(2_000_000.0 * maxf(0.50, 1.0 - 0.10 * float(police_connection())))
+
+func has_protection() -> bool:
+	return protection_days > 0
+
+# Купить «крышу сверху»: +30 дней иммунитета (розыск спадает быстрее).
+func buy_protection() -> bool:
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.spend_money(protection_cost()):
+		return false
+	protection_days += PROTECTION_DAYS
+	emit_signal("crime_changed")
+	return true
+
 # ── Рэкет / «крыша» ───────────────────────────────────────────────────────────
 # Берёшь точки под крышу: каждая даёт ежедневный грязный доход, но постоянно
 # держит розыск повышенным. Число точек ограничено авторитетом; «наезд» может
@@ -292,8 +339,13 @@ func process_day() -> void:
 	if not rackets.is_empty():
 		add_dirty_money(racket_income_total())
 		add_heat(racket_heat_total())
+	# «Крыша сверху»: иммунитет ускоряет спад розыска
+	var decay: float = HEAT_DECAY
+	if protection_days > 0:
+		protection_days -= 1
+		decay += HEAT_DECAY * 2.0
 	if heat > 0.0:
-		heat = clampf(heat - HEAT_DECAY, 0.0, 100.0)
+		heat = clampf(heat - decay, 0.0, 100.0)
 		emit_signal("heat_changed", heat)
 	bm_fluctuate()        # цены чёрного рынка колеблются
 	laundered_today = 0.0 # дневной лимит отмыва обновляется
@@ -306,6 +358,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "bm_inventory", bm_inventory)
 	cfg.set_value("crime", "laundered_today", laundered_today)
 	cfg.set_value("crime", "rackets", rackets)
+	cfg.set_value("crime", "protection_days", protection_days)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -315,6 +368,7 @@ func load_data(cfg: ConfigFile) -> void:
 	bm_inventory = cfg.get_value("crime", "bm_inventory", {})
 	laundered_today = cfg.get_value("crime", "laundered_today", 0.0)
 	rackets = cfg.get_value("crime", "rackets", [])
+	protection_days = cfg.get_value("crime", "protection_days", 0)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -325,4 +379,5 @@ func reset() -> void:
 	bm_prices = {}
 	laundered_today = 0.0
 	rackets = []
+	protection_days = 0
 	_init_bm_prices()
