@@ -92,6 +92,72 @@ func bm_fluctuate() -> void:
 		bm_prices[g.id] = clampf(p, 0.5, 2.0)
 	emit_signal("crime_changed")
 
+# ── Рэкет / «крыша» ───────────────────────────────────────────────────────────
+# Берёшь точки под крышу: каждая даёт ежедневный грязный доход, но постоянно
+# держит розыск повышенным. Число точек ограничено авторитетом; «наезд» может
+# сорваться (шумит и поднимает розыск).
+const RACKET_TARGETS := [
+	{"id":"kiosk",   "name":"Ларёк",          "icon":"🏪", "min_rep":5,  "income":12000.0,  "heat":1.0},
+	{"id":"market",  "name":"Рынок",          "icon":"🛒", "min_rep":15, "income":35000.0,  "heat":1.5},
+	{"id":"cafe",    "name":"Кафе",           "icon":"☕", "min_rep":25, "income":70000.0,  "heat":2.0},
+	{"id":"service", "name":"Автосервис",     "icon":"🔧", "min_rep":35, "income":130000.0, "heat":2.5},
+	{"id":"club",    "name":"Ночной клуб",    "icon":"🎰", "min_rep":50, "income":300000.0, "heat":3.5},
+	{"id":"mall",    "name":"Торговый центр",  "icon":"🏬", "min_rep":70, "income":700000.0, "heat":5.0},
+]
+var rackets: Array = []   # id точек под крышей
+
+func racket_target(id: String) -> Dictionary:
+	for t in RACKET_TARGETS:
+		if t.id == id:
+			return t
+	return {}
+
+func is_racket_held(id: String) -> bool:
+	return rackets.has(id)
+
+func max_rackets() -> int:
+	return 1 + int(criminal_rep / 18.0)   # авторитет расширяет «зону влияния»
+
+func racket_claim_chance(id: String) -> float:
+	return clampf(0.50 + criminal_rep / 200.0, 0.30, 0.90)
+
+# «Наезд» на точку. {ok, success, reason}
+func claim_racket(id: String) -> Dictionary:
+	var t := racket_target(id)
+	if t.is_empty() or is_racket_held(id):
+		return {"ok": false, "reason": "недоступно"}
+	if criminal_rep < float(t.min_rep):
+		return {"ok": false, "reason": "мало авторитета"}
+	if rackets.size() >= max_rackets():
+		return {"ok": false, "reason": "зона влияния заполнена"}
+	var win: bool = randf() < racket_claim_chance(id)
+	if win:
+		rackets.append(id)
+		add_criminal_rep(2.0)
+		add_heat(float(t.heat) * 2.0)   # наезд шумит
+		emit_signal("crime_changed")
+		return {"ok": true, "success": true}
+	else:
+		add_heat(float(t.heat) * 4.0)   # сорванный наезд — много шума
+		emit_signal("crime_changed")
+		return {"ok": true, "success": false}
+
+func drop_racket(id: String) -> void:
+	rackets.erase(id)
+	emit_signal("crime_changed")
+
+func racket_income_total() -> float:
+	var total: float = 0.0
+	for id in rackets:
+		total += float(racket_target(id).get("income", 0.0))
+	return total
+
+func racket_heat_total() -> float:
+	var total: float = 0.0
+	for id in rackets:
+		total += float(racket_target(id).get("heat", 0.0))
+	return total
+
 # ── Отмыв денег ───────────────────────────────────────────────────────────────
 # Грязный нал нельзя тратить открыто: прогоняешь через бизнесы-«прачечные» с
 # комиссией. Чем больше своих бизнесов — тем выше дневной лимит и ниже комиссия.
@@ -222,6 +288,10 @@ func heat_label() -> Dictionary:
 
 # Суточная обработка: розыск медленно спадает (связи/взятки усилят спад позже).
 func process_day() -> void:
+	# Доход с точек под крышей (грязным) + постоянный розыск от теневой активности
+	if not rackets.is_empty():
+		add_dirty_money(racket_income_total())
+		add_heat(racket_heat_total())
 	if heat > 0.0:
 		heat = clampf(heat - HEAT_DECAY, 0.0, 100.0)
 		emit_signal("heat_changed", heat)
@@ -235,6 +305,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "bm_prices", bm_prices)
 	cfg.set_value("crime", "bm_inventory", bm_inventory)
 	cfg.set_value("crime", "laundered_today", laundered_today)
+	cfg.set_value("crime", "rackets", rackets)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -243,6 +314,7 @@ func load_data(cfg: ConfigFile) -> void:
 	bm_prices = cfg.get_value("crime", "bm_prices", {})
 	bm_inventory = cfg.get_value("crime", "bm_inventory", {})
 	laundered_today = cfg.get_value("crime", "laundered_today", 0.0)
+	rackets = cfg.get_value("crime", "rackets", [])
 	_init_bm_prices()
 
 func reset() -> void:
@@ -252,4 +324,5 @@ func reset() -> void:
 	bm_inventory = {}
 	bm_prices = {}
 	laundered_today = 0.0
+	rackets = []
 	_init_bm_prices()
