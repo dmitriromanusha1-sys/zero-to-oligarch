@@ -42,7 +42,6 @@ var qm: Node
 var rm: Node
 
 var _invest_btn: Button = null
-var _invest_popup: PanelContainer = null
 var _zone_panel: Panel = null
 var _damage_vignette: ColorRect = null
 var _game_over_shown: bool = false
@@ -52,10 +51,8 @@ var _settings_ui: CanvasLayer = null
 var _settings_btn: Button = null
 var _journal: CanvasLayer = null
 var _journal_btn: Button = null
-var _economy_btn: Button = null
 var _life_btn: Button = null
 var _system_btn: Button = null
-var _system_popup: PanelContainer = null
 
 # Компактная верхняя панель (Фаза 1 «капремонта»)
 var _info_btn: Button = null
