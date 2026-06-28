@@ -12,6 +12,7 @@ extends Node
 #
 # Это стартовый набор работодателей — полную карту по всем 9 зонам распишем дальше.
 const EMPLOYERS := {
+	# ── Зона 0 — Трущобы ──────────────────────────────────────────────────────
 	"canteen": {
 		"name": "Столовая «Уют»", "icon": "🍲", "zone": 0,
 		"positions": [
@@ -20,6 +21,15 @@ const EMPLOYERS := {
 			{"prof":"manager", "title":"Администратор",  "min_edu":5, "salary":95000,  "slots":1, "taken":0},
 		],
 	},
+	"market": {
+		"name": "Рынок «Развал»", "icon": "🛒", "zone": 0,
+		"positions": [
+			{"prof":"",        "title":"Грузчик",       "min_edu":0, "salary":28000,  "slots":4, "taken":2},
+			{"prof":"driver",  "title":"Развозчик",     "min_edu":2, "salary":46000,  "slots":2, "taken":0},
+			{"prof":"service", "title":"Продавец",      "min_edu":5, "salary":72000,  "slots":2, "taken":1},
+		],
+	},
+	# ── Зона 1 — Рабочий квартал ──────────────────────────────────────────────
 	"autoservice": {
 		"name": "Автосервис «Гараж»", "icon": "🔧", "zone": 1,
 		"positions": [
@@ -28,13 +38,114 @@ const EMPLOYERS := {
 			{"prof":"accountant","title":"Бухгалтер",    "min_edu":6, "salary":130000, "slots":1, "taken":0},
 		],
 	},
+	"factory": {
+		"name": "Завод «Молот»", "icon": "🏭", "zone": 1,
+		"positions": [
+			{"prof":"worker",  "title":"Рабочий",        "min_edu":0, "salary":44000,  "slots":5, "taken":2},
+			{"prof":"mechanic","title":"Наладчик",       "min_edu":4, "salary":98000,  "slots":3, "taken":1},
+			{"prof":"manager", "title":"Начальник смены","min_edu":5, "salary":160000, "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 2 — Спальный район ───────────────────────────────────────────────
+	"supermarket": {
+		"name": "Супермаркет «Берёзка»", "icon": "🏪", "zone": 2,
+		"positions": [
+			{"prof":"",        "title":"Кассир",         "min_edu":2, "salary":50000,  "slots":4, "taken":2},
+			{"prof":"driver",  "title":"Водитель",       "min_edu":2, "salary":64000,  "slots":2, "taken":0},
+			{"prof":"service", "title":"Менеджер зала",  "min_edu":5, "salary":92000,  "slots":2, "taken":1},
+			{"prof":"manager", "title":"Директор",       "min_edu":5, "salary":150000, "slots":1, "taken":0},
+		],
+	},
+	"clinic": {
+		"name": "Поликлиника №7", "icon": "🏥", "zone": 2,
+		"positions": [
+			{"prof":"",          "title":"Регистратор",  "min_edu":3, "salary":56000,  "slots":2, "taken":1},
+			{"prof":"doctor",    "title":"Врач",          "min_edu":7, "salary":270000, "slots":2, "taken":0},
+			{"prof":"accountant","title":"Бухгалтер",    "min_edu":6, "salary":170000, "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 3 — Средний класс ────────────────────────────────────────────────
+	"restaurant": {
+		"name": "Ресторан «Веранда»", "icon": "🍽", "zone": 3,
+		"positions": [
+			{"prof":"service",   "title":"Официант",     "min_edu":5, "salary":95000,  "slots":3, "taken":1},
+			{"prof":"cook",      "title":"Шеф-повар",     "min_edu":4, "salary":130000, "slots":2, "taken":0},
+			{"prof":"manager",   "title":"Управляющий",  "min_edu":5, "salary":210000, "slots":1, "taken":0},
+			{"prof":"accountant","title":"Бухгалтер",    "min_edu":6, "salary":185000, "slots":1, "taken":0},
+		],
+	},
+	"school": {
+		"name": "Гимназия №1", "icon": "🏫", "zone": 3,
+		"positions": [
+			{"prof":"",          "title":"Охранник",     "min_edu":2, "salary":62000,  "slots":2, "taken":1},
+			{"prof":"programmer","title":"IT-специалист","min_edu":6, "salary":180000, "slots":1, "taken":0},
+			{"prof":"accountant","title":"Бухгалтер",    "min_edu":6, "salary":160000, "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 4 — Бизнес-квартал ───────────────────────────────────────────────
 	"office": {
 		"name": "Бизнес-центр «Меридиан»", "icon": "🏢", "zone": 4,
 		"positions": [
-			{"prof":"manager",   "title":"Менеджер по продажам", "min_edu":5, "salary":160000, "slots":3, "taken":1},
-			{"prof":"accountant","title":"Бухгалтер",            "min_edu":6, "salary":210000, "slots":2, "taken":0},
-			{"prof":"programmer","title":"Программист",          "min_edu":6, "salary":320000, "slots":2, "taken":0},
+			{"prof":"manager",   "title":"Менеджер по продажам", "min_edu":5, "salary":170000, "slots":3, "taken":1},
+			{"prof":"accountant","title":"Бухгалтер",            "min_edu":6, "salary":220000, "slots":2, "taken":0},
+			{"prof":"programmer","title":"Программист",          "min_edu":6, "salary":330000, "slots":2, "taken":0},
 			{"prof":"lawyer",    "title":"Юрист",                "min_edu":7, "salary":520000, "slots":1, "taken":0},
+		],
+	},
+	"bank": {
+		"name": "Банк «Капитал»", "icon": "🏦", "zone": 4,
+		"positions": [
+			{"prof":"service",   "title":"Операционист", "min_edu":5, "salary":160000, "slots":3, "taken":1},
+			{"prof":"accountant","title":"Бухгалтер",    "min_edu":6, "salary":280000, "slots":2, "taken":0},
+			{"prof":"financier", "title":"Финансист",    "min_edu":7, "salary":620000, "slots":2, "taken":0},
+			{"prof":"manager",   "title":"Управляющий",  "min_edu":5, "salary":320000, "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 5 — Элитный район ─────────────────────────────────────────────────
+	"lawfirm": {
+		"name": "Юр. фирма «Право»", "icon": "⚖️", "zone": 5,
+		"positions": [
+			{"prof":"",          "title":"Помощник",     "min_edu":6, "salary":210000,  "slots":2, "taken":1},
+			{"prof":"lawyer",    "title":"Юрист",         "min_edu":7, "salary":820000,  "slots":3, "taken":0},
+			{"prof":"accountant","title":"Бухгалтер",    "min_edu":6, "salary":360000,  "slots":1, "taken":0},
+		],
+	},
+	"privateclinic": {
+		"name": "Частная клиника «Аврора»", "icon": "🩺", "zone": 5,
+		"positions": [
+			{"prof":"",       "title":"Медсестра",       "min_edu":5, "salary":190000,  "slots":2, "taken":1},
+			{"prof":"doctor", "title":"Врач",             "min_edu":7, "salary":1050000, "slots":3, "taken":0},
+			{"prof":"manager","title":"Главврач",         "min_edu":5, "salary":420000,  "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 6 — Район олигархов ──────────────────────────────────────────────
+	"corp": {
+		"name": "Корпорация «Атлант»", "icon": "🏙", "zone": 6,
+		"positions": [
+			{"prof":"manager",   "title":"Топ-менеджер", "min_edu":5, "salary":520000,  "slots":2, "taken":1},
+			{"prof":"programmer","title":"Ведущий разработчик", "min_edu":6, "salary":950000, "slots":2, "taken":0},
+			{"prof":"financier", "title":"Финансовый директор", "min_edu":7, "salary":1600000, "slots":2, "taken":0},
+			{"prof":"lawyer",    "title":"Главный юрист", "min_edu":7, "salary":1850000, "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 7 — Правительственный квартал ────────────────────────────────────
+	"ministry": {
+		"name": "Министерство", "icon": "🏛", "zone": 7,
+		"positions": [
+			{"prof":"",          "title":"Делопроизводитель","min_edu":6, "salary":320000,  "slots":3, "taken":1},
+			{"prof":"lawyer",    "title":"Советник по праву", "min_edu":7, "salary":1600000, "slots":2, "taken":0},
+			{"prof":"accountant","title":"Аудитор",            "min_edu":6, "salary":850000,  "slots":2, "taken":0},
+			{"prof":"financier", "title":"Эксперт по бюджету", "min_edu":7, "salary":2600000, "slots":1, "taken":0},
+		],
+	},
+	# ── Зона 8 — Высший свет ──────────────────────────────────────────────────
+	"institute": {
+		"name": "НИИ «Прорыв»", "icon": "🔬", "zone": 8,
+		"positions": [
+			{"prof":"",          "title":"Лаборант",     "min_edu":7, "salary":1000000, "slots":2, "taken":1},
+			{"prof":"scientist", "title":"Учёный",        "min_edu":8, "salary":4200000, "slots":3, "taken":0},
+			{"prof":"programmer","title":"Инженер ИИ",   "min_edu":6, "salary":2600000, "slots":2, "taken":0},
+			{"prof":"financier", "title":"Директор фонда","min_edu":7, "salary":6000000, "slots":1, "taken":0},
 		],
 	},
 }
