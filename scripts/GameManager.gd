@@ -394,7 +394,7 @@ func add_work_income(amount: float) -> void:
 # Чем больше смен отработано, тем выше квалификация и ставка: за выслугу растёт
 # надбавка к оплате (до +50%). Опыт копится в часах отработанных смен.
 var work_xp: float = 0.0
-const CAREER_XP_MAX := 2400.0   # часов смен до максимального уровня
+const CAREER_XP_MAX := 2000.0   # часов смен до максимального уровня
 const CAREER_NAMES := ["Новичок", "Стажёр", "Работник", "Опытный", "Профи",
 	"Мастер", "Эксперт", "Ас", "Гуру", "Легенда"]
 
@@ -405,7 +405,8 @@ func career_progress() -> float:
 	return clampf(work_xp / CAREER_XP_MAX, 0.0, 1.0)
 
 func career_pay_mult() -> float:
-	return 1.0 + career_progress() * 0.5   # надбавка за выслугу: до +50% к ставке
+	# Front-loaded (√): первые смены ощутимо повышают ставку, потолок +50%
+	return 1.0 + sqrt(career_progress()) * 0.5
 
 func career_level() -> int:
 	return 1 + int(career_progress() * 9.0 + 0.0001)   # 1..10
@@ -483,6 +484,9 @@ func record_meal(quality: float, weight: float) -> void:
 # Суточный эффект рациона: дельта здоровья + медленный дрейф к нейтральному уровню
 func _process_nutrition_day() -> void:
 	var delta: float = (nutrition_score - 50.0) / 50.0 * NUTRITION_HEALTH
+	# Не добиваем при критическом здоровье — иначе бедняк не вырвется из спирали
+	if delta < 0.0 and health < 25.0:
+		delta *= 0.4
 	if delta != 0.0:
 		health = clamp(health + delta, 0.0, stat_max())
 		emit_signal("health_changed", health)
