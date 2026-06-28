@@ -61,6 +61,11 @@ var _system_popup: PanelContainer = null
 var _info_btn: Button = null
 var _info_popover: PanelContainer = null
 
+# Категории нижнего дока (Фаза 2 «капремонта»)
+var _household_btn: Button = null
+var _dock_menu: PanelContainer = null
+var _dock_menu_owner: Control = null
+
 var _minimap_root: Control = null
 var _minimap_player_dot: ColorRect = null
 var _minimap_zone_cells: Array = []
@@ -427,7 +432,7 @@ func _process(delta: float) -> void:
 func _any_modal_open() -> bool:
 	for w in [ach_ui, stats_ui, stock_ui, inv_ui, pause_menu, loan_ui,
 			housing_shop, business_shop, quest_ui, _titles_handbook,
-			_settings_ui, _invest_popup, _journal, _system_popup]:
+			_settings_ui, _journal, _dock_menu]:
 		if w != null and is_instance_valid(w) and w.visible:
 			return true
 	var su = get_tree().get_first_node_in_group("sleep_ui")
@@ -470,79 +475,92 @@ func _play_zone_fade() -> void:
 	tw.tween_interval(0.15)
 	tw.tween_property(_fade_rect, "color", Color(0, 0, 0, 0.0), 0.40)
 
+# ── Единое всплывающее меню категории дока ────────────────────────────────────
+func _toggle_dock_menu(owner_btn: Control, accent: Color, items: Array, am: Node) -> void:
+	var was_same: bool = _dock_menu_owner == owner_btn
+	_close_dock_menu()
+	if was_same:
+		return
+	if am: am.play_click()
+	_dock_menu_owner = owner_btn
+
+	_dock_menu = PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.05, 0.06, 0.10, 0.97)
+	ps.border_color = accent
+	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
+		ps.set_border_width(s, 2)
+		ps.set_corner_radius(s, 8)
+	ps.content_margin_left = 6; ps.content_margin_right = 6
+	ps.content_margin_top = 6; ps.content_margin_bottom = 6
+	_dock_menu.add_theme_stylebox_override("panel", ps)
+	add_child(_dock_menu)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	_dock_menu.add_child(vb)
+	for item in items:
+		var b := Button.new()
+		b.text = item.icon + "  " + item.text
+		b.custom_minimum_size = Vector2(190, 30)
+		b.add_theme_font_size_override("font_size", 13)
+		b.focus_mode = Control.FOCUS_NONE
+		_style_btn(b, item.get("col", HUD_BTN_BG), item.get("brd", HUD_BORDER))
+		var cb: Callable = item.cb
+		b.pressed.connect(func():
+			_close_dock_menu()
+			cb.call())
+		vb.add_child(b)
+
+	# Над доком, по центру у кнопки-владельца
+	_dock_menu.reset_size()
+	var vp := get_viewport().get_visible_rect().size
+	var w: float = _dock_menu.size.x
+	var anchor_x: float = vp.x * 0.5
+	if is_instance_valid(owner_btn):
+		anchor_x = owner_btn.get_global_rect().get_center().x
+	_dock_menu.position = Vector2(clampf(anchor_x - w * 0.5, 8.0, vp.x - w - 8.0),
+		vp.y - 66.0 - _dock_menu.size.y - 10.0)
+
+	_dock_menu.modulate.a = 0.0
+	_dock_menu.scale = Vector2(0.90, 0.90)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_dock_menu, "modulate:a", 1.0, 0.18)
+	tw.tween_property(_dock_menu, "scale", Vector2(1.0, 1.0), 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+func _close_dock_menu() -> void:
+	if _dock_menu and is_instance_valid(_dock_menu):
+		_dock_menu.queue_free()
+	_dock_menu = null
+	_dock_menu_owner = null
+
+# ── «Финансы» — бизнес, банк, биржа, кредиты, сводка ──────────────────────────
 func _setup_invest_btn(am: Node) -> void:
-	# Скрываем три отдельные кнопки
+	# Скрываем отдельные кнопки — теперь они внутри меню «Финансы»
 	business_btn.visible = false
 	stock_btn.visible    = false
 	loan_btn.visible     = false
 
-	# Создаём кнопку «Инвестиции» и вставляем сразу после QuestBtn
 	_invest_btn = Button.new()
-	_invest_btn.tooltip_text = "Бизнес и Банк, Биржа акций, Кредиты"
+	_invest_btn.tooltip_text = "Финансы: Бизнес и Банк, Биржа, Кредиты, Сводка"
 	var dock := $Dock/DockRow
 	dock.add_child(_invest_btn)
-	dock.move_child(_invest_btn, quest_btn.get_index() + 1)
-	_style_dock_btn(_invest_btn, "💹")
-
-	_invest_btn.pressed.connect(func(): _toggle_invest_popup(am))
-
-func _toggle_invest_popup(am: Node) -> void:
-	if _invest_popup and is_instance_valid(_invest_popup):
-		_invest_popup.queue_free()
-		_invest_popup = null
-		return
-	if am: am.play_click()
-
-	_invest_popup = PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.05, 0.06, 0.10, 0.97)
-	ps.border_color = Color(0.25, 0.52, 0.20, 0.90)
-	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		ps.set_border_width(s, 2)
-		ps.set_corner_radius(s, 8)
-	ps.content_margin_left   = 6
-	ps.content_margin_right  = 6
-	ps.content_margin_top    = 6
-	ps.content_margin_bottom = 6
-	_invest_popup.add_theme_stylebox_override("panel", ps)
-	add_child(_invest_popup)
-	# Над доком, по центру у кнопки «Инвестиции»
-	var vp := get_viewport().get_visible_rect().size
-	var anchor_x: float = vp.x * 0.5
-	if _invest_btn and is_instance_valid(_invest_btn):
-		anchor_x = _invest_btn.get_global_rect().get_center().x
-	_invest_popup.position = Vector2(clampf(anchor_x - 90.0, 8.0, vp.x - 190.0), vp.y - 66.0 - 80.0)
-
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 4)
-	_invest_popup.add_child(vb)
-
-	var items := [
-		{"icon": "💼", "text": "Бизнес и Банк",  "col": Color(0.08, 0.18, 0.10), "brd": Color(0.25, 0.58, 0.25),
-		 "cb": func(): business_shop.open(); _close_invest_popup()},
-		{"icon": "📈", "text": "Биржа акций",    "col": Color(0.06, 0.14, 0.22), "brd": Color(0.22, 0.45, 0.75),
-		 "cb": func(): stock_ui.open(); _close_invest_popup()},
-	]
-	for item in items:
-		var b := Button.new()
-		b.text = item.icon + "  " + item.text
-		b.custom_minimum_size = Vector2(170, 26)
-		b.add_theme_font_size_override("font_size", 12)
-		_style_btn(b, item.col, item.brd)
-		b.pressed.connect(item.cb)
-		vb.add_child(b)
-
-	_invest_popup.modulate.a = 0.0
-	_invest_popup.scale = Vector2(0.90, 0.90)
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(_invest_popup, "modulate:a", 1.0, 0.18)
-	tw.tween_property(_invest_popup, "scale", Vector2(1.0, 1.0), 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-
-func _close_invest_popup() -> void:
-	if _invest_popup and is_instance_valid(_invest_popup):
-		_invest_popup.queue_free()
-		_invest_popup = null
+	_style_dock_btn(_invest_btn, "💼")
+	var accent := Color(0.25, 0.52, 0.20, 0.90)
+	_invest_btn.pressed.connect(func():
+		_toggle_dock_menu(_invest_btn, accent, [
+			{"icon": "🏢", "text": "Бизнес и Банк", "col": Color(0.08, 0.18, 0.10), "brd": Color(0.25, 0.58, 0.25),
+			 "cb": func(): business_shop.open()},
+			{"icon": "📈", "text": "Биржа акций", "col": Color(0.06, 0.14, 0.22), "brd": Color(0.22, 0.45, 0.75),
+			 "cb": func(): stock_ui.open()},
+			{"icon": "🏦", "text": "Кредиты", "col": Color(0.16, 0.12, 0.05), "brd": Color(0.62, 0.48, 0.18),
+			 "cb": func(): loan_ui.open()},
+			{"icon": "📊", "text": "Финансы (сводка)", "col": HUD_BTN_BG, "brd": HUD_BORDER,
+			 "cb": func():
+				var eu = get_tree().get_first_node_in_group("economy_ui")
+				if eu and eu.has_method("open"): eu.open()},
+		], am))
 
 # ── «Журнал» (вкладки) и «Система» (поп-ап) ───────────────────────────────────
 func _setup_journal_and_system(am: Node) -> void:
@@ -570,15 +588,20 @@ func _setup_journal_and_system(am: Node) -> void:
 		if am: am.play_click()
 		if _journal: _journal.open())
 
-	# «Финансы»: единый экран экономики
-	_economy_btn = Button.new()
-	_economy_btn.tooltip_text = "Финансы: капитал, доходы/расходы, налоги, экономика страны"
-	dock.add_child(_economy_btn)
-	_style_dock_btn(_economy_btn, "📊")
-	_economy_btn.pressed.connect(func():
-		if am: am.play_click()
-		var eu = get_tree().get_first_node_in_group("economy_ui")
-		if eu and eu.has_method("open"): eu.open())
+	# «Быт»: Жильё / Инвентарь — прячем их отдельные кнопки
+	housing_btn.visible = false
+	inv_btn.visible     = false
+	_household_btn = Button.new()
+	_household_btn.tooltip_text = "Быт: Жильё и Инвентарь"
+	dock.add_child(_household_btn)
+	_style_dock_btn(_household_btn, "🏠")
+	_household_btn.pressed.connect(func():
+		_toggle_dock_menu(_household_btn, HUD_BORDER, [
+			{"icon": "🏠", "text": "Жильё", "col": HUD_BTN_BG, "brd": HUD_BORDER,
+			 "cb": func(): housing_shop.open()},
+			{"icon": "🎒", "text": "Инвентарь", "col": Color(0.10, 0.14, 0.10), "brd": Color(0.35, 0.55, 0.35),
+			 "cb": func(): inv_ui.open()},
+		], am))
 
 	# «Жизнь»: личное измерение — возраст, счастье, семья
 	_life_btn = Button.new()
@@ -595,70 +618,19 @@ func _setup_journal_and_system(am: Node) -> void:
 	_system_btn.tooltip_text = "Настройки и выход в главное меню"
 	dock.add_child(_system_btn)
 	_style_dock_btn(_system_btn, "⚙")
-	_system_btn.pressed.connect(func(): _toggle_system_popup(am))
+	_system_btn.pressed.connect(func():
+		_toggle_dock_menu(_system_btn, HUD_BORDER, [
+			{"icon": "⚙", "text": "Настройки", "col": HUD_BTN_BG, "brd": HUD_BORDER,
+			 "cb": func(): if _settings_ui: _settings_ui.open()},
+			{"icon": "🚪", "text": "Главное меню", "col": Color(0.18, 0.07, 0.07), "brd": Color(0.55, 0.20, 0.20),
+			 "cb": func(): _go_to_menu()},
+		], am))
 
-	# Порядок видимых иконок: Следующий день, Жильё, Инвестиции, Инвентарь, Журнал, Финансы, Система
-	var order := [sleep_btn, housing_btn, _invest_btn, inv_btn, _journal_btn, _economy_btn, _system_btn]
+	# Порядок категорий: Следующий день · Быт · Финансы · Жизнь · Журнал · Система
+	var order := [sleep_btn, _household_btn, _invest_btn, _life_btn, _journal_btn, _system_btn]
 	for i in order.size():
 		if order[i] and is_instance_valid(order[i]):
 			dock.move_child(order[i], i)
-
-func _toggle_system_popup(am: Node) -> void:
-	if _system_popup and is_instance_valid(_system_popup):
-		_system_popup.queue_free()
-		_system_popup = null
-		return
-	if am: am.play_click()
-
-	_system_popup = PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.05, 0.06, 0.10, 0.97)
-	ps.border_color = HUD_BORDER
-	for s in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		ps.set_border_width(s, 2)
-		ps.set_corner_radius(s, 8)
-	ps.content_margin_left = 6; ps.content_margin_right = 6
-	ps.content_margin_top = 6; ps.content_margin_bottom = 6
-	_system_popup.add_theme_stylebox_override("panel", ps)
-	add_child(_system_popup)
-
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 4)
-	_system_popup.add_child(vb)
-
-	var items := [
-		{"icon": "⚙", "text": "Настройки", "col": HUD_BTN_BG, "brd": HUD_BORDER,
-		 "cb": func(): if _settings_ui: _settings_ui.open(); _close_system_popup()},
-		{"icon": "🚪", "text": "Главное меню", "col": Color(0.18, 0.07, 0.07), "brd": Color(0.55, 0.20, 0.20),
-		 "cb": func(): _close_system_popup(); _go_to_menu()},
-	]
-	for item in items:
-		var b := Button.new()
-		b.text = item.icon + "  " + item.text
-		b.custom_minimum_size = Vector2(170, 30)
-		b.add_theme_font_size_override("font_size", 13)
-		_style_btn(b, item.col, item.brd)
-		b.pressed.connect(item.cb)
-		vb.add_child(b)
-
-	# Над доком, по центру у кнопки «Система»
-	var vp := get_viewport().get_visible_rect().size
-	var anchor_x: float = vp.x * 0.5
-	if _system_btn and is_instance_valid(_system_btn):
-		anchor_x = _system_btn.get_global_rect().get_center().x
-	_system_popup.position = Vector2(clampf(anchor_x - 90.0, 8.0, vp.x - 190.0), vp.y - 66.0 - 80.0)
-
-	_system_popup.modulate.a = 0.0
-	_system_popup.scale = Vector2(0.90, 0.90)
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(_system_popup, "modulate:a", 1.0, 0.18)
-	tw.tween_property(_system_popup, "scale", Vector2(1.0, 1.0), 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-
-func _close_system_popup() -> void:
-	if _system_popup and is_instance_valid(_system_popup):
-		_system_popup.queue_free()
-		_system_popup = null
 
 ## ── Единая цветовая палитра HUD ───────────────────────────────────────────
 const HUD_BG     := Color(0.045, 0.050, 0.085, 0.94)   # тёмное "стекло" панели
