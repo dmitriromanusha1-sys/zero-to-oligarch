@@ -32,8 +32,8 @@ func _build_shell() -> void:
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.10, 0.07, 0.13, 0.98)
-	sb.border_color = Color(0.62, 0.45, 0.85, 0.9)
+	sb.bg_color = UITheme.PANEL
+	sb.border_color = UITheme.GOLD_DIM
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(14)
 	sb.set_content_margin_all(18)
@@ -55,12 +55,14 @@ func open() -> void:
 	if im == null: im = get_node_or_null("/root/InfluenceManager")
 	_rebuild()
 	visible = true
+	var fit: float = UITheme.fit_scale(_panel)
+	_panel.pivot_offset = _panel.size * 0.5
 	_panel.modulate.a = 0.0
-	_panel.scale = Vector2(0.95, 0.95)
+	_panel.scale = Vector2(fit, fit) * 0.95
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(_panel, "modulate:a", 1.0, 0.15)
-	tw.tween_property(_panel, "scale", Vector2.ONE, 0.15).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_panel, "scale", Vector2(fit, fit), 0.15).set_ease(Tween.EASE_OUT)
 
 func close() -> void:
 	visible = false

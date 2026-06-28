@@ -99,6 +99,18 @@ static func style_button(btn: Button, variant := "primary") -> void:
 	btn.add_theme_color_override("font_disabled_color", TEXT_DIM)
 	btn.add_theme_font_override("font", body_font())
 
+# Возвращает масштаб, при котором панель целиком влезает во вьюпорт (≤1.0).
+# Так большие окна не вылезают за края на маленьких экранах. Панель должна быть
+# уже видимой и в дереве — вызывать из open() после visible = true.
+static func fit_scale(panel: Control) -> float:
+	var vp: Vector2 = panel.get_viewport_rect().size
+	panel.reset_size()
+	var sz: Vector2 = panel.size
+	if sz.x <= 1.0 or sz.y <= 1.0:
+		return 1.0
+	var margin := 32.0
+	return clampf(minf((vp.x - margin) / sz.x, (vp.y - margin) / sz.y), 0.55, 1.0)
+
 # Тонкая золотая линия-разделитель (растягивается по ширине контейнера)
 static func gold_rule() -> ColorRect:
 	var r := ColorRect.new()
