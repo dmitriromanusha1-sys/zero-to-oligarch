@@ -10,7 +10,7 @@ signal heat_changed(value: float)
 signal busted              # арест (фаза тюрьмы)
 signal raided(info: Dictionary)
 
-var arrested: bool = false   # выставляется облавой при экстремальном розыске
+var prison_days: int = 0   # оставшийся срок (0 — на свободе)
 
 var heat: float = 0.0          # розыск 0..100
 var criminal_rep: float = 0.0  # криминальный авторитет 0..100
@@ -61,7 +61,7 @@ func bm_have(id: String) -> int:
 
 # Купить контрабанду (чистыми деньгами). Возвращает true при успехе.
 func bm_buy(id: String, qty: int) -> bool:
-	if qty <= 0 or bm_good(id).is_empty():
+	if qty <= 0 or bm_good(id).is_empty() or is_imprisoned():
 		return false
 	var gm := get_node_or_null("/root/GameManager")
 	var cost: int = bm_price(id) * qty
@@ -74,7 +74,7 @@ func bm_buy(id: String, qty: int) -> bool:
 
 # Продать контрабанду — навар падает «грязным» налом.
 func bm_sell(id: String, qty: int) -> bool:
-	if qty <= 0 or bm_have(id) < qty:
+	if qty <= 0 or bm_have(id) < qty or is_imprisoned():
 		return false
 	var revenue: int = bm_price(id) * qty
 	bm_inventory[id] = bm_have(id) - qty
@@ -118,7 +118,7 @@ func turf_war_chance(z: int) -> float:
 	return clampf(p / (p + zone_rival_strength(z)), 0.05, 0.95)
 
 func can_take_zone(z: int) -> bool:
-	if controls_zone(z) or z < 0 or z > 8:
+	if controls_zone(z) or z < 0 or z > 8 or is_imprisoned():
 		return false
 	var zm := get_node_or_null("/root/ZoneManager")
 	if zm and z > zm.max_zone_reached:
@@ -180,7 +180,7 @@ func gang_upkeep_daily() -> float:
 	return float(gang_size) * GANG_UPKEEP
 
 func recruit_gang(n: int) -> bool:
-	if n <= 0 or gang_size + n > max_gang():
+	if n <= 0 or gang_size + n > max_gang() or is_imprisoned():
 		return false
 	var gm := get_node_or_null("/root/GameManager")
 	if gm == null or not gm.spend_money(GANG_HIRE_COST * n):
@@ -286,6 +286,8 @@ func racket_claim_chance(id: String) -> float:
 
 # «Наезд» на точку. {ok, success, reason}
 func claim_racket(id: String) -> Dictionary:
+	if is_imprisoned():
+		return {"ok": false, "reason": "ты в тюрьме"}
 	var t := racket_target(id)
 	if t.is_empty() or is_racket_held(id):
 		return {"ok": false, "reason": "недоступно"}
@@ -392,6 +394,8 @@ func can_attempt(id: String) -> bool:
 
 # Провернуть дело. Возвращает {ok, success, amount, reason}.
 func attempt_scheme(id: String) -> Dictionary:
+	if is_imprisoned():
+		return {"ok": false, "reason": "ты в тюрьме"}
 	var s := scheme(id)
 	if s.is_empty():
 		return {"ok": false, "reason": "нет такого дела"}
@@ -486,6 +490,7 @@ func raid_risk() -> float:
 	return clampf(base * pol, 0.0, 0.9)
 
 func _do_raid() -> Dictionary:
+	var pre_heat: float = heat
 	var info: Dictionary = {"contraband": not bm_inventory.is_empty()}
 	bm_inventory = {}                       # контрабанду изъяли
 	var seized: float = dirty_money * 0.4   # часть грязных денег изъята
@@ -495,12 +500,11 @@ func _do_raid() -> Dictionary:
 		info["lost"] = rackets.pop_back()   # прикрыли точку
 	elif not controlled_zones.is_empty():
 		info["lost_zone"] = controlled_zones.pop_back()
-	# Арест при экстремальном розыске
-	if heat >= 80.0 and randf() < 0.5:
-		arrested = true
-		info["arrested"] = true
-		emit_signal("busted")
 	heat = clampf(heat * 0.5, 0.0, 100.0)   # после рейда внимание частично спадает
+	# Арест при экстремальном розыске → срок
+	if pre_heat >= 80.0 and randf() < 0.5:
+		info["arrested"] = true
+		go_to_prison()
 	emit_signal("heat_changed", heat)
 	emit_signal("raided", info)
 	emit_signal("crime_changed")
@@ -510,8 +514,54 @@ func _process_police_day() -> void:
 	if randf() < raid_risk():
 		_do_raid()
 
+# ── Тюрьма ────────────────────────────────────────────────────────────────────
+# Арест → срок: дни идут, активный криминал заблокирован. Профессия «Юрист» и
+# связи смягчают срок; можно выйти под залог. Отсидка снимает розыск.
+func is_imprisoned() -> bool:
+	return prison_days > 0
+
+func lawyer_mitigation() -> float:
+	var m: float = 0.0
+	var pm := get_node_or_null("/root/ProfessionManager")
+	if pm and pm.profession == "lawyer":
+		m += 0.40                     # сам юрист защищается
+	var inf := get_node_or_null("/root/InfluenceManager")
+	if inf and inf.has_method("connection_level"):
+		m += 0.08 * float(inf.connection_level("mayor"))   # связи в верхах
+	return clampf(m, 0.0, 0.70)
+
+func sentence_length() -> int:
+	var base: float = 10.0 + criminal_rep / 5.0   # авторитетных судят строже
+	return maxi(1, int(base * (1.0 - lawyer_mitigation())))
+
+func go_to_prison() -> void:
+	prison_days = sentence_length()
+	heat = clampf(heat * 0.3, 0.0, 100.0)   # отсидка снимает розыск
+	emit_signal("busted")
+	emit_signal("crime_changed")
+
+func bail_cost() -> int:
+	return prison_days * 500000   # залог за каждый оставшийся день
+
+func post_bail() -> bool:
+	if prison_days <= 0:
+		return false
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.spend_money(bail_cost()):
+		return false
+	prison_days = 0
+	emit_signal("crime_changed")
+	return true
+
+func _process_prison_day() -> void:
+	if prison_days > 0:
+		prison_days -= 1
+		if prison_days == 0:
+			emit_signal("crime_changed")
+
 # Суточная обработка: розыск медленно спадает (связи/взятки усилят спад позже).
 func process_day() -> void:
+	_process_prison_day() # идёт срок
 	_process_gang_day()   # содержание банды и лояльность
 	# Доход с точек под крышей и контролируемых районов (грязным, × ранг) + розыск
 	var inc_mult: float = rank_income_mult()
@@ -531,7 +581,8 @@ func process_day() -> void:
 		emit_signal("heat_changed", heat)
 	bm_fluctuate()        # цены чёрного рынка колеблются
 	laundered_today = 0.0 # дневной лимит отмыва обновляется
-	_process_police_day() # риск облавы при высоком розыске
+	if not is_imprisoned():
+		_process_police_day()   # риск облавы (не трогают того, кто уже сидит)
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "heat", heat)
@@ -545,7 +596,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "gang_size", gang_size)
 	cfg.set_value("crime", "gang_loyalty", gang_loyalty)
 	cfg.set_value("crime", "controlled_zones", controlled_zones)
-	cfg.set_value("crime", "arrested", arrested)
+	cfg.set_value("crime", "prison_days", prison_days)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -559,7 +610,7 @@ func load_data(cfg: ConfigFile) -> void:
 	gang_size = cfg.get_value("crime", "gang_size", 0)
 	gang_loyalty = cfg.get_value("crime", "gang_loyalty", 100.0)
 	controlled_zones = cfg.get_value("crime", "controlled_zones", [])
-	arrested = cfg.get_value("crime", "arrested", false)
+	prison_days = cfg.get_value("crime", "prison_days", 0)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -574,5 +625,5 @@ func reset() -> void:
 	gang_size = 0
 	gang_loyalty = 100.0
 	controlled_zones = []
-	arrested = false
+	prison_days = 0
 	_init_bm_prices()
