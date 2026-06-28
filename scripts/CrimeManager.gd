@@ -293,6 +293,26 @@ func bribe_police(amount: float) -> Dictionary:
 	emit_signal("crime_changed")
 	return {"ok": true, "cooled": cooled, "spent": cost}
 
+# ── Информатор / снитч ────────────────────────────────────────────────────────
+# Платный осведомитель: шанс уйти от облавы (наводка — успел залечь) и реже наезды
+# конкурентов. Дешевле со связями в полиции.
+var informant_days: int = 0
+const INFORMANT_DAYS := 20
+
+func has_informant() -> bool:
+	return informant_days > 0
+
+func informant_cost() -> int:
+	return int(1_500_000.0 * maxf(0.60, 1.0 - 0.10 * float(police_connection())))
+
+func hire_informant() -> bool:
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.spend_money(informant_cost()):
+		return false
+	informant_days += INFORMANT_DAYS
+	emit_signal("crime_changed")
+	return true
+
 func protection_cost() -> int:
 	return int(2_000_000.0 * maxf(0.50, 1.0 - 0.10 * float(police_connection())))
 
@@ -663,6 +683,12 @@ func _fmt(v: float) -> String:
 
 func _process_police_day() -> void:
 	if randf() < raid_risk():
+		# Информатор может предупредить — успеваешь залечь
+		if has_informant() and randf() < 0.6:
+			var es := get_node_or_null("/root/EventSystem")
+			if es and es.has_signal("event_triggered"):
+				es.event_triggered.emit({"text": "🕵 Информатор слил облаву — ты успел залечь.", "money": 0, "health": 0})
+			return
 		_do_raid()
 
 # ── Враждебные ОПГ ────────────────────────────────────────────────────────────
@@ -673,7 +699,10 @@ func rival_attack_chance() -> float:
 	var holdings: int = rackets.size() + controlled_zones.size()
 	if holdings == 0:
 		return 0.0
-	return clampf(0.05 + float(holdings) * 0.02 + float(rank()) * 0.02, 0.0, 0.40)
+	var base: float = clampf(0.05 + float(holdings) * 0.02 + float(rank()) * 0.02, 0.0, 0.40)
+	if has_informant():
+		base *= 0.6   # слышишь о планах конкурентов заранее
+	return base
 
 func _process_rival_day() -> void:
 	if randf() >= rival_attack_chance():
@@ -768,6 +797,8 @@ func process_day() -> void:
 	if protection_days > 0:
 		protection_days -= 1
 		decay += HEAT_DECAY * 2.0
+	if informant_days > 0:
+		informant_days -= 1
 	if heat > 0.0:
 		heat = clampf(heat - decay, 0.0, 100.0)
 		emit_signal("heat_changed", heat)
@@ -793,6 +824,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "controlled_zones", controlled_zones)
 	cfg.set_value("crime", "prison_days", prison_days)
 	cfg.set_value("crime", "current_contract", current_contract)
+	cfg.set_value("crime", "informant_days", informant_days)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -809,6 +841,7 @@ func load_data(cfg: ConfigFile) -> void:
 	controlled_zones = cfg.get_value("crime", "controlled_zones", [])
 	prison_days = cfg.get_value("crime", "prison_days", 0)
 	current_contract = cfg.get_value("crime", "current_contract", "")
+	informant_days = cfg.get_value("crime", "informant_days", 0)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -826,4 +859,5 @@ func reset() -> void:
 	controlled_zones = []
 	prison_days = 0
 	current_contract = ""
+	informant_days = 0
 	_init_bm_prices()
