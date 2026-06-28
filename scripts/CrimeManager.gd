@@ -115,7 +115,7 @@ func controls_zone(z: int) -> bool:
 
 func turf_war_chance(z: int) -> float:
 	var p: float = gang_power()
-	return clampf(p / (p + zone_rival_strength(z)), 0.05, 0.95)
+	return clampf(p / (p + zone_rival_strength(z)) + lieutenant_bonus("war"), 0.05, 0.95)
 
 func can_take_zone(z: int) -> bool:
 	if controls_zone(z) or z < 0 or z > 8 or is_imprisoned():
@@ -167,6 +167,44 @@ var gang_loyalty: float = 100.0
 const GANG_HIRE_COST := 200000.0   # вербовка одного бойца
 const GANG_UPKEEP := 5000.0        # содержание бойца в день
 
+# ── Бригадиры (именные лейтенанты) ────────────────────────────────────────────
+# Поверх рядовых бойцов — бригадиры с именем, специализацией и личной лояльностью.
+# Каждый усиливает свою сферу: дела, рэкет или войну за районы. Число ограничено
+# криминальным рангом.
+const LT_NAMES := ["Серый", "Тихий", "Шрам", "Кабан", "Хром", "Молчун", "Лысый",
+	"Батя", "Жук", "Студент", "Цыган", "Беспалый", "Поп", "Купец"]
+const LT_SPECS := ["schemes", "racket", "war"]
+const LT_SPEC_NAME := {"schemes": "дела", "racket": "рэкет", "war": "война"}
+const LT_HIRE_COST := 1_000_000.0
+var lieutenants: Array = []   # [{name, spec, loyalty}]
+
+func max_lieutenants() -> int:
+	return rank()   # авторитет: 0 (Никто) .. 4 (Вор в законе)
+
+func recruit_lieutenant(spec: String) -> bool:
+	if not LT_SPECS.has(spec) or lieutenants.size() >= max_lieutenants():
+		return false
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.spend_money(LT_HIRE_COST):
+		return false
+	lieutenants.append({"name": LT_NAMES[randi() % LT_NAMES.size()], "spec": spec, "loyalty": 100.0})
+	emit_signal("crime_changed")
+	return true
+
+func dismiss_lieutenant(idx: int) -> void:
+	if idx >= 0 and idx < lieutenants.size():
+		lieutenants.remove_at(idx)
+		emit_signal("crime_changed")
+
+# Суммарный бонус бригадиров заданной специализации (взвешен лояльностью).
+func lieutenant_bonus(spec: String) -> float:
+	var per: float = 0.10 if spec == "racket" else (0.08 if spec == "war" else 0.05)
+	var b: float = 0.0
+	for lt in lieutenants:
+		if String(lt.get("spec", "")) == spec:
+			b += per * (float(lt.get("loyalty", 0.0)) / 100.0)
+	return b
+
 func max_gang() -> int:
 	return int(criminal_rep / 10.0)   # авторитет определяет размер банды
 
@@ -194,17 +232,32 @@ func disband_gang(n: int) -> void:
 	emit_signal("crime_changed")
 
 # Содержание банды (вызывается раз в день): платишь — лояльны, нет — недовольство.
+const LT_UPKEEP := 20000.0   # содержание бригадира в день
+
 func _process_gang_day() -> void:
-	if gang_size <= 0:
+	if gang_size <= 0 and lieutenants.is_empty():
 		return
 	var gm := get_node_or_null("/root/GameManager")
-	if gm and gm.spend_money(gang_upkeep_daily()):
-		gang_loyalty = clampf(gang_loyalty + 1.0 + rank_loyalty_bonus(), 0.0, 100.0)
+	var upkeep: float = gang_upkeep_daily() + float(lieutenants.size()) * LT_UPKEEP
+	var paid: bool = gm != null and gm.spend_money(upkeep)
+	if paid:
+		if gang_size > 0:
+			gang_loyalty = clampf(gang_loyalty + 1.0 + rank_loyalty_bonus(), 0.0, 100.0)
+		for lt in lieutenants:
+			lt["loyalty"] = clampf(float(lt.loyalty) + 1.0 + rank_loyalty_bonus(), 0.0, 100.0)
 	else:
-		gang_loyalty = clampf(gang_loyalty - 12.0, 0.0, 100.0)
-		if gang_loyalty <= 0.0:
-			gang_size = maxi(0, gang_size - 1)   # дезертирство
-			gang_loyalty = 30.0
+		if gang_size > 0:
+			gang_loyalty = clampf(gang_loyalty - 12.0, 0.0, 100.0)
+			if gang_loyalty <= 0.0:
+				gang_size = maxi(0, gang_size - 1)   # дезертирство рядового
+				gang_loyalty = 30.0
+		# Недовольные бригадиры теряют лояльность, при нуле уходят
+		var keep: Array = []
+		for lt in lieutenants:
+			lt["loyalty"] = clampf(float(lt.loyalty) - 10.0, 0.0, 100.0)
+			if float(lt.loyalty) > 0.0:
+				keep.append(lt)
+		lieutenants = keep
 	emit_signal("crime_changed")
 
 # ── Коррупция и иммунитет ─────────────────────────────────────────────────────
@@ -382,8 +435,8 @@ func scheme_chance(id: String) -> float:
 	var s := scheme(id)
 	if s.is_empty():
 		return 0.0
-	# Авторитет повышает шанс (до +0.33), банда — ещё (до +0.20)
-	return clampf(float(s.chance) + criminal_rep / 300.0 + gang_scheme_bonus(), 0.05, 0.95)
+	# Авторитет (до +0.33), банда (до +0.20) и бригадир по делам повышают шанс
+	return clampf(float(s.chance) + criminal_rep / 300.0 + gang_scheme_bonus() + lieutenant_bonus("schemes"), 0.05, 0.95)
 
 func can_attempt(id: String) -> bool:
 	var s := scheme(id)
@@ -585,7 +638,7 @@ func process_day() -> void:
 	# Доход с точек под крышей и контролируемых районов (грязным, × ранг) + розыск
 	var inc_mult: float = rank_income_mult()
 	if not rackets.is_empty():
-		add_dirty_money(racket_income_total() * inc_mult)
+		add_dirty_money(racket_income_total() * inc_mult * (1.0 + lieutenant_bonus("racket")))
 		add_heat(racket_heat_total())
 	if not controlled_zones.is_empty():
 		add_dirty_money(turf_income_total() * inc_mult)
@@ -614,6 +667,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "protection_days", protection_days)
 	cfg.set_value("crime", "gang_size", gang_size)
 	cfg.set_value("crime", "gang_loyalty", gang_loyalty)
+	cfg.set_value("crime", "lieutenants", lieutenants)
 	cfg.set_value("crime", "controlled_zones", controlled_zones)
 	cfg.set_value("crime", "prison_days", prison_days)
 
@@ -628,6 +682,7 @@ func load_data(cfg: ConfigFile) -> void:
 	protection_days = cfg.get_value("crime", "protection_days", 0)
 	gang_size = cfg.get_value("crime", "gang_size", 0)
 	gang_loyalty = cfg.get_value("crime", "gang_loyalty", 100.0)
+	lieutenants = cfg.get_value("crime", "lieutenants", [])
 	controlled_zones = cfg.get_value("crime", "controlled_zones", [])
 	prison_days = cfg.get_value("crime", "prison_days", 0)
 	_init_bm_prices()
@@ -643,6 +698,7 @@ func reset() -> void:
 	protection_days = 0
 	gang_size = 0
 	gang_loyalty = 100.0
+	lieutenants = []
 	controlled_zones = []
 	prison_days = 0
 	_init_bm_prices()
