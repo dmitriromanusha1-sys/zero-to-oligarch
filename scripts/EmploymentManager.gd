@@ -188,6 +188,13 @@ func free_slots(pos: Dictionary) -> int:
 func is_open(pos: Dictionary) -> bool:
 	return free_slots(pos) > 0
 
+# Доступен ли район работодателя (нельзя устроиться в ещё не открытую зону).
+func zone_open(eid: String) -> bool:
+	var zm := get_node_or_null("/root/ZoneManager")
+	if zm == null:
+		return true
+	return int(employer(eid).get("zone", 0)) <= zm.max_zone_reached
+
 # Подходит ли игрок: образование не ниже требуемого и (если нужна профессия) —
 # именно эта профессия.
 func qualifies(pos: Dictionary) -> bool:
@@ -215,6 +222,8 @@ func monthly_salary(pos: Dictionary) -> int:
 # Позиции работодателя, которые игрок может занять прямо сейчас (подходит + есть место).
 func available_for_player(id: String) -> Array:
 	var out: Array = []
+	if not zone_open(id):
+		return out
 	for pos in positions(id):
 		if qualifies(pos) and is_open(pos):
 			out.append(pos)
@@ -252,7 +261,7 @@ func take_job(eid: String, idx: int, occ: String = "full") -> bool:
 	if idx < 0 or idx >= ps.size():
 		return false
 	var pos: Dictionary = ps[idx]
-	if not qualifies(pos) or not is_open(pos):
+	if not qualifies(pos) or not is_open(pos) or not zone_open(eid):
 		return false
 	employer_id = eid
 	pos_index = idx

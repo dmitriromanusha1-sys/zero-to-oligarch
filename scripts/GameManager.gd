@@ -691,8 +691,13 @@ func skip_day() -> void:
 	var hours: int = maxi(1, 24 - current_hour)
 	var meal_m: float = 1.0 + meal_drain_bonus
 	var cap: float = stat_max()
-	var e_gain: float = (LEISURE_ENERGY_BASE + get_sleep_energy_per_hour() * LEISURE_ENERGY_FACTOR) * hours * meal_m
-	var h_gain: float = (LEISURE_HEALTH_BASE + get_sleep_health_per_hour() * LEISURE_HEALTH_FACTOR) * hours * meal_m
+	# Если есть работа — день уходит на неё, а не на отдых: восстановление урезано.
+	var leisure_m: float = 1.0
+	var jm_work = get_node_or_null("/root/EmploymentManager")
+	if jm_work and jm_work.has_method("is_employed") and jm_work.is_employed():
+		leisure_m = 0.4
+	var e_gain: float = (LEISURE_ENERGY_BASE + get_sleep_energy_per_hour() * LEISURE_ENERGY_FACTOR) * hours * meal_m * leisure_m
+	var h_gain: float = (LEISURE_HEALTH_BASE + get_sleep_health_per_hour() * LEISURE_HEALTH_FACTOR) * hours * meal_m * leisure_m
 	energy = clamp(energy + e_gain, 0.0, cap)
 	health = clamp(health + h_gain, 0.0, cap)
 	emit_signal("energy_changed", energy)

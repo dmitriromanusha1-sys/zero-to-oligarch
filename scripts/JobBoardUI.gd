@@ -109,10 +109,14 @@ func _rebuild() -> void:
 	ids.sort_custom(func(a, b): return int(jm.employer(a).get("zone", 0)) < int(jm.employer(b).get("zone", 0)))
 	for eid in ids:
 		var emp: Dictionary = jm.employer(eid)
-		_header("%s %s" % [emp.get("icon", "🏢"), emp.get("name", eid)], _zone_name(int(emp.get("zone", 0))))
+		var zopen: bool = jm.zone_open(eid)
+		var zone_lbl: String = _zone_name(int(emp.get("zone", 0)))
+		if not zopen:
+			zone_lbl += "  🚧 закрыт"
+		_header("%s %s" % [emp.get("icon", "🏢"), emp.get("name", eid)], zone_lbl)
 		var ps: Array = jm.positions(eid)
 		for i in ps.size():
-			_position_row(eid, i, ps[i])
+			_position_row(eid, i, ps[i], zopen)
 		_sep()
 
 	# Кнопка закрытия
@@ -194,7 +198,7 @@ func _on_shift_minigame(mult: float) -> void:
 	if visible:
 		_rebuild()
 
-func _position_row(eid: String, idx: int, pos: Dictionary) -> void:
+func _position_row(eid: String, idx: int, pos: Dictionary, zopen: bool = true) -> void:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UITheme.card_box(true))
 	var box := VBoxContainer.new()
@@ -241,6 +245,9 @@ func _position_row(eid: String, idx: int, pos: Dictionary) -> void:
 	if here:
 		st_lbl.text = "💼 ты здесь работаешь"
 		st_lbl.add_theme_color_override("font_color", UITheme.GOLD)
+	elif not zopen:
+		st_lbl.text = "🚧 район ещё не открыт"
+		st_lbl.add_theme_color_override("font_color", Color(0.7, 0.6, 0.45))
 	elif qualifies and open_slot:
 		st_lbl.text = "✓ Подходишь"
 		st_lbl.add_theme_color_override("font_color", UITheme.GREEN)
@@ -254,8 +261,8 @@ func _position_row(eid: String, idx: int, pos: Dictionary) -> void:
 	status.add_child(st_lbl)
 	box.add_child(status)
 
-	# Кнопка «Устроиться» — если подходишь, есть место и это не текущая работа
-	if qualifies and open_slot and not here:
+	# Кнопка «Устроиться» — если подходишь, есть место, район открыт и это не текущая работа
+	if qualifies and open_slot and zopen and not here:
 		var apply := Button.new()
 		apply.text = "📄 Устроиться"
 		apply.add_theme_font_size_override("font_size", 12)
