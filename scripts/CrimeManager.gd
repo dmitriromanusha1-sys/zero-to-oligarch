@@ -196,7 +196,7 @@ func _process_gang_day() -> void:
 		return
 	var gm := get_node_or_null("/root/GameManager")
 	if gm and gm.spend_money(gang_upkeep_daily()):
-		gang_loyalty = clampf(gang_loyalty + 1.0, 0.0, 100.0)
+		gang_loyalty = clampf(gang_loyalty + 1.0 + rank_loyalty_bonus(), 0.0, 100.0)
 	else:
 		gang_loyalty = clampf(gang_loyalty - 12.0, 0.0, 100.0)
 		if gang_loyalty <= 0.0:
@@ -439,6 +439,27 @@ func rank() -> int:
 func rank_name() -> String:
 	return RANKS[rank()]
 
+# Перки ранга: авторитет на улице конвертируется в реальную силу.
+const RANK_PERKS := [
+	"—",
+	"доступ к тёмным делам и крыше",
+	"+теневой доход, набор банды",
+	"крупная банда, уважение улиц",
+	"вор в законе: макс. доход, верная банда, розыск тает",
+]
+
+func rank_perk_text() -> String:
+	return RANK_PERKS[clampi(rank(), 0, RANK_PERKS.size() - 1)]
+
+func rank_income_mult() -> float:
+	return 1.0 + float(rank()) * 0.08   # до ×1.32 теневому доходу
+
+func rank_heat_resist() -> float:
+	return float(rank()) * 0.5          # уважение/связи ускоряют спад розыска
+
+func rank_loyalty_bonus() -> float:
+	return float(rank()) * 1.5          # авторитет держит банду верной
+
 # Подпись уровня розыска для UI: чем выше — тем опаснее
 func heat_label() -> Dictionary:
 	if heat >= 80.0:   return {"name": "Облава близко", "color": Color(0.95, 0.30, 0.30)}
@@ -449,15 +470,16 @@ func heat_label() -> Dictionary:
 # Суточная обработка: розыск медленно спадает (связи/взятки усилят спад позже).
 func process_day() -> void:
 	_process_gang_day()   # содержание банды и лояльность
-	# Доход с точек под крышей и контролируемых районов (грязным) + розыск
+	# Доход с точек под крышей и контролируемых районов (грязным, × ранг) + розыск
+	var inc_mult: float = rank_income_mult()
 	if not rackets.is_empty():
-		add_dirty_money(racket_income_total())
+		add_dirty_money(racket_income_total() * inc_mult)
 		add_heat(racket_heat_total())
 	if not controlled_zones.is_empty():
-		add_dirty_money(turf_income_total())
+		add_dirty_money(turf_income_total() * inc_mult)
 		add_heat(turf_heat_total())
-	# «Крыша сверху»: иммунитет ускоряет спад розыска
-	var decay: float = HEAT_DECAY
+	# Спад розыска: база + сопротивление ранга; «крыша сверху» ускоряет ещё
+	var decay: float = HEAT_DECAY + rank_heat_resist()
 	if protection_days > 0:
 		protection_days -= 1
 		decay += HEAT_DECAY * 2.0
