@@ -501,14 +501,19 @@ func _do_raid() -> Dictionary:
 	elif not controlled_zones.is_empty():
 		info["lost_zone"] = controlled_zones.pop_back()
 	heat = clampf(heat * 0.5, 0.0, 100.0)   # после рейда внимание частично спадает
-	# Публичная облава бьёт по легальной репутации
+	# Публичная облава бьёт по легальной репутации и нервам
 	var rm := get_node_or_null("/root/ReputationManager")
 	if rm and rm.has_method("add"):
 		rm.add(-5)
+	var life := get_node_or_null("/root/LifeManager")
+	if life and life.has_method("add_stress"):
+		life.add_stress(8.0)
 	# Арест при экстремальном розыске → срок
 	if pre_heat >= 80.0 and randf() < 0.5:
 		info["arrested"] = true
 		go_to_prison()
+		if life and life.has_method("add_stress"):
+			life.add_stress(20.0)   # арест — сильнейший стресс
 	# Уведомление игроку (облава могла случиться при закрытом экране)
 	var es := get_node_or_null("/root/EventSystem")
 	if es and es.has_signal("event_triggered"):
