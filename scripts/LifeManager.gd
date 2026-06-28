@@ -1332,8 +1332,10 @@ func _relationship_tick() -> void:
 # ── Тело, форма и внешность ───────────────────────────────────────────────────
 # Внешность складывается из формы, стиля и возраста (молодость — плюс).
 func appearance() -> float:
+	# Форма и стиль на максимуме дают 100; молодость добавляет (клампится),
+	# возраст — снимает. Веса 0.5/0.5, чтобы внешность могла достичь 100.
 	var age_factor: float = clampf((35 - age()) * 0.3, -12.0, 5.0)
-	return clampf(fitness * 0.45 + style * 0.45 + age_factor, 0.0, 100.0)
+	return clampf(fitness * 0.5 + style * 0.5 + age_factor, 0.0, 100.0)
 
 func workout_cost() -> int:
 	return gm.shop_price(WORKOUT_BASE_COST)

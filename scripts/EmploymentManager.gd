@@ -306,12 +306,11 @@ func process_workday() -> void:
 	if gm == null:
 		return
 	var frac: float = occupancy_fraction()
-	var relief: float = gm.get_housing_energy_drain_bonus() if gm.has_method("get_housing_energy_drain_bonus") else 0.0
-	var e_cost: float = WORK_ENERGY_FULL * frac * (1.0 - relief)
-	if gm.energy < e_cost:
-		return   # прогул: слишком устал — день пропущен, без оклада
-	gm.energy = clamp(gm.energy - e_cost, 0.0, gm.stat_max())
-	gm.emit_signal("energy_changed", gm.energy)
+	# Контрактная работа — не тяжёлая смена: её цена это часы дня, проезд и еда/
+	# вода, а не «прожигание» энергии. Поэтому энергия спокойно восстанавливается
+	# сном до 100. Совсем без сил (энергия на нуле) на работу не идёшь — прогул.
+	if gm.energy <= 0.0:
+		return
 	# Дорога до работы — ежедневные расходы (проезд)
 	if gm.has_method("shop_price"):
 		var commute: int = int(gm.shop_price(150) * frac)
