@@ -8,6 +8,9 @@ extends Node
 signal crime_changed
 signal heat_changed(value: float)
 signal busted              # арест (фаза тюрьмы)
+signal raided(info: Dictionary)
+
+var arrested: bool = false   # выставляется облавой при экстремальном розыске
 
 var heat: float = 0.0          # розыск 0..100
 var criminal_rep: float = 0.0  # криминальный авторитет 0..100
@@ -467,6 +470,46 @@ func heat_label() -> Dictionary:
 	elif heat >= 20.0: return {"name": "Под наблюдением","color": Color(0.90, 0.80, 0.40)}
 	else:              return {"name": "Спокойно",       "color": Color(0.55, 0.80, 0.55)}
 
+# ── Полиция: розыск, облавы ───────────────────────────────────────────────────
+# При высоком розыске полиция приходит с обыском: изъятие контрабанды и части
+# грязных денег, прикрытие точки/района, а при экстремальном heat — арест.
+# Связь с полицией («Влияние»), «крыша сверху» и сильная банда снижают риск.
+func raid_risk() -> float:
+	if heat < 40.0:
+		return 0.0
+	var base: float = clampf((heat - 40.0) / 60.0 * 0.5, 0.0, 0.5)
+	if has_protection():
+		base *= 0.4
+	base *= maxf(0.5, 1.0 - gang_power() * 0.01)   # банда отбивается
+	var inf := get_node_or_null("/root/InfluenceManager")
+	var pol: float = inf.police_raid_mult() if inf and inf.has_method("police_raid_mult") else 1.0
+	return clampf(base * pol, 0.0, 0.9)
+
+func _do_raid() -> Dictionary:
+	var info: Dictionary = {"contraband": not bm_inventory.is_empty()}
+	bm_inventory = {}                       # контрабанду изъяли
+	var seized: float = dirty_money * 0.4   # часть грязных денег изъята
+	dirty_money -= seized
+	info["cash"] = seized
+	if not rackets.is_empty():
+		info["lost"] = rackets.pop_back()   # прикрыли точку
+	elif not controlled_zones.is_empty():
+		info["lost_zone"] = controlled_zones.pop_back()
+	# Арест при экстремальном розыске
+	if heat >= 80.0 and randf() < 0.5:
+		arrested = true
+		info["arrested"] = true
+		emit_signal("busted")
+	heat = clampf(heat * 0.5, 0.0, 100.0)   # после рейда внимание частично спадает
+	emit_signal("heat_changed", heat)
+	emit_signal("raided", info)
+	emit_signal("crime_changed")
+	return info
+
+func _process_police_day() -> void:
+	if randf() < raid_risk():
+		_do_raid()
+
 # Суточная обработка: розыск медленно спадает (связи/взятки усилят спад позже).
 func process_day() -> void:
 	_process_gang_day()   # содержание банды и лояльность
@@ -488,6 +531,7 @@ func process_day() -> void:
 		emit_signal("heat_changed", heat)
 	bm_fluctuate()        # цены чёрного рынка колеблются
 	laundered_today = 0.0 # дневной лимит отмыва обновляется
+	_process_police_day() # риск облавы при высоком розыске
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "heat", heat)
@@ -501,6 +545,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "gang_size", gang_size)
 	cfg.set_value("crime", "gang_loyalty", gang_loyalty)
 	cfg.set_value("crime", "controlled_zones", controlled_zones)
+	cfg.set_value("crime", "arrested", arrested)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -514,6 +559,7 @@ func load_data(cfg: ConfigFile) -> void:
 	gang_size = cfg.get_value("crime", "gang_size", 0)
 	gang_loyalty = cfg.get_value("crime", "gang_loyalty", 100.0)
 	controlled_zones = cfg.get_value("crime", "controlled_zones", [])
+	arrested = cfg.get_value("crime", "arrested", false)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -528,4 +574,5 @@ func reset() -> void:
 	gang_size = 0
 	gang_loyalty = 100.0
 	controlled_zones = []
+	arrested = false
 	_init_bm_prices()
