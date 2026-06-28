@@ -1436,6 +1436,8 @@ func _show_game_over() -> void:
 func _on_hunger_changed(val: float) -> void:
 	hunger_bar.value = val
 	_refresh_bar_labels()
+	if _nutrition_lbl != null:   # обновить ярлык рациона после еды
+		_refresh_meal_buff()
 	if val <= 0:
 		_show_popup("😵 Ты голоден! Поешь что-нибудь!")
 	elif val <= 25:
@@ -1509,6 +1511,17 @@ func _refresh_meal_buff() -> void:
 		_penalty_lbl.visible = true
 	else:
 		_penalty_lbl.visible = false
+	# Качество рациона (питание влияет на здоровье)
+	if _nutrition_lbl == null and gm.has_method("nutrition_label"):
+		_nutrition_lbl = Label.new()
+		_nutrition_lbl.add_theme_font_size_override("font_size", 11)
+		$TopBar/Row/StatusCol/StatusRow3.add_child(_nutrition_lbl)
+	if _nutrition_lbl:
+		var n: Dictionary = gm.nutrition_label()
+		_nutrition_lbl.text = "%s %s" % [n.icon, n.name]
+		_nutrition_lbl.add_theme_color_override("font_color", n.color)
+
+var _nutrition_lbl: Label = null
 
 func _on_event(event: Dictionary) -> void:
 	var sm := get_node_or_null("/root/SettingsManager")

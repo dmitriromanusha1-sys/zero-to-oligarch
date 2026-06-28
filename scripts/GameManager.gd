@@ -284,6 +284,7 @@ const WAGE_TAX_RATE: float = 0.13
 const WAGE_TAX_ALLOWANCE: float = 5000.0
 var meal_buff_days: int = 0       # оставшихся дней бонуса после обеда
 var meal_drain_bonus: float = 0.0 # снижение расхода еды/воды (0.0–0.80, чем дальше зона/дороже обед — тем больше % и дольше срок)
+var nutrition_score: float = 60.0 # качество рациона (0–100, EMA от съеденного): что ешь — влияет на здоровье
 
 const SAVE_PATH_LEGACY = "user://savegame.cfg"   # старое единое сохранение (миграция)
 const SECS_PER_GAME_MIN: float = 0.5   # 1 сек реального времени = 2 игровых минуты
@@ -442,6 +443,33 @@ func get_hourly_hunger_drain() -> float:
 func get_hourly_thirst_drain() -> float:
 	var season_m: float = get_season().get("thirst", 1.0) as float
 	return THIRST_PER_HOUR * (1.0 - meal_drain_bonus) * season_m
+
+# ── Рацион (качество питания) ─────────────────────────────────────────────────
+# Не только «сколько съел», но и «что съел». Хорошая еда (вода, суши, супы, фрукты)
+# поднимает рацион, фастфуд и алкоголь — опускают. Рацион даёт суточную прибавку
+# или убыль здоровья, а оно уже тянет за собой благополучие и доход (LifeManager).
+const NUTRITION_HEALTH := 1.6   # макс. суточное влияние рациона на здоровье (±)
+const NUTRITION_DRIFT := 1.5    # ежедневный дрейф к нейтральным 50, если не питаться
+
+# quality 0–100, weight 0–1 — насколько сильно блюдо смещает рацион (сытный обед > глоток воды)
+func record_meal(quality: float, weight: float) -> void:
+	weight = clampf(weight, 0.0, 1.0)
+	nutrition_score = clampf(lerpf(nutrition_score, clampf(quality, 0.0, 100.0), weight), 0.0, 100.0)
+
+# Суточный эффект рациона: дельта здоровья + медленный дрейф к нейтральному уровню
+func _process_nutrition_day() -> void:
+	var delta: float = (nutrition_score - 50.0) / 50.0 * NUTRITION_HEALTH
+	if delta != 0.0:
+		health = clamp(health + delta, 0.0, stat_max())
+		emit_signal("health_changed", health)
+	nutrition_score = move_toward(nutrition_score, 50.0, NUTRITION_DRIFT)
+
+func nutrition_label() -> Dictionary:
+	if nutrition_score >= 75.0:   return {"name":"Отличный рацион",  "icon":"🥗", "color":Color(0.45, 0.85, 0.50)}
+	elif nutrition_score >= 58.0: return {"name":"Здоровый рацион",  "icon":"🍎", "color":Color(0.60, 0.82, 0.55)}
+	elif nutrition_score >= 42.0: return {"name":"Обычный рацион",   "icon":"🍽", "color":Color(0.82, 0.78, 0.50)}
+	elif nutrition_score >= 28.0: return {"name":"Так себе рацион",  "icon":"🍟", "color":Color(0.92, 0.62, 0.35)}
+	else:                         return {"name":"Вредный рацион",   "icon":"🍔", "color":Color(0.95, 0.45, 0.40)}
 
 # Применяет расход еды/воды и почасовой урон здоровью за каждый прошедший час.
 # drain_mult: 1.0 обычно, 0.5 во сне.
@@ -672,6 +700,8 @@ func next_day() -> void:
 		meal_buff_days -= 1
 		if meal_buff_days <= 0:
 			meal_drain_bonus = 0.0
+	# Качество рациона: суточная прибавка/убыль здоровья + дрейф к нейтральному
+	_process_nutrition_day()
 	# Штраф истощения: считаем дни и снимаем ограничение максимума по истечении
 	if max_stat_days > 0:
 		max_stat_days -= 1
@@ -1035,6 +1065,7 @@ func save_game() -> void:
 	cfg.set_value("player", "minute", current_minute)
 	cfg.set_value("player", "meal_buff_days", meal_buff_days)
 	cfg.set_value("player", "meal_drain_bonus", meal_drain_bonus)
+	cfg.set_value("player", "nutrition_score", nutrition_score)
 	cfg.set_value("player", "max_stat", max_stat)
 	cfg.set_value("player", "max_stat_days", max_stat_days)
 	cfg.set_value("player", "season_start_offset", season_start_offset)
@@ -1169,6 +1200,7 @@ func load_game() -> void:
 	current_minute = cfg.get_value("player", "minute", 0)
 	meal_buff_days  = cfg.get_value("player", "meal_buff_days", 0)
 	meal_drain_bonus = cfg.get_value("player", "meal_drain_bonus", 0.0)
+	nutrition_score = cfg.get_value("player", "nutrition_score", 60.0)
 	max_stat        = cfg.get_value("player", "max_stat", 100.0)
 	max_stat_days   = cfg.get_value("player", "max_stat_days", 0)
 	season_start_offset = cfg.get_value("player", "season_start_offset", season_start_offset)
@@ -1214,7 +1246,7 @@ func _reset_state() -> void:
 	current_title_index = 0; current_housing_index = 0
 	day = 1; current_hour = 8; current_minute = 0
 	money_history.clear()
-	meal_buff_days = 0; meal_drain_bonus = 0.0
+	meal_buff_days = 0; meal_drain_bonus = 0.0; nutrition_score = 60.0
 	max_stat = 100.0; max_stat_days = 0; _collapsing = false
 	tutorial_done = false   # новая игра — показать обучение
 	month_wage_income = 0.0; total_wage_tax = 0.0
