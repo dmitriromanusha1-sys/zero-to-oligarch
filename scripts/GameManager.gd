@@ -779,6 +779,10 @@ func next_day() -> void:
 	var jm_work = get_node_or_null("/root/EmploymentManager")
 	if jm_work and jm_work.has_method("process_workday"):
 		jm_work.process_workday()
+	# Розыск медленно спадает со временем
+	var crime_day = get_node_or_null("/root/CrimeManager")
+	if crime_day and crime_day.has_method("process_day"):
+		crime_day.process_day()
 	# Штраф истощения: считаем дни и снимаем ограничение максимума по истечении
 	if max_stat_days > 0:
 		max_stat_days -= 1
@@ -1190,6 +1194,8 @@ func save_game() -> void:
 	if pm: pm.save(cfg)
 	var jm = get_node_or_null("/root/EmploymentManager")
 	if jm: jm.save(cfg)
+	var crime = get_node_or_null("/root/CrimeManager")
+	if crime: crime.save(cfg)
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.save(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
@@ -1331,6 +1337,8 @@ func load_game() -> void:
 	if pm: pm.load_data(cfg)
 	var jm = get_node_or_null("/root/EmploymentManager")
 	if jm: jm.load_data(cfg)
+	var crime = get_node_or_null("/root/CrimeManager")
+	if crime: crime.load_data(cfg)
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.load_data(cfg)
 	var tm = get_node_or_null("/root/TransportManager")
@@ -1383,6 +1391,8 @@ func _reset_state() -> void:
 	if pm: pm.reset()
 	var jm = get_node_or_null("/root/EmploymentManager")
 	if jm: jm.reset()
+	var crime = get_node_or_null("/root/CrimeManager")
+	if crime: crime.reset()
 	var zm = get_node_or_null("/root/ZoneManager")
 	if zm: zm.current_zone = 0; zm.max_zone_reached = 0
 	var qm = get_node_or_null("/root/QuestManager")
