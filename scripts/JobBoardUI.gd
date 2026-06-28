@@ -132,9 +132,10 @@ func _current_job_card() -> void:
 
 	var pos: Dictionary = jm.current_position()
 	_lbl(box, "💼 Сейчас работаешь: %s — %s" % [jm.current_employer_name(), pos.get("title", "")], Color(0.92, 0.90, 0.78), 14)
-	var occ_txt: String = "полный день" if jm.occupancy == "full" else "полдня"
+	var occ_txt: String = "полный день (8 ч)" if jm.occupancy == "full" else "полдня (4 ч)"
 	_lbl(box, "Занятость: %s · накоплено за месяц: %s ₽ · отработано: %d дн." % [
 		occ_txt, gm.format_money(jm.accrued), jm.days_worked], Color(0.66, 0.7, 0.78), 11)
+	_lbl(box, "Каждый день работа занимает время с утра, тратит энергию и проезд.", Color(0.6, 0.62, 0.7), 10)
 	var mode_txt: String = "🎲 Авто (случайный 0.5–2.5)" if jm.work_mode == "auto" else "🎯 Активный (мини-игра)"
 	_lbl(box, "Режим: %s · эффективность: ×%.2f" % [mode_txt, jm.coefficient], Color(0.7, 0.78, 0.9), 11)
 	var grade_line: String = "Грейд: 🎖 %s (×%.2f к окладу) · стаж %d дн." % [jm.grade_name(), jm.grade_mult(), jm.tenure_days]

@@ -299,6 +299,16 @@ func process_workday() -> void:
 		return   # прогул: слишком устал — день пропущен, без оклада
 	gm.energy = clamp(gm.energy - e_cost, 0.0, gm.stat_max())
 	gm.emit_signal("energy_changed", gm.energy)
+	# Дорога до работы — ежедневные расходы (проезд)
+	if gm.has_method("shop_price"):
+		var commute: int = int(gm.shop_price(150) * frac)
+		if commute > 0:
+			gm.spend_money(commute)
+	# Рабочий день занимает часы суток: с утра на 8 ч (полдня — 4 ч), при этом
+	# идёт время и тратятся еда/вода. Так работа реально занимает день.
+	var work_hours: int = int(round(8.0 * frac))
+	if work_hours > 0 and gm.current_hour + work_hours < 24:
+		gm.advance_time(work_hours, gm.WORK_DRAIN_MULT)
 	# В авто-режиме коэффициент эффективности случаен (со сдвигом от навыка/выслуги);
 	# в активном — задан последней мини-игрой (perform_shift) и держится.
 	if work_mode == "auto":
