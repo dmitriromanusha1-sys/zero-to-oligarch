@@ -298,6 +298,10 @@ func quit_job() -> void:
 func process_workday() -> void:
 	if not is_employed():
 		return
+	# Из тюрьмы на работу не походишь — контракт на паузе
+	var crime := get_node_or_null("/root/CrimeManager")
+	if crime and crime.has_method("is_imprisoned") and crime.is_imprisoned():
+		return
 	var gm := get_node_or_null("/root/GameManager")
 	if gm == null:
 		return

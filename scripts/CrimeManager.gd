@@ -501,14 +501,28 @@ func _do_raid() -> Dictionary:
 	elif not controlled_zones.is_empty():
 		info["lost_zone"] = controlled_zones.pop_back()
 	heat = clampf(heat * 0.5, 0.0, 100.0)   # после рейда внимание частично спадает
+	# Публичная облава бьёт по легальной репутации
+	var rm := get_node_or_null("/root/ReputationManager")
+	if rm and rm.has_method("add"):
+		rm.add(-5)
 	# Арест при экстремальном розыске → срок
 	if pre_heat >= 80.0 and randf() < 0.5:
 		info["arrested"] = true
 		go_to_prison()
+	# Уведомление игроку (облава могла случиться при закрытом экране)
+	var es := get_node_or_null("/root/EventSystem")
+	if es and es.has_signal("event_triggered"):
+		var txt: String = "🚓 Тебя взяли с поличным! Назначен срок." if info.get("arrested", false) \
+			else "🚨 Облава! Изъято %s грязными." % _fmt(seized)
+		es.event_triggered.emit({"text": txt, "money": 0, "health": 0})
 	emit_signal("heat_changed", heat)
 	emit_signal("raided", info)
 	emit_signal("crime_changed")
 	return info
+
+func _fmt(v: float) -> String:
+	var gm := get_node_or_null("/root/GameManager")
+	return gm.format_money(v) if gm and gm.has_method("format_money") else str(int(v))
 
 func _process_police_day() -> void:
 	if randf() < raid_risk():
