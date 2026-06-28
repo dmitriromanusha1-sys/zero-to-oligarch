@@ -9,6 +9,7 @@ signal crime_changed
 signal heat_changed(value: float)
 signal busted              # арест (фаза тюрьмы)
 signal raided(info: Dictionary)
+signal rival_attack(info: Dictionary)
 
 var prison_days: int = 0   # оставшийся срок (0 — на свободе)
 
@@ -664,6 +665,47 @@ func _process_police_day() -> void:
 	if randf() < raid_risk():
 		_do_raid()
 
+# ── Враждебные ОПГ ────────────────────────────────────────────────────────────
+# Конкуренты наезжают на твои точки и районы. Отбиваешься силой банды (+ бригадир
+# войны) против силы наезжающих; проигрыш — потеря актива. Чем больше держишь и
+# выше ранг — тем чаще на тебя зарятся.
+func rival_attack_chance() -> float:
+	var holdings: int = rackets.size() + controlled_zones.size()
+	if holdings == 0:
+		return 0.0
+	return clampf(0.05 + float(holdings) * 0.02 + float(rank()) * 0.02, 0.0, 0.40)
+
+func _process_rival_day() -> void:
+	if randf() >= rival_attack_chance():
+		return
+	var target_zone: bool = (not controlled_zones.is_empty()) and (rackets.is_empty() or randf() < 0.5)
+	var asset
+	var rival_strength: float
+	if target_zone:
+		asset = controlled_zones[randi() % controlled_zones.size()]
+		rival_strength = zone_rival_strength(int(asset))
+	else:
+		asset = rackets[randi() % rackets.size()]
+		rival_strength = 5.0 + float(racket_target(String(asset)).get("income", 0.0)) / 20000.0
+	var def_chance: float = clampf(gang_power() / (gang_power() + rival_strength) + lieutenant_bonus("war"), 0.05, 0.95)
+	var info: Dictionary = {}
+	if randf() < def_chance:
+		if randf() < 0.4:
+			gang_size = maxi(0, gang_size - 1)   # потери при отражении
+		info["defended"] = true
+	elif target_zone:
+		lose_zone(int(asset))
+		info["lost_zone"] = asset
+	else:
+		drop_racket(String(asset))
+		info["lost_racket"] = asset
+	add_heat(3.0)   # перестрелка шумит
+	emit_signal("rival_attack", info)
+	var es := get_node_or_null("/root/EventSystem")
+	if es and es.has_signal("event_triggered"):
+		var txt: String = "⚔ Конкуренты наехали — отбились!" if info.get("defended", false) else "⚔ Чужая ОПГ отжала твой актив!"
+		es.event_triggered.emit({"text": txt, "money": 0, "health": 0})
+
 # ── Тюрьма ────────────────────────────────────────────────────────────────────
 # Арест → срок: дни идут, активный криминал заблокирован. Профессия «Юрист» и
 # связи смягчают срок; можно выйти под залог. Отсидка снимает розыск.
@@ -733,6 +775,7 @@ func process_day() -> void:
 	laundered_today = 0.0 # дневной лимит отмыва обновляется
 	if not is_imprisoned():
 		_roll_contract()        # шанс получить разовый заказ
+		_process_rival_day()    # наезды конкурентов на активы
 		_process_police_day()   # риск облавы (не трогают того, кто уже сидит)
 
 func save(cfg: ConfigFile) -> void:
