@@ -951,7 +951,7 @@ func show_autosave_toast() -> void:
 func _refresh() -> void:
 	money_label.text  = "💰 " + gm.format_money(gm.money)
 	title_label.text  = "🏅 " + gm.get_title()
-	housing_label.text = "🏠 " + gm.get_housing()
+	housing_label.text = "🏠 %s · 🛋 %d" % [gm.get_housing(), gm.get_comfort()]
 	health_bar.value  = gm.health
 	hunger_bar.value  = gm.hunger
 	thirst_bar.value  = gm.thirst
@@ -1100,7 +1100,7 @@ func _on_reputation_changed(_val: int) -> void:
 	_refresh_reputation()
 
 func _on_housing_changed(housing: String) -> void:
-	housing_label.text = "🏠 " + housing
+	housing_label.text = "🏠 %s · 🛋 %d" % [housing, gm.get_comfort()]
 
 func _on_health_changed(hp: float) -> void:
 	health_bar.value = hp

@@ -292,6 +292,8 @@ func happiness_baseline() -> float:
 	var b: float = 40.0
 	b += gm.current_title_index * 3.0          # статус/достаток радует
 	b += (gm.health - 50.0) * 0.2              # здоровье ±
+	if gm.has_method("get_comfort"):
+		b += (gm.get_comfort() - 50.0) * 0.08  # уют жилья влияет на настроение
 	b += (fitness - 50.0) * 0.10               # спорт радует
 	b += (appearance() - 50.0) * 0.06          # хорошо выглядеть приятно
 	b += (skill("charisma") - 50.0) * 0.05     # социальная уверенность

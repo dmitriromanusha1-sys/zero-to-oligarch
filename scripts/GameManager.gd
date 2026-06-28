@@ -560,15 +560,37 @@ func survive_collapse() -> void:
 		})
 	save_game()
 
+# Комфорт жилья (0–100) — единый понятный показатель «уюта», от которого зависит
+# восстановление во сне/отдыхе и настроение. Чем выше класс жилья — тем уютнее.
+func get_comfort() -> int:
+	return int(clampf((HOUSINGS[current_housing_index].get("tier", 0) as float) * 10.0, 0.0, 100.0))
+
 func get_sleep_energy_per_hour() -> float:
-	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
-	return lerpf(4.0, 16.0, clampf(tier / 10.0, 0.0, 1.0))
+	return lerpf(4.0, 16.0, clampf(get_comfort() / 100.0, 0.0, 1.0))
 
 func get_sleep_health_per_hour() -> float:
-	# Сон не вредит здоровью: на худшем жилье — 0 (нет восстановления),
-	# на лучшем — до +2.5/час. Здоровье от голода/жажды убирается отдельно.
-	var tier: int = HOUSINGS[current_housing_index].get("tier", 0) as int
-	return lerpf(0.0, 2.5, clampf(tier / 10.0, 0.0, 1.0))
+	# Сон не вредит здоровью: в неуютном жилье — 0 (нет восстановления),
+	# в уютном — до +2.5/час. Здоровье от голода/жажды убирается отдельно.
+	return lerpf(0.0, 2.5, clampf(get_comfort() / 100.0, 0.0, 1.0))
+
+# ── Коммуналка (ЖКХ) ──────────────────────────────────────────────────────────
+# Собственное жильё больше не бесплатно: чем престижнее дом, тем дороже его
+# содержать. Аренда уже включает ЖКХ, поэтому коммуналку платят только владельцы.
+const UTILITIES_BY_TIER := {4: 8000, 5: 25000, 6: 90000, 8: 400000, 9: 1200000, 10: 5000000}
+
+func get_housing_utilities_base() -> int:
+	var h: Dictionary = HOUSINGS[current_housing_index]
+	if (h.get("monthly", 0) as float) > 0.0:
+		return 0   # аренда уже включает ЖКХ
+	return int(UTILITIES_BY_TIER.get(h.get("tier", 0) as int, 0))
+
+func effective_utilities() -> int:
+	var base: int = get_housing_utilities_base()
+	if base <= 0:
+		return 0
+	var cb := get_node_or_null("/root/CentralBankManager")
+	var idx: float = cb.price_index if cb else 1.0
+	return int(base * (_diff().penalty as float) * idx)
 
 # Возвращает сводку: {energy_gain, robbed, robbed_amount}
 func sleep_hours(hours: int) -> Dictionary:
@@ -666,6 +688,11 @@ func next_day() -> void:
 			if not spend_money(rent):
 				current_housing_index = 0
 				emit_signal("housing_changed", HOUSINGS[0].name)
+		else:
+			# Коммуналка за собственное жильё (ЖКХ)
+			var util: int = effective_utilities()
+			if util > 0:
+				spend_money(util)
 		# Подоходный налог (НДФЛ) с дохода от работы сверх необлагаемого минимума.
 		# Минимум индексируется ценами, поэтому ранний этап практически не страдает.
 		var idx: float = cb.price_index if cb else 1.0
@@ -997,6 +1024,8 @@ func get_finance() -> Dictionary:
 	var monthly: float = h.get("monthly", 0) as float
 	if monthly > 0.0:
 		expense += effective_rent(monthly) / 30.0
+	else:
+		expense += effective_utilities() / 30.0   # ЖКХ за собственное жильё
 	var lm: Node = get_node_or_null("/root/LoanManager")
 	if lm and lm.has_method("get_monthly_total"):
 		expense += (lm.get_monthly_total() as float) / 30.0
