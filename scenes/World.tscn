@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://world001"]
+[gd_scene load_steps=16 format=3 uid="uid://world001"]
 
 [ext_resource type="Script" path="res://scripts/World.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/TutorialUI.gd" id="12"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/EconomyUI.gd" id="13"]
 [ext_resource type="Script" path="res://scripts/InfluenceUI.gd" id="15"]
 [ext_resource type="Script" path="res://scripts/LifeUI.gd" id="16"]
+[ext_resource type="Script" path="res://scripts/JobBoardUI.gd" id="17"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://scenes/HUD.tscn" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/DayNightCycle.tscn" id="5"]
@@ -63,3 +64,6 @@ script = ExtResource("15")
 
 [node name="LifeUI" type="CanvasLayer" parent="."]
 script = ExtResource("16")
+
+[node name="JobBoardUI" type="CanvasLayer" parent="."]
+script = ExtResource("17")

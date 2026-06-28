@@ -52,6 +52,7 @@ var _settings_btn: Button = null
 var _journal: CanvasLayer = null
 var _journal_btn: Button = null
 var _life_btn: Button = null
+var _work_btn: Button = null
 var _system_btn: Button = null
 
 # Компактная верхняя панель (Фаза 1 «капремонта»)
@@ -182,7 +183,7 @@ func _ready() -> void:
 const _MODAL_GROUPS := ["shift_ui", "sleep_ui", "food_shop", "business_shop",
 	"education_shop", "transport_shop", "radio_shop", "casino_ui", "stock_ui",
 	"travel_agency_ui", "loan_ui", "exam_ui", "quest_ui", "settings_ui",
-	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui", "life_ui"]
+	"bus_stop_ui", "minigame", "newspaper", "economy_ui", "realestate_ui", "influence_ui", "life_ui", "jobboard_ui"]
 
 func _is_blocking_ui_open() -> bool:
 	if _game_over_shown or pause_menu.visible:
@@ -610,6 +611,16 @@ func _setup_journal_and_system(am: Node) -> void:
 		var lu = get_tree().get_first_node_in_group("life_ui")
 		if lu and lu.has_method("open"): lu.open())
 
+	# «Работа»: биржа труда — вакансии по профессии и образованию
+	_work_btn = Button.new()
+	_work_btn.tooltip_text = "Биржа труда: вакансии по твоей профессии и образованию"
+	dock.add_child(_work_btn)
+	_style_dock_btn(_work_btn, "🧑‍💼")
+	_work_btn.pressed.connect(func():
+		if am: am.play_click()
+		var jb = get_tree().get_first_node_in_group("jobboard_ui")
+		if jb and jb.has_method("open"): jb.open())
+
 	# «Система»: Настройки / Главное меню
 	_system_btn = Button.new()
 	_system_btn.tooltip_text = "Настройки и выход в главное меню"
@@ -623,8 +634,8 @@ func _setup_journal_and_system(am: Node) -> void:
 			 "cb": func(): _go_to_menu()},
 		], am))
 
-	# Порядок категорий: Следующий день · Быт · Финансы · Жизнь · Журнал · Система
-	var order := [sleep_btn, _household_btn, _invest_btn, _life_btn, _journal_btn, _system_btn]
+	# Порядок категорий: Следующий день · Быт · Финансы · Работа · Жизнь · Журнал · Система
+	var order := [sleep_btn, _household_btn, _invest_btn, _work_btn, _life_btn, _journal_btn, _system_btn]
 	for i in order.size():
 		if order[i] and is_instance_valid(order[i]):
 			dock.move_child(order[i], i)
