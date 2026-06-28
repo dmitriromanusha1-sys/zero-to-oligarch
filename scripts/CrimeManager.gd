@@ -92,6 +92,42 @@ func bm_fluctuate() -> void:
 		bm_prices[g.id] = clampf(p, 0.5, 2.0)
 	emit_signal("crime_changed")
 
+# ── Отмыв денег ───────────────────────────────────────────────────────────────
+# Грязный нал нельзя тратить открыто: прогоняешь через бизнесы-«прачечные» с
+# комиссией. Чем больше своих бизнесов — тем выше дневной лимит и ниже комиссия.
+var laundered_today: float = 0.0
+const LAUNDER_BASE_CAP := 50000.0     # сколько можно отмыть без прикрытия в день
+const LAUNDER_PER_FRONT := 250000.0   # +лимит за каждый бизнес-прачечную
+
+func front_count() -> int:
+	var bm := get_node_or_null("/root/BusinessManager")
+	return bm.business_count() if bm and bm.has_method("business_count") else 0
+
+func laundering_capacity() -> float:
+	return LAUNDER_BASE_CAP + float(front_count()) * LAUNDER_PER_FRONT
+
+func laundering_fee() -> float:
+	# больше прачечных — дешевле отмыв (0.30 → 0.10)
+	return clampf(0.30 - float(front_count()) * 0.04, 0.10, 0.35)
+
+func launder_left_today() -> float:
+	return maxf(0.0, laundering_capacity() - laundered_today)
+
+# Отмыть сумму грязных денег → чистые (минус комиссия). {ok, laundered, received, fee}
+func launder(amount: float) -> Dictionary:
+	var amt: float = clampf(amount, 0.0, minf(dirty_money, launder_left_today()))
+	if amt <= 0.0:
+		return {"ok": false, "reason": "нет грязных денег или исчерпан дневной лимит"}
+	var fee: float = laundering_fee()
+	var clean: float = amt * (1.0 - fee)
+	dirty_money -= amt
+	laundered_today += amt
+	var gm := get_node_or_null("/root/GameManager")
+	if gm: gm.add_money(clean)
+	add_heat(amt / 1_000_000.0 * 2.0)   # финансовый след
+	emit_signal("crime_changed")
+	return {"ok": true, "laundered": amt, "received": clean, "fee": fee}
+
 # ── Тёмные дела (схемы) ───────────────────────────────────────────────────────
 # Операции с риском: успех даёт грязный нал и авторитет, провал шумит (лишний
 # розыск). Каждое дело тратит энергию и требует определённого авторитета. Шанс
@@ -189,7 +225,8 @@ func process_day() -> void:
 	if heat > 0.0:
 		heat = clampf(heat - HEAT_DECAY, 0.0, 100.0)
 		emit_signal("heat_changed", heat)
-	bm_fluctuate()   # цены чёрного рынка колеблются
+	bm_fluctuate()        # цены чёрного рынка колеблются
+	laundered_today = 0.0 # дневной лимит отмыва обновляется
 
 func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "heat", heat)
@@ -197,6 +234,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "dirty_money", dirty_money)
 	cfg.set_value("crime", "bm_prices", bm_prices)
 	cfg.set_value("crime", "bm_inventory", bm_inventory)
+	cfg.set_value("crime", "laundered_today", laundered_today)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -204,6 +242,7 @@ func load_data(cfg: ConfigFile) -> void:
 	dirty_money = cfg.get_value("crime", "dirty_money", 0.0)
 	bm_prices = cfg.get_value("crime", "bm_prices", {})
 	bm_inventory = cfg.get_value("crime", "bm_inventory", {})
+	laundered_today = cfg.get_value("crime", "laundered_today", 0.0)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -212,4 +251,5 @@ func reset() -> void:
 	dirty_money = 0.0
 	bm_inventory = {}
 	bm_prices = {}
+	laundered_today = 0.0
 	_init_bm_prices()
