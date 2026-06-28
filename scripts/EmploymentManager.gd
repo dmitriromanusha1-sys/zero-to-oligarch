@@ -164,6 +164,12 @@ var coefficient: float = 1.0    # текущий коэффициент эффе
 const COEF_MIN := 0.5
 const COEF_MAX := 2.5
 
+# Грейд (карьера внутри компании): растёт со стажем на текущем месте, повышает оклад.
+var tenure_days: int = 0   # дней отработано на текущей должности (сбрасывается при смене)
+const GRADE_NAMES := ["Стажёр", "Младший", "Специалист", "Старший", "Руководитель"]
+const GRADE_DAYS := [0, 24, 60, 120, 240]
+const GRADE_MULT := [1.00, 1.10, 1.22, 1.36, 1.55]
+
 const WORK_ENERGY_FULL := 16.0  # энергия за полный рабочий день (полдня — вдвое меньше)
 const OCCUPANCY := {"full": 1.0, "half": 0.5}
 
@@ -253,6 +259,7 @@ func take_job(eid: String, idx: int, occ: String = "full") -> bool:
 	occupancy = occ if OCCUPANCY.has(occ) else "full"
 	accrued = 0.0
 	days_worked = 0
+	tenure_days = 0   # стаж считается с нуля на новом месте
 	emit_signal("employment_changed")
 	var qm := get_node_or_null("/root/QuestManager")
 	if qm: qm.add_diary_entry("📄 Устроился: %s, %s" % [current_employer_name(), pos.get("title", "")])
@@ -274,6 +281,7 @@ func quit_job() -> void:
 	pos_index = -1
 	accrued = 0.0
 	days_worked = 0
+	tenure_days = 0
 	emit_signal("employment_changed")
 
 # Один рабочий день: тратит энергию и копит дневной оклад. Возвращает true, если
@@ -295,11 +303,39 @@ func process_workday() -> void:
 	# в активном — задан последней мини-игрой (perform_shift) и держится.
 	if work_mode == "auto":
 		coefficient = _roll_auto_coeff()
-	var daily: float = float(monthly_salary(current_position())) * frac * coefficient / 30.0
+	var daily: float = float(monthly_salary(current_position())) * frac * coefficient * grade_mult() / 30.0
 	accrued += daily
 	days_worked += 1
 	if gm.has_method("add_work_xp"):
 		gm.add_work_xp(8.0 * frac)   # выслуга растёт и на контракте
+	# Стаж на этом месте → грейд (повышение по должности)
+	var prev_grade: int = grade()
+	tenure_days += 1
+	if grade() > prev_grade:
+		var qm := get_node_or_null("/root/QuestManager")
+		if qm: qm.add_diary_entry("📈 Повышение: %s — %s" % [grade_name(), current_employer_name()])
+		emit_signal("employment_changed")
+
+# ── Грейд внутри компании ─────────────────────────────────────────────────────
+func grade() -> int:
+	var g: int = 0
+	for i in GRADE_DAYS.size():
+		if tenure_days >= GRADE_DAYS[i]:
+			g = i
+	return g
+
+func grade_name() -> String:
+	return GRADE_NAMES[grade()]
+
+func grade_mult() -> float:
+	return GRADE_MULT[grade()]
+
+# Дней до следующего грейда (0 — потолок)
+func days_to_next_grade() -> int:
+	var g: int = grade()
+	if g >= GRADE_DAYS.size() - 1:
+		return 0
+	return GRADE_DAYS[g + 1] - tenure_days
 
 # Качество работника 0..1: профильный навык + выслуга. Сдвигает авто-коэффициент вверх.
 func efficiency_quality() -> float:
@@ -352,6 +388,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("employment", "days_worked", days_worked)
 	cfg.set_value("employment", "work_mode", work_mode)
 	cfg.set_value("employment", "coefficient", coefficient)
+	cfg.set_value("employment", "tenure_days", tenure_days)
 
 func load_data(cfg: ConfigFile) -> void:
 	employer_id = cfg.get_value("employment", "employer_id", "")
@@ -361,6 +398,7 @@ func load_data(cfg: ConfigFile) -> void:
 	days_worked = cfg.get_value("employment", "days_worked", 0)
 	work_mode = cfg.get_value("employment", "work_mode", "auto")
 	coefficient = cfg.get_value("employment", "coefficient", 1.0)
+	tenure_days = cfg.get_value("employment", "tenure_days", 0)
 
 func reset() -> void:
 	employer_id = ""
@@ -370,3 +408,4 @@ func reset() -> void:
 	days_worked = 0
 	work_mode = "auto"
 	coefficient = 1.0
+	tenure_days = 0

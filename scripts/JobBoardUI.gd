@@ -137,6 +137,11 @@ func _current_job_card() -> void:
 		occ_txt, gm.format_money(jm.accrued), jm.days_worked], Color(0.66, 0.7, 0.78), 11)
 	var mode_txt: String = "🎲 Авто (случайный 0.5–2.5)" if jm.work_mode == "auto" else "🎯 Активный (мини-игра)"
 	_lbl(box, "Режим: %s · эффективность: ×%.2f" % [mode_txt, jm.coefficient], Color(0.7, 0.78, 0.9), 11)
+	var grade_line: String = "Грейд: 🎖 %s (×%.2f к окладу) · стаж %d дн." % [jm.grade_name(), jm.grade_mult(), jm.tenure_days]
+	var to_next: int = jm.days_to_next_grade()
+	if to_next > 0:
+		grade_line += " · до повышения %d дн." % to_next
+	_lbl(box, grade_line, Color(0.82, 0.76, 0.55), 11)
 
 	var btns := HBoxContainer.new()
 	btns.add_theme_constant_override("separation", 8)
