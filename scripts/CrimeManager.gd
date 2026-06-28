@@ -92,6 +92,70 @@ func bm_fluctuate() -> void:
 		bm_prices[g.id] = clampf(p, 0.5, 2.0)
 	emit_signal("crime_changed")
 
+# ── Контроль районов (передел) ────────────────────────────────────────────────
+# Берёшь районы под контроль силой банды. «Передел» — стычка с местной ОПГ: шанс
+# зависит от силы банды против врага. Контролируемый район даёт крупный теневой
+# доход, но богатые районы и охраняются злее. Можно брать только открытые районы.
+var controlled_zones: Array = []
+
+func zone_rival_strength(z: int) -> float:
+	return 5.0 + float(z) * 4.0
+
+func turf_income(z: int) -> float:
+	return 50000.0 * float(z + 1)
+
+func turf_heat(z: int) -> float:
+	return 1.0 + float(z) * 0.5
+
+func controls_zone(z: int) -> bool:
+	return controlled_zones.has(z)
+
+func turf_war_chance(z: int) -> float:
+	var p: float = gang_power()
+	return clampf(p / (p + zone_rival_strength(z)), 0.05, 0.95)
+
+func can_take_zone(z: int) -> bool:
+	if controls_zone(z) or z < 0 or z > 8:
+		return false
+	var zm := get_node_or_null("/root/ZoneManager")
+	if zm and z > zm.max_zone_reached:
+		return false
+	return gang_power() > 0.0
+
+# Передел района. {ok, success, reason}
+func take_zone(z: int) -> Dictionary:
+	if not can_take_zone(z):
+		return {"ok": false, "reason": "недоступно (нужна банда / открытый район)"}
+	var win: bool = randf() < turf_war_chance(z)
+	add_heat(turf_heat(z) * 3.0)   # война шумит
+	if win:
+		controlled_zones.append(z)
+		add_criminal_rep(3.0 + float(z) * 0.5)
+		emit_signal("crime_changed")
+		return {"ok": true, "success": true}
+	else:
+		gang_loyalty = clampf(gang_loyalty - 15.0, 0.0, 100.0)
+		if randf() < 0.5:
+			gang_size = maxi(0, gang_size - 1)   # потери в перестрелке
+		emit_signal("crime_changed")
+		return {"ok": true, "success": false}
+
+func lose_zone(z: int) -> void:
+	controlled_zones.erase(z)
+	emit_signal("crime_changed")
+
+func turf_income_total() -> float:
+	var t: float = 0.0
+	for z in controlled_zones:
+		t += turf_income(int(z))
+	return t
+
+func turf_heat_total() -> float:
+	var t: float = 0.0
+	for z in controlled_zones:
+		t += turf_heat(int(z))
+	return t
+
 # ── Братва / ОПГ ──────────────────────────────────────────────────────────────
 # Набираешь бойцов: они усиливают дела и расширяют зону влияния, но требуют
 # содержания. Не платишь — лояльность падает, дойдёт до нуля — дезертируют.
@@ -385,10 +449,13 @@ func heat_label() -> Dictionary:
 # Суточная обработка: розыск медленно спадает (связи/взятки усилят спад позже).
 func process_day() -> void:
 	_process_gang_day()   # содержание банды и лояльность
-	# Доход с точек под крышей (грязным) + постоянный розыск от теневой активности
+	# Доход с точек под крышей и контролируемых районов (грязным) + розыск
 	if not rackets.is_empty():
 		add_dirty_money(racket_income_total())
 		add_heat(racket_heat_total())
+	if not controlled_zones.is_empty():
+		add_dirty_money(turf_income_total())
+		add_heat(turf_heat_total())
 	# «Крыша сверху»: иммунитет ускоряет спад розыска
 	var decay: float = HEAT_DECAY
 	if protection_days > 0:
@@ -411,6 +478,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "protection_days", protection_days)
 	cfg.set_value("crime", "gang_size", gang_size)
 	cfg.set_value("crime", "gang_loyalty", gang_loyalty)
+	cfg.set_value("crime", "controlled_zones", controlled_zones)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -423,6 +491,7 @@ func load_data(cfg: ConfigFile) -> void:
 	protection_days = cfg.get_value("crime", "protection_days", 0)
 	gang_size = cfg.get_value("crime", "gang_size", 0)
 	gang_loyalty = cfg.get_value("crime", "gang_loyalty", 100.0)
+	controlled_zones = cfg.get_value("crime", "controlled_zones", [])
 	_init_bm_prices()
 
 func reset() -> void:
@@ -436,4 +505,5 @@ func reset() -> void:
 	protection_days = 0
 	gang_size = 0
 	gang_loyalty = 100.0
+	controlled_zones = []
 	_init_bm_prices()
