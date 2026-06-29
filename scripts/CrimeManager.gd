@@ -283,11 +283,18 @@ func _process_gang_day() -> void:
 				gang_loyalty = 30.0
 		# Недовольные бригадиры теряют лояльность, при нуле уходят
 		var keep: Array = []
+		var left: Array = []
 		for lt in lieutenants:
 			lt["loyalty"] = clampf(float(lt.loyalty) - 10.0, 0.0, 100.0)
 			if float(lt.loyalty) > 0.0:
 				keep.append(lt)
+			else:
+				left.append(String(lt.get("name", "Бригадир")))
 		lieutenants = keep
+		if not left.is_empty():
+			var es := get_node_or_null("/root/EventSystem")
+			if es and es.has_signal("event_triggered"):
+				es.event_triggered.emit({"text": "🚪 От тебя ушёл бригадир: %s — не платишь, не уважают." % ", ".join(left), "money": 0, "health": 0})
 	emit_signal("crime_changed")
 
 # ── Коррупция и иммунитет ─────────────────────────────────────────────────────

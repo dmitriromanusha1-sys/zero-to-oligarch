@@ -137,7 +137,7 @@ func _rebuild() -> void:
 	if cm.max_gang() > 0:
 		_action_btn("Завербовать бойца (%s)" % gm.format_money(cm.GANG_HIRE_COST), "ghost", func(): cm.recruit_gang(1))
 	# Бригадиры
-	_lbl(_vb, "Бригадиры: %d/%d" % [cm.lieutenants.size(), cm.max_lieutenants()], Color(0.78, 0.72, 0.55), 11)
+	_lbl(_vb, "Бригадиры: %d/%d — усиливают дела, рэкет или войну" % [cm.lieutenants.size(), cm.max_lieutenants()], Color(0.78, 0.72, 0.55), 11)
 	for lt in cm.lieutenants:
 		_lbl(_vb, "  • %s — %s (лояльность %d%%)" % [lt.name, cm.LT_SPEC_NAME[lt.spec], int(lt.loyalty)], Color(0.7, 0.75, 0.82), 10)
 	if cm.lieutenants.size() < cm.max_lieutenants():
@@ -159,6 +159,9 @@ func _rebuild() -> void:
 
 	# Районы
 	_sep(); _header("🗺 Контроль районов")
+	if cm.rackets.size() + cm.controlled_zones.size() > 0:
+		var thr: int = int(round(cm.rival_attack_chance() * 100))
+		_lbl(_vb, "⚔ Риск наезда конкурентов: %d%%/день — держи банду сильной" % thr, Color(0.9, 0.62, 0.45), 11)
 	for z in range(9):
 		_turf_row(z)
 
