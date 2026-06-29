@@ -451,6 +451,13 @@ func controlled_count() -> int:
 func power_level() -> int:
 	return controlled_count()
 
+# «Политическая крыша»: достаточная власть, чтобы прикрыть криминал от облав.
+# Высшая власть (президент/Серый кардинал) ИЛИ полный контроль полиции и мэрии.
+func political_cover() -> bool:
+	if is_president or grey_cardinal:
+		return true
+	return connection_level("police") >= MAX_CONNECTION_LEVEL and connection_level("mayor") >= 2
+
 func election_inf_cost(i: int) -> int:
 	return int((ELECTION_INF_BASE + i * ELECTION_INF_PER) * ideology_election_cost_mult())
 

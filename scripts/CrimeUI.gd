@@ -94,6 +94,9 @@ func _rebuild() -> void:
 		_lbl(_vb, "🛡 Крыша сверху: %d дн." % cm.protection_days, Color(0.6, 0.8, 0.9), 11)
 	if cm.has_informant():
 		_lbl(_vb, "🕵 Информатор: %d дн." % cm.informant_days, Color(0.6, 0.8, 0.9), 11)
+	var inf := get_node_or_null("/root/InfluenceManager")
+	if inf and inf.has_method("political_cover") and inf.political_cover():
+		_lbl(_vb, "🏛 Политическая крыша — облавы не грозят", Color(0.55, 0.85, 0.7), 11)
 
 	# Тюрьма — если сидим, только залог
 	if cm.is_imprisoned():

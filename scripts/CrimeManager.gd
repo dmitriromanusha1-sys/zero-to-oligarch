@@ -686,6 +686,10 @@ func heat_label() -> Dictionary:
 # грязных денег, прикрытие точки/района, а при экстремальном heat — арест.
 # Связь с полицией («Влияние»), «крыша сверху» и сильная банда снижают риск.
 func raid_risk() -> float:
+	# Политическая крыша (высшая власть / контроль полиции и мэрии) — облав нет
+	var inf_cover := get_node_or_null("/root/InfluenceManager")
+	if inf_cover and inf_cover.has_method("political_cover") and inf_cover.political_cover():
+		return 0.0
 	if heat < 40.0:
 		return 0.0
 	var base: float = clampf((heat - 40.0) / 60.0 * 0.5, 0.0, 0.5)
