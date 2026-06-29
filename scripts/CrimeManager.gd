@@ -235,17 +235,46 @@ func disband_gang(n: int) -> void:
 # Содержание банды (вызывается раз в день): платишь — лояльны, нет — недовольство.
 const LT_UPKEEP := 20000.0   # содержание бригадира в день
 
+# ── Общак ОПГ ─────────────────────────────────────────────────────────────────
+# Касса банды (грязный нал): страхует содержание, если личных денег не хватило,
+# и держит лояльность — обеспеченная братва верна.
+var obshchak: float = 0.0
+
+func deposit_obshchak(amount: float) -> void:
+	var amt: float = clampf(amount, 0.0, dirty_money)
+	if amt <= 0.0:
+		return
+	dirty_money -= amt
+	obshchak += amt
+	emit_signal("crime_changed")
+
+func withdraw_obshchak(amount: float) -> void:
+	var amt: float = clampf(amount, 0.0, obshchak)
+	if amt <= 0.0:
+		return
+	obshchak -= amt
+	add_dirty_money(amt)
+
+func obshchak_loyalty_bonus() -> float:
+	if gang_size <= 0:
+		return 0.0
+	return clampf(obshchak / float(gang_size) / 500000.0, 0.0, 3.0)   # до +3/день при 500k на бойца
+
 func _process_gang_day() -> void:
 	if gang_size <= 0 and lieutenants.is_empty():
 		return
 	var gm := get_node_or_null("/root/GameManager")
 	var upkeep: float = gang_upkeep_daily() + float(lieutenants.size()) * LT_UPKEEP
 	var paid: bool = gm != null and gm.spend_money(upkeep)
+	if not paid and obshchak >= upkeep:
+		obshchak -= upkeep   # общак выручает
+		paid = true
 	if paid:
+		var loy_gain: float = 1.0 + rank_loyalty_bonus() + obshchak_loyalty_bonus()
 		if gang_size > 0:
-			gang_loyalty = clampf(gang_loyalty + 1.0 + rank_loyalty_bonus(), 0.0, 100.0)
+			gang_loyalty = clampf(gang_loyalty + loy_gain, 0.0, 100.0)
 		for lt in lieutenants:
-			lt["loyalty"] = clampf(float(lt.loyalty) + 1.0 + rank_loyalty_bonus(), 0.0, 100.0)
+			lt["loyalty"] = clampf(float(lt.loyalty) + loy_gain, 0.0, 100.0)
 	else:
 		if gang_size > 0:
 			gang_loyalty = clampf(gang_loyalty - 12.0, 0.0, 100.0)
@@ -825,6 +854,7 @@ func save(cfg: ConfigFile) -> void:
 	cfg.set_value("crime", "prison_days", prison_days)
 	cfg.set_value("crime", "current_contract", current_contract)
 	cfg.set_value("crime", "informant_days", informant_days)
+	cfg.set_value("crime", "obshchak", obshchak)
 
 func load_data(cfg: ConfigFile) -> void:
 	heat = cfg.get_value("crime", "heat", 0.0)
@@ -842,6 +872,7 @@ func load_data(cfg: ConfigFile) -> void:
 	prison_days = cfg.get_value("crime", "prison_days", 0)
 	current_contract = cfg.get_value("crime", "current_contract", "")
 	informant_days = cfg.get_value("crime", "informant_days", 0)
+	obshchak = cfg.get_value("crime", "obshchak", 0.0)
 	_init_bm_prices()
 
 func reset() -> void:
@@ -860,4 +891,5 @@ func reset() -> void:
 	prison_days = 0
 	current_contract = ""
 	informant_days = 0
+	obshchak = 0.0
 	_init_bm_prices()
