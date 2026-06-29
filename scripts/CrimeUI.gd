@@ -92,6 +92,8 @@ func _rebuild() -> void:
 	_lbl(_vb, "💵 Грязные деньги: %s" % gm.format_money(cm.dirty_money), Color(0.7, 0.85, 0.6), 12)
 	if cm.has_protection():
 		_lbl(_vb, "🛡 Крыша сверху: %d дн." % cm.protection_days, Color(0.6, 0.8, 0.9), 11)
+	if cm.has_informant():
+		_lbl(_vb, "🕵 Информатор: %d дн." % cm.informant_days, Color(0.6, 0.8, 0.9), 11)
 
 	# Тюрьма — если сидим, только залог
 	if cm.is_imprisoned():
@@ -100,6 +102,14 @@ func _rebuild() -> void:
 		_action_btn("💸 Выйти под залог (%s)" % gm.format_money(cm.bail_cost()), "danger", func(): cm.post_bail())
 		_close_btn()
 		return
+
+	# Заказ — разовый жирный контракт
+	if cm.has_contract():
+		var c: Dictionary = cm.contract(cm.current_contract)
+		_sep(); _header("🕶 Поступил заказ!")
+		_lbl(_vb, "%s %s — куш %s · шанс %d%% · энергия %d" % [c.icon, c.name, gm.format_money(c.payout), int(cm.contract_chance(cm.current_contract) * 100), int(c.energy)], Color(0.95, 0.85, 0.6), 13)
+		_action_btn("✅ Взяться за заказ", "primary", _on_contract)
+		_action_btn("Отказаться", "ghost", func(): cm.decline_contract())
 
 	# Отмыв
 	_sep(); _header("💼 Отмыв денег")
@@ -126,6 +136,26 @@ func _rebuild() -> void:
 	_sep(); _header("👥 Братва (%d/%d, лояльность %d%%)" % [cm.gang_size, cm.max_gang(), int(cm.gang_loyalty)])
 	if cm.max_gang() > 0:
 		_action_btn("Завербовать бойца (%s)" % gm.format_money(cm.GANG_HIRE_COST), "ghost", func(): cm.recruit_gang(1))
+	# Бригадиры
+	_lbl(_vb, "Бригадиры: %d/%d" % [cm.lieutenants.size(), cm.max_lieutenants()], Color(0.78, 0.72, 0.55), 11)
+	for lt in cm.lieutenants:
+		_lbl(_vb, "  • %s — %s (лояльность %d%%)" % [lt.name, cm.LT_SPEC_NAME[lt.spec], int(lt.loyalty)], Color(0.7, 0.75, 0.82), 10)
+	if cm.lieutenants.size() < cm.max_lieutenants():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		for spec in cm.LT_SPECS:
+			var b := _mk_btn("Бригадир: " + cm.LT_SPEC_NAME[spec], "ghost")
+			b.pressed.connect(_on_recruit_lt.bind(String(spec)))
+			row.add_child(b)
+		_vb.add_child(row)
+
+	# Общак
+	_sep(); _header("💰 Общак (%s)" % gm.format_money(cm.obshchak))
+	_lbl(_vb, "Касса банды страхует содержание и держит лояльность.", Color(0.65, 0.67, 0.75), 10)
+	if cm.dirty_money > 0.0:
+		_action_btn("Внести грязные в общак", "ghost", func(): cm.deposit_obshchak(cm.dirty_money))
+	if cm.obshchak > 0.0:
+		_action_btn("Забрать из общака", "ghost", func(): cm.withdraw_obshchak(cm.obshchak))
 
 	# Районы
 	_sep(); _header("🗺 Контроль районов")
@@ -137,6 +167,7 @@ func _rebuild() -> void:
 	if cm.heat > 0.0:
 		_action_btn("Дать взятку (сбить ~10 розыска)", "ghost", func(): cm.bribe_police(cm.bribe_cost_per_heat() * 10.0))
 	_action_btn("Купить крышу сверху (%s)" % gm.format_money(cm.protection_cost()), "ghost", func(): cm.buy_protection())
+	_action_btn("Нанять информатора (%s)" % gm.format_money(cm.informant_cost()), "ghost", func(): cm.hire_informant())
 
 	_close_btn()
 
@@ -152,6 +183,15 @@ func _scheme_row(s: Dictionary) -> void:
 func _on_scheme(id: String) -> void:
 	var r: Dictionary = cm.attempt_scheme(id)
 	_status = ("✅ Дело выгорело!" if r.get("success", false) else "❌ Сорвалось, шухер!") if r.ok else "Нельзя сейчас"
+	_rebuild()
+
+func _on_contract() -> void:
+	var r: Dictionary = cm.attempt_contract()
+	_status = ("💰 Заказ выполнен!" if r.get("success", false) else "❌ Заказ провален!") if r.ok else "Нельзя сейчас"
+	_rebuild()
+
+func _on_recruit_lt(spec: String) -> void:
+	cm.recruit_lieutenant(spec)
 	_rebuild()
 
 func _bm_row(g: Dictionary) -> void:
