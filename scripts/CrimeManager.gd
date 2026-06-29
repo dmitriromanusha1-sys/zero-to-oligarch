@@ -605,16 +605,35 @@ func attempt_scheme(id: String) -> Dictionary:
 		add_criminal_rep(0.5)   # опыт даже при провале
 		return {"ok": true, "success": false, "amount": 0}
 
+func _heat_band() -> int:
+	if heat >= 80.0: return 3
+	elif heat >= 50.0: return 2
+	elif heat >= 20.0: return 1
+	return 0
+
+func _notify(text: String) -> void:
+	var es := get_node_or_null("/root/EventSystem")
+	if es and es.has_signal("event_triggered"):
+		es.event_triggered.emit({"text": text, "money": 0, "health": 0})
+
 func add_heat(amount: float) -> void:
+	var prev_band: int = _heat_band()
 	heat = clampf(heat + amount, 0.0, 100.0)
 	emit_signal("heat_changed", heat)
 	emit_signal("crime_changed")
+	# Предупреждение при росте розыска в опасную зону
+	var band: int = _heat_band()
+	if band > prev_band and band >= 2:
+		_notify("🚨 Розыск высок — менты в разработке!" if band == 2 else "🚓 Розыск критический — облава вот-вот!")
 
 func cool_heat(amount: float) -> void:
 	add_heat(-amount)
 
 func add_criminal_rep(amount: float) -> void:
+	var prev_rank: int = rank()
 	criminal_rep = clampf(criminal_rep + amount, 0.0, 100.0)
+	if rank() > prev_rank:
+		_notify("👑 Ты поднялся в иерархии: теперь ты %s!" % rank_name())
 	emit_signal("crime_changed")
 
 func add_dirty_money(amount: float) -> void:
